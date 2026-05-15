@@ -1,0 +1,59 @@
+# secrets
+.env
+.env.*
+secrets.h
+secrets.hpp
+credentials.json
+token*.json
+*secret*
+*password*
+*passwd*
+*credential*
+*.pem
+*.key
+id_rsa
+id_ed25519
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.pytest_cache/
+# Arduino / build
+build/
+.cache/
+.arduinoIDE/
+*.elf
+*.bin
+*.map
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+# logs and runtime bulk
+*.log
+*.tmp
+*.bak
+raw_logs/
+runtime/
+*.jsonl
+!logs_samples/**/*.jsonl
+!runtime_examples/**/*.sample.txt
+# databases / models / heavy artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.pkl
+*.pt
+*.onnx
+*.safetensors
+# archives
+*.zip
+*.rar
+*.7z
+
+# safe examples and static checks
+!configs/examples/secrets.example.h
+!tests/static_checks/check_sensitive_markers.py

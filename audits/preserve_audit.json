@@ -1,0 +1,74 @@
+[
+  {
+    "project": "CORE2",
+    "final_candidate": "firmware/core2/CORE2.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "BUZZ",
+    "final_candidate": "firmware/buzz/Buzz.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "BLIND_EYE",
+    "final_candidate": "firmware/blind_eye/BLIND_EYE.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "BEACON",
+    "final_candidate": "firmware/beacon/Beacon_A1.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "STICK",
+    "final_candidate": "firmware/esp32_swarm/Stick.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "ATOM_SWARM_TRON",
+    "final_candidate": "firmware/esp32_swarm/ATOM_SWARM_TRON.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "ATOM_MATRIX_PYRAMID",
+    "final_candidate": "firmware/pyramid/ATOM_MATRIX_Pyramid.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  },
+  {
+    "project": "ZIM_GEEK",
+    "final_candidate": "firmware/zim_geek/Zim.ino",
+    "old_canonical_file": null,
+    "missing_functions": [],
+    "added_functions": [],
+    "abi_changes": "not evaluated in cleanup pass",
+    "recommendation": "Treat as current public entrypoint; compile and flash-test before behavioral claims."
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "wifi_ssid": "YOUR_WIFI",
+  "wifi_password": "YOUR_PASSWORD",
+  "worker_name": "YOUR_WORKER",
+  "espnow_channel": 1,
+  "cold_mode": true
+}

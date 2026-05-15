@@ -1,0 +1,178 @@
+[
+  {
+    "path": "firmware/core2/CORE2.ino",
+    "project": "CORE2",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 362777,
+    "sha256": "94889abb9dd1882219b951713859c267aa9a709c573cb32fac9fdf0d1d967254",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "M5Stack Core2 display/control surface"
+  },
+  {
+    "path": "firmware/buzz/Buzz.ino",
+    "project": "BUZZ",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 263330,
+    "sha256": "7bfab978a7e16ef8d84f826192ed5676177380d0094db50999952939dbad912a",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Audio, worker, ESP-NOW, Stratum-aware node"
+  },
+  {
+    "path": "firmware/blind_eye/BLIND_EYE.ino",
+    "project": "BLIND_EYE",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 93558,
+    "sha256": "97b375171797af38cf32ea50fb75832594a01035bedd8bcd965120daf4db49af",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Presence and sensor calibration node"
+  },
+  {
+    "path": "firmware/beacon/Beacon_A1.ino",
+    "project": "BEACON",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 133608,
+    "sha256": "ac73e2c0b25cd01d61365d3e606de885c6892f5ab134e96d0d08833057adbb4c",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Beacon preserve candidate"
+  },
+  {
+    "path": "firmware/esp32_swarm/Stick.ino",
+    "project": "STICK",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 255836,
+    "sha256": "a3ae2c7c2ef36003fb5baebb3afa00ecf5b06f4f958edbe3cb9f0a66a133a973",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Mobile ESP32 swarm node"
+  },
+  {
+    "path": "firmware/esp32_swarm/ATOM_SWARM_TRON.ino",
+    "project": "ATOM_SWARM_TRON",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 197825,
+    "sha256": "e7ab617a74499594408e328504d276d3966f13f06324bf30e977cc411fc2093d",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Atom swarm/TRON node"
+  },
+  {
+    "path": "firmware/pyramid/ATOM_MATRIX_Pyramid.ino",
+    "project": "ATOM_MATRIX_PYRAMID",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 155657,
+    "sha256": "2828daa5016358a35c8956458b3b1ad7e7fd46281545829b8823e3c6fef3cf4f",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "Atom Matrix visual/swarm node"
+  },
+  {
+    "path": "firmware/zim_geek/Zim.ino",
+    "project": "ZIM_GEEK",
+    "role": "BOOTABLE",
+    "language": "arduino/cpp",
+    "size": 154064,
+    "sha256": "4735736667fb6105cd0153044ab4fdb0755bceb1e1952d02a448032081730b34",
+    "risk": "MEDIUM",
+    "keep": true,
+    "reason": "ESP32-S3 Geek swarm reporting node"
+  },
+  {
+    "path": "README.md",
+    "project": "SUPPORT",
+    "role": "DOC",
+    "language": "markdown",
+    "size": 3726,
+    "sha256": "f57c227a7b0aa0bebffc1455c4b2958b62442d8b01eb7d1b85066b017643fd82",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Public repository overview"
+  },
+  {
+    "path": "M5STACK_REVIEW_GUIDE.md",
+    "project": "SUPPORT",
+    "role": "DOC",
+    "language": "markdown",
+    "size": 2339,
+    "sha256": "23a0749bf4c5d3e78bbcae236bb625f54dff55f4d1d8599d378449e2f3474311",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "External hardware review entrypoint"
+  },
+  {
+    "path": "PROJECT_MAP.md",
+    "project": "SUPPORT",
+    "role": "DOC",
+    "language": "markdown",
+    "size": 1204,
+    "sha256": "458f010b3f95482cf8c80bca6b6d5c1f8edfdb27275530970f76d344e38e817b",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Focused repository map"
+  },
+  {
+    "path": "SECURITY.md",
+    "project": "SUPPORT",
+    "role": "DOC",
+    "language": "markdown",
+    "size": 683,
+    "sha256": "9a0840810839877bd97e05e17ea328ec18acbe098c884ccccd7c4898ebccdd20",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Security and secret policy"
+  },
+  {
+    "path": "LICENSE",
+    "project": "SUPPORT",
+    "role": "DOC",
+    "language": "text",
+    "size": 833,
+    "sha256": "0bcb225441b778ac43adf3f9e339d7cf2d64d494ed5bc0d505f21893b151e114",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "MIT license"
+  },
+  {
+    "path": "configs/examples/secrets.example.h",
+    "project": "SUPPORT",
+    "role": "CONFIG",
+    "language": "cpp/header",
+    "size": 223,
+    "sha256": "b3a29625f7201fb708483963b2633eda85f5a52cfe3a4f51c29f58a1c601a356",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Placeholder secret header example"
+  },
+  {
+    "path": "configs/examples/config.example.json",
+    "project": "SUPPORT",
+    "role": "CONFIG",
+    "language": "json",
+    "size": 143,
+    "sha256": "dac2fca030b0f2805c519462ad3ab170bf2e98276613c007408b987ad9604a6c",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Placeholder JSON config example"
+  },
+  {
+    "path": "tests/static_checks/check_sensitive_markers.py",
+    "project": "SUPPORT",
+    "role": "TEST",
+    "language": "python",
+    "size": 681,
+    "sha256": "a17d67e8a7ba05bfa4532d36d445c1d2b2251bfbae99fddcf396631bfe7613d1",
+    "risk": "LOW",
+    "keep": true,
+    "reason": "Lightweight secret marker check"
+  }
+]

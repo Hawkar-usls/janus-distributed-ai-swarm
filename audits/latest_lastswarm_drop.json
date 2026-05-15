@@ -1,0 +1,58 @@
+[
+  {
+    "project": "CORE2",
+    "repo_path": "firmware/core2/CORE2.ino",
+    "source_hint": "Janus/LastSwarm/CORE2.ino",
+    "size": 362777,
+    "sha256": "94889abb9dd1882219b951713859c267aa9a709c573cb32fac9fdf0d1d967254"
+  },
+  {
+    "project": "BUZZ",
+    "repo_path": "firmware/buzz/Buzz.ino",
+    "source_hint": "Janus/LastSwarm/Buzz.ino",
+    "size": 263330,
+    "sha256": "7bfab978a7e16ef8d84f826192ed5676177380d0094db50999952939dbad912a"
+  },
+  {
+    "project": "BLIND_EYE",
+    "repo_path": "firmware/blind_eye/BLIND_EYE.ino",
+    "source_hint": "Janus/LastSwarm/BLIND_EYE.ino",
+    "size": 93558,
+    "sha256": "97b375171797af38cf32ea50fb75832594a01035bedd8bcd965120daf4db49af"
+  },
+  {
+    "project": "BEACON",
+    "repo_path": "firmware/beacon/Beacon_A1.ino",
+    "source_hint": "Janus/LastSwarm/Beacon_A1.ino",
+    "size": 133608,
+    "sha256": "ac73e2c0b25cd01d61365d3e606de885c6892f5ab134e96d0d08833057adbb4c"
+  },
+  {
+    "project": "STICK",
+    "repo_path": "firmware/esp32_swarm/Stick.ino",
+    "source_hint": "Janus/LastSwarm/Stick.ino",
+    "size": 255836,
+    "sha256": "a3ae2c7c2ef36003fb5baebb3afa00ecf5b06f4f958edbe3cb9f0a66a133a973"
+  },
+  {
+    "project": "ATOM_SWARM_TRON",
+    "repo_path": "firmware/esp32_swarm/ATOM_SWARM_TRON.ino",
+    "source_hint": "Janus/LastSwarm/ATOM_SWARM_TRON.ino",
+    "size": 197825,
+    "sha256": "e7ab617a74499594408e328504d276d3966f13f06324bf30e977cc411fc2093d"
+  },
+  {
+    "project": "ATOM_MATRIX_PYRAMID",
+    "repo_path": "firmware/pyramid/ATOM_MATRIX_Pyramid.ino",
+    "source_hint": "Janus/LastSwarm/ATOM_MATRIX_Pyramid.ino",
+    "size": 155657,
+    "sha256": "2828daa5016358a35c8956458b3b1ad7e7fd46281545829b8823e3c6fef3cf4f"
+  },
+  {
+    "project": "ZIM_GEEK",
+    "repo_path": "firmware/zim_geek/Zim.ino",
+    "source_hint": "Janus/LastSwarm/Zim.ino",
+    "size": 154064,
+    "sha256": "4735736667fb6105cd0153044ab4fdb0755bceb1e1952d02a448032081730b34"
+  }
+]

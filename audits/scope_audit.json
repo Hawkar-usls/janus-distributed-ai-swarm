@@ -1,0 +1,25 @@
+﻿{
+    "public_scope":  "Current LastSwarm firmware only",
+    "kept_firmware_count":  8,
+    "kept_firmware":  [
+                          "firmware/core2/CORE2.ino",
+                          "firmware/buzz/Buzz.ino",
+                          "firmware/blind_eye/BLIND_EYE.ino",
+                          "firmware/beacon/Beacon_A1.ino",
+                          "firmware/esp32_swarm/Stick.ino",
+                          "firmware/esp32_swarm/ATOM_SWARM_TRON.ino",
+                          "firmware/pyramid/ATOM_MATRIX_Pyramid.ino",
+                          "firmware/zim_geek/Zim.ino"
+                      ],
+    "excluded_categories":  [
+                                "older firmware branches",
+                                "non-firmware side projects",
+                                "runtime dumps",
+                                "logs samples",
+                                "databases",
+                                "archives",
+                                "unrelated research notes",
+                                "bulk experiments"
+                            ],
+    "reason":  "Public M5Stack-facing repository should be a clean technical review surface for the current firmware files."
+}
