@@ -1,4 +1,4 @@
-#include <M5Unified.h>
+﻿#include <M5Unified.h>
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -24,11 +24,14 @@ static inline void janusPresentFrame() {
 }
 
 // =====================================================
-// JANUS ELITE STICKS3 v9.5 LIVING PILOT MMORPG WEAPONS
+// JANUS ELITE STICKS3 v9.6C BLACKBOARD PILOT BODY NODE
 // Travel appetite raised, visible laser/missile FX, real station UI flow,
 // Pilot agent live cockpit, Core2 contracts as non-blocking ops,
 // smuggler/merc/trader/explorer loop, mecha-ready surface contracts, no mission-screen lock,
 // thermal smart-charge guard for Stick3S / StickC-class PMIC, living pilot UI, weapons and one-minute contracts.
+// v9.6C: Restores informative diagnostics during power guard and adds native SwarmSense S/S pilot-body observe packets.
+// v9.6B: Power/brownout guard for Grove/weak-supply operation: low-battery load-shed, safer charge policy, radio warmup gate.
+// v9.6: Adds JANUS blackboard pilot/body layer: J/E semantic events, J/P policy RX, K2/TP pilot prophecy, peer self-healing.
 // =====================================================
 
 // StickS3 horizontal target. The original 128x128 ATOM layout is preserved below,
@@ -47,10 +50,24 @@ static int16_t janusScreenH = 80;
 #define JANUS_CHARGE_GUARD_FULL_MV 4180
 #define JANUS_CHARGE_GUARD_RESUME_MV 4050
 #define JANUS_CHARGE_GUARD_LOW_CURRENT_MA 100
+// v9.6B: Grove / weak-supply brownout guard.
+// If the battery is already low, do NOT fully pause charging at 55-58C; shed load first.
+#define JANUS_CHARGE_GUARD_CRITICAL_MV 3350
+#define JANUS_CHARGE_GUARD_WEAK_MV 3500
+#define JANUS_CHARGE_GUARD_HOLD_CHARGE_MV 3600
+#define JANUS_CHARGE_GUARD_LOADSHED_HOT_C 52.0f
+#define JANUS_CHARGE_GUARD_EMERGENCY_HOT_C 62.0f
+#define JANUS_POWER_GUARD_RENDER_MS 120UL
+#define JANUS_POWER_GUARD_RADIO_MS 8000UL
+#define JANUS_POWER_GUARD_LOG_MS 9000UL
+#define JANUS_STICK_DIAG_NORMAL_MS 12000UL
+#define JANUS_STICK_DIAG_GUARD_MS 5000UL
+#define JANUS_STICK_SWARMSENSE_TX_MS 6000UL
+#define JANUS_STICK_SWARMSENSE_GUARD_MS 18000UL
 #define JANUS_CONTRACT_POPUP_MS 60000UL
 #define JANUS_WEAPON_COUNT 5
-#define MESH_WIFI_SSID "YOUR_WIFI"
-#define MESH_WIFI_PASSWORD "YOUR_PASSWORD"
+#define MESH_WIFI_SSID "JANUS_WIFI_PLACEHOLDER"
+#define MESH_WIFI_PASSWORD "JANUS_NET_PLACEHOLDER"
 #define MESH_URL_BLIND_EYE "http://192.168.1.92:5000/api/device/latest/atom_s3r_blind_eye"
 #define MESH_URL_BEACON    "http://192.168.1.92:5000/api/device/latest/janus_adv_beacon_eye_chain"
 
@@ -737,6 +754,11 @@ float localMagMood = 0.0f;
 bool janusChargeGuardReady = false;
 bool janusChargeGuardPaused = false;
 bool janusThermalThrottle = false;
+bool janusPowerBrownoutGuard = false;
+bool janusPowerLowBattery = false;
+bool janusPowerWeakSupply = false;
+bool janusPowerChargeHold = false;
+uint32_t janusPowerGuardSinceMs = 0;
 uint32_t janusChargeGuardLastMs = 0;
 float janusChargeGuardTempC = 0.0f;
 int janusChargeGuardBattMv = 0;
@@ -774,9 +796,14 @@ void janusSmartChargeBegin() {
   janusChargeGuardBattPct = M5.Power.getBatteryLevel();
   janusChargeGuardBattMa = M5.Power.getBatteryCurrent();
   M5.Power.setChargeCurrent(JANUS_CHARGE_GUARD_LOW_CURRENT_MA);
+  // v9.6B: after a brownout/boot, make sure charging is enabled at low current.
+  // The guard may pause charging later only if the pack is not in the critical zone.
+  M5.Power.setBatteryCharge(true);
+  janusChargeGuardPaused = false;
   snprintf(janusChargeGuardLine, sizeof(janusChargeGuardLine), "CHG guard ON %.1fC", janusChargeGuardTempC);
-  Serial.printf("[POWER] smart charge guard ready current=%dmA hot=%.1f cool=%.1f temp=%.1fC batt=%dmV pct=%d\n",
+  Serial.printf("[POWER] smart charge guard ready current=%dmA hot=%.1f cool=%.1f emergencyHot=%.1f low=%dmV temp=%.1fC batt=%dmV pct=%d\n",
                 JANUS_CHARGE_GUARD_LOW_CURRENT_MA, JANUS_CHARGE_GUARD_HOT_C, JANUS_CHARGE_GUARD_COOL_C,
+                JANUS_CHARGE_GUARD_EMERGENCY_HOT_C, JANUS_CHARGE_GUARD_CRITICAL_MV,
                 janusChargeGuardTempC, janusChargeGuardBattMv, janusChargeGuardBattPct);
 #endif
 }
@@ -792,29 +819,82 @@ void janusSmartChargeTick() {
   janusChargeGuardBattPct = M5.Power.getBatteryLevel();
   janusChargeGuardBattMa = M5.Power.getBatteryCurrent();
   bool charging = (int)M5.Power.isCharging() != 0 || janusChargeGuardBattMa > 20;
-  janusThermalThrottle = janusChargeGuardPaused || janusChargeGuardTempC >= 45.0f;
+  bool battKnown = janusChargeGuardBattMv > 0;
+  bool criticalBatt = battKnown && janusChargeGuardBattMv <= JANUS_CHARGE_GUARD_CRITICAL_MV;
+  bool weakBatt = battKnown && janusChargeGuardBattMv <= JANUS_CHARGE_GUARD_WEAK_MV;
+  bool loadHot = janusChargeGuardTempC >= JANUS_CHARGE_GUARD_LOADSHED_HOT_C;
+  bool emergencyHot = janusChargeGuardTempC >= JANUS_CHARGE_GUARD_EMERGENCY_HOT_C;
+
+  janusPowerLowBattery = criticalBatt;
+  janusPowerWeakSupply = weakBatt || (battKnown && janusChargeGuardBattMv < JANUS_CHARGE_GUARD_HOLD_CHARGE_MV && janusChargeGuardBattMa <= 20);
+  // Grove/ATOM power can report cur=0mA and sag hard.  Below HOLD_CHARGE_MV,
+  // do not hot-pause the charger at 53-55C; shed load and keep charge enabled
+  // until the pack is safely above the weak/brownout zone. Emergency heat still wins.
+  janusPowerChargeHold = battKnown &&
+                         janusChargeGuardBattMv < JANUS_CHARGE_GUARD_HOLD_CHARGE_MV &&
+                         !emergencyHot &&
+                         (janusChargeGuardBattMa <= 20 || weakBatt || criticalBatt);
+  bool loadShed = criticalBatt || (weakBatt && loadHot) || emergencyHot || janusPowerChargeHold;
+  janusPowerBrownoutGuard = loadShed;
+  if (janusPowerBrownoutGuard && janusPowerGuardSinceMs == 0) janusPowerGuardSinceMs = now;
+  if (!janusPowerBrownoutGuard) janusPowerGuardSinceMs = 0;
+
+  // Brownout guard: shed load before cutting charge. This is important when powered through Grove/weak upstream power.
+  janusThermalThrottle = janusChargeGuardPaused || janusChargeGuardTempC >= 45.0f || janusPowerBrownoutGuard;
   if (janusThermalThrottle) {
     unifiedMinimalFX = true;
-    if (laserHeat > 55.0f) laserHeat = 55.0f;
+    if (laserHeat > 42.0f) laserHeat = 42.0f;
+  }
+  if (janusPowerBrownoutGuard && brightnessIndex > 1) {
+    brightnessIndex = 1;
+    M5.Display.setBrightness(brightnessLevels[brightnessIndex]);
+    setEffectiveSpeakerVolume();
+  }
+  if (janusPowerBrownoutGuard) {
+    M5.Speaker.setVolume(42);
   }
 
   if (!janusChargeGuardPaused) {
-    if (janusChargeGuardTempC >= JANUS_CHARGE_GUARD_HOT_C) {
+    if (emergencyHot && !criticalBatt && !janusPowerChargeHold) {
+      janusSetBatteryChargeSafe(false, "emergency-hot");
+    } else if (janusChargeGuardTempC >= JANUS_CHARGE_GUARD_HOT_C && !criticalBatt && !janusPowerChargeHold) {
       janusSetBatteryChargeSafe(false, "hot");
     } else if (charging && janusChargeGuardBattMv >= JANUS_CHARGE_GUARD_FULL_MV) {
       janusSetBatteryChargeSafe(false, "full");
     } else {
-      snprintf(janusChargeGuardLine, sizeof(janusChargeGuardLine), "CHG ok T%.1f V%d %dmA", janusChargeGuardTempC, janusChargeGuardBattMv, janusChargeGuardBattMa);
+      snprintf(janusChargeGuardLine, sizeof(janusChargeGuardLine), "CHG ok T%.1f V%d %dmA%s%s",
+               janusChargeGuardTempC, janusChargeGuardBattMv, janusChargeGuardBattMa,
+               janusPowerBrownoutGuard ? " SHED" : "",
+               janusPowerChargeHold ? " HOLD" : "");
     }
   } else {
     bool cooled = janusChargeGuardTempC <= JANUS_CHARGE_GUARD_COOL_C;
-    bool needsBattery = janusChargeGuardBattMv > 0 && janusChargeGuardBattMv <= JANUS_CHARGE_GUARD_RESUME_MV;
-    if (cooled && needsBattery) {
-      janusSetBatteryChargeSafe(true, "cool");
+    bool needsBattery = battKnown && janusChargeGuardBattMv <= JANUS_CHARGE_GUARD_RESUME_MV;
+    bool mustChargeToAvoidBrownout = (criticalBatt || janusPowerChargeHold) && !emergencyHot;
+    if (mustChargeToAvoidBrownout || (cooled && needsBattery)) {
+      janusSetBatteryChargeSafe(true, janusPowerChargeHold ? "grove-hold" : (mustChargeToAvoidBrownout ? "low-batt" : "cool"));
     } else {
       snprintf(janusChargeGuardLine, sizeof(janusChargeGuardLine), "CHG paused T%.1f V%d", janusChargeGuardTempC, janusChargeGuardBattMv);
     }
   }
+
+  static uint32_t janusPowerLastGuardLogMs = 0;
+  static bool janusPowerLastGuardState = false;
+  if (janusPowerBrownoutGuard &&
+      (now - janusPowerLastGuardLogMs >= JANUS_POWER_GUARD_LOG_MS || janusPowerLastGuardState != janusPowerBrownoutGuard)) {
+    janusPowerLastGuardLogMs = now;
+    Serial.printf("[POWER/STICK] guard=1 low=%u weak=%u hold=%u temp=%.1fC batt=%dmV pct=%d cur=%dmA chargePaused=%u wifi=%d ch=%u bright=%u guardSec=%lu\n",
+                  janusPowerLowBattery ? 1U : 0U,
+                  janusPowerWeakSupply ? 1U : 0U,
+                  janusPowerChargeHold ? 1U : 0U,
+                  janusChargeGuardTempC, janusChargeGuardBattMv, janusChargeGuardBattPct, janusChargeGuardBattMa,
+                  janusChargeGuardPaused ? 1U : 0U,
+                  (int)WiFi.status(),
+                  (unsigned)WiFi.channel(),
+                  (unsigned)brightnessLevels[brightnessIndex],
+                  (unsigned long)(janusPowerGuardSinceMs ? ((now - janusPowerGuardSinceMs) / 1000UL) : 0UL));
+  }
+  janusPowerLastGuardState = janusPowerBrownoutGuard;
 #endif
 }
 bool localMicReady = false;
@@ -871,6 +951,11 @@ uint8_t JANUS_BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 uint32_t janusColonySeq = 0;
 uint32_t janusColonyTxOk = 0;
 uint32_t janusColonyTxFail = 0;
+uint8_t janusColonyPeerChannel = 0;
+uint32_t janusColonyPeerRebuilds = 0;
+uint32_t janusColonyLastPeerFixMs = 0;
+uint32_t janusColonyLastSendErr = 0;
+char janusColonyLastSendTag[18] = "-";
 uint32_t janusRemoteSharesSent = 0;
 uint32_t janusRemoteHashesTotal = 0;
 uint32_t janusRemoteHashrate = 0;
@@ -900,6 +985,18 @@ constexpr uint32_t JANUS_COLONY_PULSE_MS = 1200UL;
 constexpr uint32_t JANUS_COLONY_ENTROPY_MS = 2400UL;
 constexpr uint32_t JANUS_MASTER_TIMEOUT_MS = 9000UL;
 constexpr uint32_t JANUS_REMOTE_JOB_TTL_MS = 6500UL;
+constexpr uint32_t JANUS_COLONY_PEER_REFIX_MS = 3500UL;
+
+#define JANUS_STICK_BLACKBOARD_ENABLE       1
+#define JANUS_STICK_BLACKBOARD_HEARTBEAT_MS 5000UL
+#define JANUS_STICK_BLACKBOARD_MOTION_MS    2800UL
+#define JANUS_STICK_BLACKBOARD_HASH_MS      8000UL
+#define JANUS_STICK_BLACKBOARD_MEMORY_MS    30000UL
+#define JANUS_STICK_BLACKBOARD_TASK_MS      18000UL
+#define JANUS_STICK_KENSHI_TX_MS            3200UL
+#define JANUS_STICK_TACHYON_TX_MS           2600UL
+#define JANUS_STICK_TACHYON_ALERT_MS        900UL
+#define JANUS_STICK_POLICY_TIMEOUT_MS       18000UL
 
 // -----------------------------------------------------
 // MODELS
@@ -3569,7 +3666,7 @@ bool projectPoint(const Vec3 &p, int &sx, int &sy, float &depth) {
   } else if (dockPhase != DOCK_NONE || janus.mode == MODE_LAUNCH || currentGoal == GOAL_ESCAPE) {
     float shakeMul = heavyPlanetView ? 0.18f : 0.40f;
     camShakeX = sinf(millis() * 0.00075f) * shakeMul;
-    camShakeY = "YOUR_KEY";
+    camShakeY = cosf(millis() * 0.00052f) * shakeMul;
   }
 #if JANUS_STICKS3_HORIZONTAL
   const float viewCx = SCREEN_W * 0.50f;
@@ -6087,6 +6184,40 @@ struct __attribute__((packed)) EntropyReport {
   float values[4];
 };
 
+struct __attribute__((packed)) SwarmSensePacket {
+  uint8_t magic[2];        // 'S','S'
+  uint8_t version;         // 1
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t micros_tail;
+  uint32_t free_heap;
+  uint16_t loop_jitter_us;
+  uint16_t loop_max_us;
+  int8_t rssi;
+  uint8_t radio_mode;
+  uint8_t bt_flags;
+  uint8_t palette;
+  uint8_t knn_label;
+  uint8_t knn_confidence;
+  uint8_t ai_hint;
+  uint8_t thermal_load;
+  uint16_t effective_batch;
+  uint16_t dynamic_batch;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint16_t best_bits;
+  uint16_t hash_eff_x1000;
+  int16_t prediction_error_x1000;
+  uint16_t entropy_x1000;
+  uint16_t touch_delta;
+  uint16_t job_age_s;
+  uint16_t nonce_remaining_l16;
+  uint16_t flags;
+};
+
 struct __attribute__((packed)) JanusAgentRewardPacket {
   uint8_t magic[2];
   uint8_t version;
@@ -6143,10 +6274,172 @@ struct __attribute__((packed)) JanusPilotLinkPacket {
   uint32_t uptime_ms;
 };
 
+// v9.6 BLACKBOARD PILOT BODY NODE: shared semantic packet ABI with Core2/Buzz/TRON/BlindEye.
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0, JR_CORE = 1, JR_ZIM = 2, JR_BUZZ = 3, JR_BEACON = 4,
+  JR_TRON = 5, JR_BLIND = 6, JR_AUDIO = 7, JR_PYRAMID = 8, JR_SENSOR = 9,
+  JR_RELAY = 10, JR_STICK = 11
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE = 0, JE_BOOT = 1, JE_HEARTBEAT = 2, JE_ENV = 3, JE_MOTION = 4,
+  JE_PRESENCE = 5, JE_SOUND = 6, JE_WIFI_WEAK = 7, JE_LOW_HEAP = 8,
+  JE_HASH = 9, JE_SOLO_ACCEPT = 10, JE_SOLO_REJECT = 11, JE_TASK_NEED = 12,
+  JE_TASK_DONE = 13, JE_DANGER = 14, JE_SAFE = 15, JE_POLICY = 16, JE_AI_MEMORY = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE = 0, JM_QUIET = 1, JM_ALERT = 2, JM_EXPLORE = 3, JM_GUARD = 4, JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP = 0x0001, JC_HUM = 0x0002, JC_PRESS = 0x0004, JC_IMU = 0x0008,
+  JC_MIC = 0x0010, JC_TMOS = 0x0020, JC_AIR = 0x0040, JC_HASH = 0x0080,
+  JC_AUDIO = 0x0100, JC_VISION = 0x0200, JC_TOUCH = 0x0400, JC_RELAY = 0x0800,
+  JC_MEMORY = 0x1000, JC_AI = 0x2000, JC_BATTERY = 0x4000, JC_RF = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;
+  uint8_t urgency;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t swarmMood;
+  uint8_t radioRate;
+  uint8_t buzzBudget;
+  uint8_t sensorRate;
+  uint8_t confidence;
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
+struct __attribute__((packed)) JanusKenshiPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint8_t activeBubbleNodes;
+  uint8_t virtualNodes;
+  uint32_t worldFlags;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t jobState;
+  uint8_t priority;
+  int8_t rssi;
+  float entropy;
+  float activity;
+  float confidence;
+  float values[6];
+};
+
+struct __attribute__((packed)) JanusTachyonProphecyPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint16_t horizon_ms;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t confidence;
+  uint8_t jobState;
+  float presence_now;
+  float motion_now;
+  float pred_presence_1;
+  float pred_motion_1;
+  float pred_presence_2;
+  float pred_motion_2;
+  float pred_presence_3;
+  float pred_motion_3;
+  float event_eta_ms;
+  float future_stress;
+  float swarm_pressure;
+};
+
+struct JanusStickWorldState {
+  bool cortexOnline = false;
+  bool buzzOnline = false;
+  bool dangerActive = false;
+  bool contractActive = false;
+  bool surfaceActive = false;
+  bool combatActive = false;
+  bool docked = false;
+  uint8_t sector = 0;
+  uint8_t predictedSector = 0;
+  uint8_t goal = 0;
+  uint8_t health = 100;
+  uint8_t stress = 0;
+  uint8_t confidence = 45;
+  uint8_t autonomy = 70;
+  float pilotMotion = 0.0f;
+  float futureStress = 0.0f;
+  uint32_t lastUpdateMs = 0;
+  uint32_t lastDangerMs = 0;
+  uint32_t lastSafeMs = 0;
+  uint32_t lastTaskNeedMs = 0;
+  uint32_t lastTaskDoneMs = 0;
+};
+
 uint32_t janusPilotLinkSeq = 0;
 uint32_t janusPilotLinkLastMs = 0;
 uint32_t janusGroundOrdersRx = 0;
 char janusGroundOrderLine[64] = "Core2 order link: waiting";
+
+JanusStickWorldState janusStickWorld;
+uint32_t janusStickEventSeq = 0;
+uint32_t janusStickEventTx = 0;
+uint32_t janusStickEventFail = 0;
+uint32_t janusStickEventSkip = 0;
+uint32_t janusStickPolicyRx = 0;
+uint32_t janusStickLastPolicyMs = 0;
+uint32_t janusStickQuietUntilMs = 0;
+uint8_t janusStickMood = JM_IDLE;
+uint8_t janusStickRadioRate = 1;
+uint8_t janusStickSensorRate = 1;
+uint8_t janusStickPolicyConfidence = 0;
+uint16_t janusStickDangerX100 = 0;
+char janusStickPolicyOrder[40] = "-";
+uint32_t janusStickKenshiSeq = 0;
+uint32_t janusStickKenshiTx = 0;
+uint32_t janusStickTachyonSeq = 0;
+uint32_t janusStickTachyonTx = 0;
+uint32_t janusStickLastKenshiMs = 0;
+uint32_t janusStickLastTachyonMs = 0;
+uint32_t janusStickSwarmSenseSeq = 0;
+uint32_t janusStickSwarmSenseTx = 0;
+uint32_t janusStickSwarmSenseFail = 0;
+uint32_t janusStickLastSwarmSenseMs = 0;
+bool janusStickBootEventSent = false;
 
 uint16_t janusWorkerId() {
   if (janusWorkerIdCache) return janusWorkerIdCache;
@@ -6217,24 +6510,566 @@ void janusApplyAgentRewardFields(const char* targetNode,
   statusLine = (rewardLevel >= 3) ? "BUZZ GOLD" : ((aiHint == 3) ? "BUZZ BOOST" : "BUZZ REWARD");
 }
 
-void janusColonyEnsurePeer() {
+uint8_t janusColonyCurrentWifiChannel() {
 #if JANUS_ENABLE_BUZZ_ESPNOW
+  if (WiFi.status() != WL_CONNECTED) return 0;
   uint8_t primary = 0;
   wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
-  esp_wifi_get_channel(&primary, &second);
-  if (primary == 0 && WiFi.status() == WL_CONNECTED) primary = WiFi.channel();
-  if (primary == 0) primary = 1;
+  if (esp_wifi_get_channel(&primary, &second) != ESP_OK) primary = 0;
+  if (primary == 0) primary = WiFi.channel();
+  // v9.6B: do not fall back to channel 1 before Wi-Fi joins the AP.
+  // The real JANUS_WIFI_PLACEHOLDER channel is learned after STA association; early ch=1 spam created fail bursts.
+  return primary;
+#else
+  return 1;
+#endif
+}
 
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+bool janusColonyAddPeer(uint8_t primary, const char* reason) {
+#if JANUS_ENABLE_BUZZ_ESPNOW
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, JANUS_BROADCAST_MAC, 6);
   peerInfo.channel = primary;
   peerInfo.encrypt = false;
   esp_err_t r = esp_now_add_peer(&peerInfo);
-  if (r != ESP_OK) {
-    janusColonyTxFail++;
-    Serial.printf("[BUZZ] peer add failed ch=%u err=%d\n", primary, (int)r);
+  if (r == ESP_OK || r == ESP_ERR_ESPNOW_EXIST) {
+    janusColonyPeerChannel = primary;
+    janusColonyLastPeerFixMs = millis();
+    janusColonyPeerRebuilds++;
+    Serial.printf("[STICK/RADIO] peer ready ch=%u rebuilds=%lu reason=%s\n",
+                  (unsigned)primary, (unsigned long)janusColonyPeerRebuilds, reason ? reason : "-");
+    return true;
   }
+  janusColonyPeerChannel = 0;
+  janusColonyTxFail++;
+  Serial.printf("[STICK/RADIO] peer add fail ch=%u err=%d reason=%s\n",
+                (unsigned)primary, (int)r, reason ? reason : "-");
+  return false;
+#else
+  (void)primary; (void)reason; return false;
+#endif
+}
+
+void janusColonyForcePeerRebuild(const char* reason) {
+#if JANUS_ENABLE_BUZZ_ESPNOW
+  uint8_t primary = janusColonyCurrentWifiChannel();
+  if (primary == 0) return;
+  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  janusColonyPeerChannel = 0;
+  janusColonyAddPeer(primary, reason ? reason : "force");
+#else
+  (void)reason;
+#endif
+}
+
+void janusColonyEnsurePeer() {
+#if JANUS_ENABLE_BUZZ_ESPNOW
+  uint8_t primary = janusColonyCurrentWifiChannel();
+  if (primary == 0) return;
+  bool exists = esp_now_is_peer_exist(JANUS_BROADCAST_MAC);
+  if (exists && janusColonyPeerChannel == primary) return;
+  if (exists && millis() - janusColonyLastPeerFixMs < JANUS_COLONY_PEER_REFIX_MS) return;
+  if (exists) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  janusColonyPeerChannel = 0;
+  janusColonyAddPeer(primary, "ensure");
+#endif
+}
+
+esp_err_t janusEspNowBroadcast(const char* tag, const uint8_t* data, size_t len) {
+#if JANUS_ENABLE_BUZZ_ESPNOW
+  if (!data || len == 0) return ESP_FAIL;
+  if (WiFi.status() != WL_CONNECTED) return ESP_FAIL;
+  janusColonyEnsurePeer();
+  esp_err_t r = esp_now_send(JANUS_BROADCAST_MAC, data, len);
+  if (r == ESP_OK) {
+    janusColonyTxOk++;
+  } else {
+    janusColonyTxFail++;
+    janusColonyLastSendErr = (uint32_t)r;
+    strlcpy(janusColonyLastSendTag, tag ? tag : "send", sizeof(janusColonyLastSendTag));
+    Serial.printf("[STICK/RADIO] tx fail tag=%s err=%d fail=%lu ch=%u wifi=%d\n",
+                  janusColonyLastSendTag, (int)r, (unsigned long)janusColonyTxFail,
+                  (unsigned)janusColonyPeerChannel, (int)WiFi.status());
+    janusColonyForcePeerRebuild(tag ? tag : "tx-fail");
+  }
+  return r;
+#else
+  (void)tag; (void)data; (void)len; return ESP_FAIL;
+#endif
+}
+
+
+uint16_t janusBbHash16(const char* s) {
+  uint16_t h = 0x811C;
+  if (!s) return h;
+  while (*s) {
+    h ^= (uint8_t)(*s++);
+    h = (uint16_t)(h * 167U + 13U);
+  }
+  return h;
+}
+
+uint32_t janusBbMix32(uint32_t x) {
+  x ^= x >> 16; x *= 0x7feb352dUL;
+  x ^= x >> 15; x *= 0x846ca68bUL;
+  x ^= x >> 16;
+  return x;
+}
+
+uint32_t janusBbEventChecksumRaw(const void* rawPtr) {
+  if (!rawPtr) return 0x4A45564FUL;
+  const JanusEventPacket& je = *(const JanusEventPacket*)rawPtr;
+  uint32_t h = 0x4A45564FUL;
+  const uint8_t* b = (const uint8_t*)&je;
+  const size_t n = sizeof(JanusEventPacket) - sizeof(uint32_t) - sizeof(uint32_t);
+  for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 16777619UL; }
+  h ^= je.ttlMs;
+  return janusBbMix32(h);
+}
+
+int16_t janusX10(float v, float lo, float hi) {
+  if (!isfinite(v)) v = 0.0f;
+  v = clampf(v, lo, hi);
+  return (int16_t)roundf(v * 10.0f);
+}
+
+uint8_t janusClampU8(int v) {
+  if (v < 0) return 0;
+  if (v > 100) return 100;
+  return (uint8_t)v;
+}
+
+const char* janusStickMoodName(uint8_t mood) {
+  switch (mood) {
+    case JM_QUIET: return "QUIET";
+    case JM_ALERT: return "ALERT";
+    case JM_EXPLORE: return "EXPLORE";
+    case JM_GUARD: return "GUARD";
+    case JM_RECOVER: return "RECOVER";
+    default: return "IDLE";
+  }
+}
+
+uint16_t janusStickCapabilities() {
+  return JC_IMU | JC_TOUCH | JC_HASH | JC_RELAY | JC_MEMORY | JC_AI | JC_BATTERY | JC_RF;
+}
+
+uint8_t janusStickJobState() {
+  if (surfaceOp.active) return 3;
+  if (janus.mode == MODE_COMBAT || currentGoal == GOAL_FIGHT || pilot.missileIncoming) return 3;
+  if (currentGoal == GOAL_MISSION || currentBarMission.active) return 4;
+  if (pilot.docked) return 1;
+  if (janusRemoteJobActive) return 5;
+  return 2;
+}
+
+void janusStickUpdateWorldState(uint32_t now) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  JanusStickWorldState& w = janusStickWorld;
+  w.cortexOnline = janusStickLastPolicyMs && (now - janusStickLastPolicyMs < JANUS_STICK_POLICY_TIMEOUT_MS);
+  w.buzzOnline = janusColonyMasterPresent && (now - janusColonyLastMasterMs < JANUS_MASTER_TIMEOUT_MS);
+  w.contractActive = currentBarMission.active || surfaceOp.active || (janusLastGroundOrderMs && now - janusLastGroundOrderMs < 90000UL);
+  w.surfaceActive = surfaceOp.active;
+  w.combatActive = (janus.mode == MODE_COMBAT || currentGoal == GOAL_FIGHT || pilot.missileIncoming);
+  w.docked = pilot.docked;
+  w.sector = janusPilotSector();
+
+  float motion = fabsf(shipYaw) * 0.55f + fabsf(shipPitch) * 0.55f + fabsf(shipRoll) * 0.35f + shipSpeed * 4.0f;
+  if (!janusAutopilot) motion += 0.25f;
+  if (surfaceOp.active) motion += (float)surfaceOp.threat * 0.12f;
+  motion += localMicMood * 0.08f + remoteExplorationBias * 0.20f;
+  w.pilotMotion = clampf(motion, 0.0f, 3.0f);
+
+  int stress = 0;
+  stress += (int)clampf((100.0f - shipShield) * 0.38f, 0.0f, 45.0f);
+  stress += (int)clampf((100.0f - shipEnergy) * 0.25f, 0.0f, 35.0f);
+  stress += (int)clampf(laserHeat * 0.18f, 0.0f, 22.0f);
+  stress += w.combatActive ? 28 : 0;
+  stress += surfaceOp.active ? (18 + surfaceOp.threat * 5 + surfaceOp.mechHeat / 6) : 0;
+  stress += janusThermalThrottle ? 30 : 0;
+  stress += (janusStickDangerX100 > 62) ? 8 : 0;
+  w.stress = janusClampU8(stress);
+  w.dangerActive = w.stress >= 62 || w.combatActive || pilot.missileIncoming || shipShield < 35.0f || shipEnergy < 30.0f;
+
+  int health = 100;
+  health -= (int)clampf((100.0f - shipShield) * 0.35f, 0.0f, 35.0f);
+  health -= (int)clampf((100.0f - shipEnergy) * 0.30f, 0.0f, 35.0f);
+  health -= (int)clampf(laserHeat * 0.16f, 0.0f, 18.0f);
+  health -= janusThermalThrottle ? 22 : 0;
+  if (surfaceOp.active) health -= (int)clampf((float)surfaceOp.mechHeat * 0.10f, 0.0f, 12.0f);
+  w.health = janusClampU8(health);
+
+  int conf = 35 + (w.cortexOnline ? 16 : 0) + (w.buzzOnline ? 8 : 0) + (pilot.docked ? 6 : 0) + (janusRemoteJobActive ? 8 : 0);
+  conf += (int)clampf(shipShield * 0.12f + shipEnergy * 0.10f, 0.0f, 22.0f);
+  conf -= w.dangerActive ? 12 : 0;
+  w.confidence = janusClampU8(conf);
+  w.autonomy = janusClampU8((janusAutopilot ? 68 : 92) + (janusCruiseMode ? 6 : 0) - (w.cortexOnline ? 0 : 8));
+  w.goal = (uint8_t)currentGoal;
+  w.futureStress = clampf((float)w.stress / 100.0f + w.pilotMotion * 0.22f + (currentBarMission.active ? 0.20f : 0.0f), 0.0f, 3.0f);
+  w.predictedSector = (uint8_t)((w.sector + (w.futureStress > 1.15f ? 2 : (w.pilotMotion > 0.75f ? 1 : 0))) & 0x0F);
+  w.lastUpdateMs = now;
+#endif
+}
+
+void janusHandleBlackboardPolicyPacketRaw(const void* rawPtr) {
+  if (!rawPtr) return;
+  const JanusPolicyPacket& jp = *(const JanusPolicyPacket*)rawPtr;
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+  uint32_t now = millis();
+  janusStickPolicyRx++;
+  janusStickLastPolicyMs = now;
+  janusStickMood = jp.swarmMood;
+  janusStickRadioRate = jp.radioRate;
+  janusStickSensorRate = jp.sensorRate;
+  janusStickPolicyConfidence = jp.confidence;
+  janusStickDangerX100 = jp.danger_x100;
+  uint32_t quietForMs = jp.quietUntilMs;
+  if (quietForMs > 60000UL) quietForMs = 60000UL;
+  janusStickQuietUntilMs = quietForMs ? (now + quietForMs) : 0;
+  strlcpy(janusStickPolicyOrder, jp.order[0] ? jp.order : "-", sizeof(janusStickPolicyOrder));
+
+  static uint32_t lastLogMs = 0;
+  if (now - lastLogMs > 4000UL) {
+    lastLogMs = now;
+    Serial.printf("[BLACKBOARD/STICK] policy rx=%lu mood=%s radio=%u sensor=%u conf=%u danger=%.2f order=%s\n",
+                  (unsigned long)janusStickPolicyRx, janusStickMoodName(janusStickMood),
+                  (unsigned)janusStickRadioRate, (unsigned)janusStickSensorRate,
+                  (unsigned)janusStickPolicyConfidence, (float)janusStickDangerX100 / 100.0f,
+                  janusStickPolicyOrder);
+  }
+#endif
+}
+
+bool janusStickCriticalEvent(uint8_t eventType) {
+  return eventType == JE_BOOT || eventType == JE_HEARTBEAT || eventType == JE_DANGER ||
+         eventType == JE_SAFE || eventType == JE_WIFI_WEAK || eventType == JE_LOW_HEAP ||
+         eventType == JE_TASK_NEED || eventType == JE_SOLO_ACCEPT;
+}
+
+uint8_t janusStickAttentionScore(uint8_t eventType, uint8_t confidence, uint8_t urgency) {
+  uint16_t s = ((uint16_t)confidence * 3U + (uint16_t)urgency * 5U) / 8U;
+  if (eventType == JE_DANGER || eventType == JE_TASK_NEED || eventType == JE_WIFI_WEAK || eventType == JE_LOW_HEAP) s += 24;
+  else if (eventType == JE_SOLO_ACCEPT || eventType == JE_SAFE) s += 18;
+  else if (eventType == JE_BOOT || eventType == JE_HEARTBEAT) s += 10;
+  if (janusStickMood == JM_ALERT || janusStickMood == JM_GUARD) s += 7;
+  if (janusStickWorld.dangerActive) s += 9;
+  if (s > 100U) s = 100U;
+  return (uint8_t)s;
+}
+
+bool janusEmitStickEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                         uint16_t topicHash, uint16_t objectHash,
+                         int16_t a, int16_t b, int16_t c, int16_t d, uint32_t ttlMs) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  if (!janusColonyReady) return false;
+  if (WiFi.status() != WL_CONNECTED || janusColonyCurrentWifiChannel() == 0) { janusStickEventSkip++; return false; }
+  uint8_t att = janusStickAttentionScore(eventType, confidence, urgency);
+  if (!janusStickCriticalEvent(eventType) && janusStickRadioRate == 0 && att < 70) { janusStickEventSkip++; return false; }
+  if (!janusStickCriticalEvent(eventType) && millis() < janusStickQuietUntilMs && att < 82) { janusStickEventSkip++; return false; }
+
+  JanusEventPacket je{};
+  je.magic[0] = 'J'; je.magic[1] = 'E';
+  je.version = 1;
+  je.eventType = eventType;
+  je.nodeRole = JR_STICK;
+  je.confidence = confidence > 100 ? 100 : confidence;
+  je.urgency = urgency > 100 ? 100 : urgency;
+  strlcpy(je.nodeId, JANUS_NODE_ID, sizeof(je.nodeId));
+  strlcpy(je.kind, kind && kind[0] ? kind : "stick", sizeof(je.kind));
+  je.seq = ++janusStickEventSeq;
+  je.uptimeMs = millis();
+  je.topicHash = topicHash;
+  je.objectHash = objectHash;
+  je.capabilities = janusStickCapabilities();
+  je.valueA_x10 = a; je.valueB_x10 = b; je.valueC_x10 = c; je.valueD_x10 = d;
+  je.ttlMs = ttlMs;
+  je.eventHash = janusBbEventChecksumRaw(&je);
+  esp_err_t r = janusEspNowBroadcast("stick-je", (const uint8_t*)&je, sizeof(je));
+  if (r == ESP_OK) { janusStickEventTx++; return true; }
+  janusStickEventFail++;
+#endif
+  return false;
+}
+
+void janusStickBlackboardTick(uint32_t now) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  static uint32_t lastHeartbeatMs = 0;
+  static uint32_t lastMotionMs = 0;
+  static uint32_t lastHashMs = 0;
+  static uint32_t lastMemoryMs = 0;
+  static uint32_t lastDiagMs = 0;
+  static uint32_t lastShareSeen = 0;
+  static bool lastDanger = false;
+
+  janusStickUpdateWorldState(now);
+  uint32_t radioMul = (janusStickRadioRate == 0 || now < janusStickQuietUntilMs) ? 2UL : 1UL;
+  uint32_t sensorMul = (janusStickSensorRate == 0 || now < janusStickQuietUntilMs) ? 2UL : 1UL;
+  int8_t rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
+
+  if (!janusStickBootEventSent && WiFi.status() == WL_CONNECTED) {
+    janusStickBootEventSent = janusEmitStickEvent(JE_BOOT, "stick_boot", 88, 30,
+      janusBbHash16("boot"), janusBbHash16(JANUS_NODE_ID),
+      (int16_t)rssi, (int16_t)(ESP.getFreeHeap() / 1024), (int16_t)janusStickWorld.sector, 0, 45000UL);
+  }
+
+  if (now - lastHeartbeatMs >= JANUS_STICK_BLACKBOARD_HEARTBEAT_MS * radioMul) {
+    lastHeartbeatMs = now;
+    janusEmitStickEvent(JE_HEARTBEAT, "stick_state", janusStickWorld.confidence, janusStickWorld.dangerActive ? 58 : 24,
+      janusBbHash16("stick"), janusBbHash16("heartbeat"),
+      (int16_t)janusStickWorld.health, (int16_t)janusStickWorld.stress,
+      (int16_t)rssi, (int16_t)janusRemoteHashrate, 18000UL);
+  }
+
+  if (now - lastMotionMs >= JANUS_STICK_BLACKBOARD_MOTION_MS * sensorMul) {
+    lastMotionMs = now;
+    uint8_t ev = janusStickWorld.dangerActive ? JE_MOTION : JE_PRESENCE;
+    uint8_t urg = janusStickWorld.dangerActive ? 76 : 34;
+    janusEmitStickEvent(ev, surfaceOp.active ? "stick_surface" : "stick_pilot", janusStickWorld.confidence, urg,
+      janusBbHash16("pilot"), janusBbHash16("body"),
+      janusX10(janusStickWorld.pilotMotion, 0.0f, 10.0f),
+      janusX10(shipShield, 0.0f, 200.0f),
+      janusX10(shipEnergy, 0.0f, 200.0f),
+      (int16_t)janusStickWorld.sector, 16000UL);
+  }
+
+  if (janusStickWorld.dangerActive != lastDanger) {
+    lastDanger = janusStickWorld.dangerActive;
+    if (lastDanger) {
+      janusStickWorld.lastDangerMs = now;
+      janusEmitStickEvent(JE_DANGER, "stick_danger", janusStickWorld.confidence, 86,
+        janusBbHash16("danger"), janusBbHash16("pilot"),
+        (int16_t)janusStickWorld.stress, janusX10(shipShield, 0.0f, 200.0f),
+        janusX10(shipEnergy, 0.0f, 200.0f), (int16_t)janusStickWorld.goal, 20000UL);
+    } else {
+      janusStickWorld.lastSafeMs = now;
+      janusEmitStickEvent(JE_SAFE, "stick_safe", janusStickWorld.confidence, 32,
+        janusBbHash16("safe"), janusBbHash16("pilot"),
+        (int16_t)janusStickWorld.health, (int16_t)janusStickWorld.stress,
+        (int16_t)janusStickWorld.sector, 0, 26000UL);
+    }
+  }
+
+  if (now - lastHashMs >= JANUS_STICK_BLACKBOARD_HASH_MS * radioMul) {
+    lastHashMs = now;
+    janusEmitStickEvent(JE_HASH, "stick_hash", janusRemoteHashrate > 0 ? 74 : 34, janusRemoteHashrate > 0 ? 34 : 16,
+      janusBbHash16("hash"), janusBbHash16("stick-worker"),
+      (int16_t)constrain((int32_t)janusRemoteHashrate / 10, -32768L, 32767L),
+      (int16_t)janusBestBits,
+      (int16_t)constrain((int32_t)janusRemoteSharesSent, 0L, 32767L),
+      (int16_t)janusMiningBatch, 22000UL);
+  }
+
+  if (janusRemoteSharesSent > lastShareSeen) {
+    lastShareSeen = janusRemoteSharesSent;
+    janusEmitStickEvent(JE_SOLO_ACCEPT, "stick_share", 92, 78,
+      janusBbHash16("hash-accept"), janusBbHash16("stick-worker"),
+      (int16_t)constrain((int32_t)janusRemoteSharesSent, 0L, 32767L),
+      (int16_t)janusBestBits,
+      (int16_t)constrain((int32_t)janusRemoteHashrate / 10, -32768L, 32767L), 0, 42000UL);
+  }
+
+  if (now - lastMemoryMs >= JANUS_STICK_BLACKBOARD_MEMORY_MS * radioMul) {
+    lastMemoryMs = now;
+    janusEmitStickEvent(JE_AI_MEMORY, "stick_memory", janusStickWorld.confidence, 36,
+      janusBbHash16("memory"), janusBbHash16("pilot-state"),
+      (int16_t)pilot.currentSystem, (int16_t)pilot.kills,
+      janusX10(janus.aggression, 0.0f, 1.0f), janusX10(janus.caution, 0.0f, 1.0f), 70000UL);
+  }
+
+  if (janusStickWorld.health < 45 && now - janusStickWorld.lastTaskNeedMs >= JANUS_STICK_BLACKBOARD_TASK_MS) {
+    janusStickWorld.lastTaskNeedMs = now;
+    janusEmitStickEvent(JE_TASK_NEED, "stick_needs_recover", janusStickWorld.confidence, 82,
+      janusBbHash16("task"), janusBbHash16("recover"),
+      (int16_t)janusStickWorld.health, (int16_t)janusStickWorld.stress, (int16_t)rssi, 0, 30000UL);
+  } else if (currentBarMission.active && now - janusStickWorld.lastTaskDoneMs >= 45000UL) {
+    janusStickWorld.lastTaskDoneMs = now;
+    janusEmitStickEvent(JE_TASK_DONE, "stick_contract_alive", janusStickWorld.confidence, 22,
+      janusBbHash16("task"), janusBbHash16("contract"),
+      (int16_t)pilot.currentSystem, (int16_t)janusStickWorld.sector, (int16_t)currentBarMission.type, 0, 45000UL);
+  }
+
+  if (now - lastDiagMs >= 15000UL) {
+    lastDiagMs = now;
+    Serial.printf("[BLACKBOARD/STICK] tx=%lu fail=%lu skip=%lu pol=%lu mood=%s H=%lu hp=%u stress=%u sec=%u->%u k2=%lu tp=%lu ss=%lu/%lu peerCh=%u wifi=%d ch=%u batt=%dmV temp=%.1f guard=%u hold=%u order=%s\n",
+      (unsigned long)janusStickEventTx, (unsigned long)janusStickEventFail, (unsigned long)janusStickEventSkip,
+      (unsigned long)janusStickPolicyRx, janusStickMoodName(janusStickMood), (unsigned long)janusRemoteHashrate,
+      (unsigned)janusStickWorld.health, (unsigned)janusStickWorld.stress,
+      (unsigned)janusStickWorld.sector, (unsigned)janusStickWorld.predictedSector,
+      (unsigned long)janusStickKenshiTx, (unsigned long)janusStickTachyonTx,
+      (unsigned long)janusStickSwarmSenseTx, (unsigned long)janusStickSwarmSenseFail,
+      (unsigned)janusColonyPeerChannel, (int)WiFi.status(), (unsigned)janusColonyCurrentWifiChannel(),
+      janusChargeGuardBattMv, janusChargeGuardTempC, janusPowerBrownoutGuard ? 1U : 0U,
+      janusPowerChargeHold ? 1U : 0U, janusStickPolicyOrder);
+  }
+#endif
+}
+
+void janusStickSendKenshi(uint32_t now, bool force=false) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  if (!janusColonyReady) return;
+  if (!force && now - janusStickLastKenshiMs < JANUS_STICK_KENSHI_TX_MS) return;
+  janusStickLastKenshiMs = now;
+  janusStickUpdateWorldState(now);
+
+  JanusKenshiPacket kp{};
+  kp.magic[0] = 'K'; kp.magic[1] = '2';
+  kp.version = 1;
+  kp.flags = 0x04;
+  if (janusStickWorld.pilotMotion > 0.35f) kp.flags |= 0x01;
+  if (janusStickWorld.dangerActive) kp.flags |= 0x02;
+  strlcpy(kp.nodeId, JANUS_NODE_ID, sizeof(kp.nodeId));
+  kp.seq = ++janusStickKenshiSeq;
+  kp.worker_id = janusWorkerId();
+  kp.uptime_ms = now;
+  kp.activeBubbleNodes = (uint8_t)constrain((janusStickWorld.buzzOnline ? 1 : 0) + (janusStickWorld.cortexOnline ? 1 : 0) + (janusStickWorld.contractActive ? 1 : 0), 0, 8);
+  kp.virtualNodes = 1;
+  kp.worldFlags = ((uint32_t)kp.flags) | ((uint32_t)janusStickWorld.goal << 8) | ((uint32_t)pilot.legalStatus << 16) | ((uint32_t)pilot.shipFrame << 24);
+  kp.sector = janusStickWorld.sector;
+  kp.predictedSector = janusStickWorld.predictedSector;
+  kp.jobState = janusStickJobState();
+  kp.priority = (uint8_t)constrain((int)janusStickWorld.stress * 2 + (currentBarMission.active ? 20 : 0), 0, 255);
+  kp.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
+  kp.entropy = janusComputeGameEntropy();
+  kp.activity = janusStickWorld.pilotMotion;
+  kp.confidence = (float)janusStickWorld.confidence / 100.0f;
+  // Core2 K2 observer expects values[0]=presence, values[1]=motion, values[2]=air/load.
+  kp.values[0] = janusStickWorld.pilotMotion;
+  kp.values[1] = janusStickWorld.futureStress;
+  kp.values[2] = (float)janusStickWorld.stress / 100.0f;
+  kp.values[3] = janusStickWorld.dangerActive ? 1.0f : 0.0f;
+  kp.values[4] = (float)janusRemoteHashrate;
+  kp.values[5] = (float)pilot.credits;
+  if (janusEspNowBroadcast("stick-k2", (const uint8_t*)&kp, sizeof(kp)) == ESP_OK) janusStickKenshiTx++;
+#endif
+}
+
+void janusStickSendTachyon(uint32_t now, bool force=false) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  if (!janusColonyReady) return;
+  uint32_t interval = janusStickWorld.dangerActive ? JANUS_STICK_TACHYON_ALERT_MS : JANUS_STICK_TACHYON_TX_MS;
+  if (!force && now - janusStickLastTachyonMs < interval) return;
+  janusStickLastTachyonMs = now;
+  janusStickUpdateWorldState(now);
+
+  JanusTachyonProphecyPacket tp{};
+  tp.magic[0] = 'T'; tp.magic[1] = 'P';
+  tp.version = 1;
+  tp.flags = 0;
+  if (janusStickWorld.pilotMotion > 0.35f) tp.flags |= 0x01;
+  if (janusStickWorld.combatActive || surfaceOp.active) tp.flags |= 0x02;
+  if (janusStickWorld.dangerActive) tp.flags |= 0x04;
+  if (janusStickWorld.cortexOnline) tp.flags |= 0x08;
+  strlcpy(tp.nodeId, JANUS_NODE_ID, sizeof(tp.nodeId));
+  tp.seq = ++janusStickTachyonSeq;
+  tp.worker_id = janusWorkerId();
+  tp.uptime_ms = now;
+  tp.horizon_ms = 2400;
+  tp.sector = janusStickWorld.sector;
+  tp.predictedSector = janusStickWorld.predictedSector;
+  tp.confidence = janusStickWorld.confidence;
+  tp.jobState = janusStickJobState();
+  tp.presence_now = janusStickWorld.pilotMotion;
+  tp.motion_now = janusStickWorld.combatActive ? 1.0f : (shipSpeed * 3.0f + localMicMood * 0.1f);
+  tp.pred_presence_1 = clampf(tp.presence_now * 0.70f + janusStickWorld.futureStress * 0.22f, 0.0f, 3.0f);
+  tp.pred_motion_1 = clampf(tp.motion_now * 0.68f + janusStickWorld.stress / 100.0f * 0.38f, 0.0f, 3.0f);
+  tp.pred_presence_2 = clampf(tp.pred_presence_1 * 0.82f + (currentBarMission.active ? 0.20f : 0.0f), 0.0f, 3.0f);
+  tp.pred_motion_2 = clampf(tp.pred_motion_1 * 0.82f + (surfaceOp.active ? 0.35f : 0.0f), 0.0f, 3.0f);
+  tp.pred_presence_3 = clampf(tp.pred_presence_2 * 0.82f, 0.0f, 3.0f);
+  tp.pred_motion_3 = clampf(tp.pred_motion_2 * 0.82f, 0.0f, 3.0f);
+  tp.event_eta_ms = janusStickWorld.dangerActive ? 350.0f : 9999.0f;
+  tp.future_stress = janusStickWorld.futureStress;
+  tp.swarm_pressure = remoteExplorationBias + (janusStickDangerX100 / 100.0f) * 0.45f;
+  if (janusEspNowBroadcast("stick-tp", (const uint8_t*)&tp, sizeof(tp)) == ESP_OK) janusStickTachyonTx++;
+#endif
+}
+
+void janusStickSendSwarmSense(uint32_t now, bool force=false) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  if (!janusColonyReady) return;
+  uint32_t interval = janusPowerBrownoutGuard ? JANUS_STICK_SWARMSENSE_GUARD_MS : JANUS_STICK_SWARMSENSE_TX_MS;
+  if (!force && now - janusStickLastSwarmSenseMs < interval) return;
+  janusStickLastSwarmSenseMs = now;
+  janusStickUpdateWorldState(now);
+
+  SwarmSensePacket ss{};
+  ss.magic[0] = 'S'; ss.magic[1] = 'S';
+  ss.version = 1;
+  ss.worker_id = janusWorkerId();
+  strlcpy(ss.nodeId, JANUS_NODE_ID, sizeof(ss.nodeId));
+  strlcpy(ss.kind, "pilot_body", sizeof(ss.kind));
+  ss.seq = ++janusStickSwarmSenseSeq;
+  ss.uptime_ms = now;
+  ss.micros_tail = micros();
+  ss.free_heap = ESP.getFreeHeap();
+  ss.loop_jitter_us = (uint16_t)constrain((int32_t)(millis() - lastLogicTick), 0L, 65535L);
+  ss.loop_max_us = (uint16_t)constrain((int32_t)(janusPowerBrownoutGuard ? JANUS_POWER_GUARD_RENDER_MS : RENDER_INTERVAL_MS), 0L, 65535L);
+  ss.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
+  ss.radio_mode = janusPowerBrownoutGuard ? 0 : (janusStickRadioRate ? janusStickRadioRate : 1);
+  ss.bt_flags = 0;
+  if (janusStickWorld.cortexOnline) ss.bt_flags |= 0x01;
+  if (janusStickWorld.buzzOnline) ss.bt_flags |= 0x02;
+  if (janusStickWorld.dangerActive) ss.bt_flags |= 0x04;
+  if (janusPowerBrownoutGuard) ss.bt_flags |= 0x08;
+  ss.palette = brightnessIndex;
+  ss.knn_label = janusStickWorld.sector;
+  ss.knn_confidence = janusStickWorld.confidence;
+  ss.ai_hint = janusAgentHint;
+  ss.thermal_load = (uint8_t)constrain((int)janusChargeGuardTempC, 0, 100);
+  ss.effective_batch = janusMiningBatch;
+  ss.dynamic_batch = janusMiningBatch;
+  ss.hash_rate = janusRemoteHashrate;
+  ss.total_hashes = janusRemoteHashesTotal;
+  ss.best_bits = janusBestBits;
+  ss.hash_eff_x1000 = (uint16_t)constrain((int32_t)(janusRemoteHashrate / 10UL), 0L, 65535L);
+  ss.prediction_error_x1000 = (int16_t)constrain((int32_t)(janusStickWorld.futureStress * 1000.0f), -32768L, 32767L);
+  ss.entropy_x1000 = (uint16_t)constrain((int32_t)(janusComputeGameEntropy() * 1000.0f), 0L, 65535L);
+  ss.touch_delta = (M5.BtnA.isPressed() || M5.BtnB.isPressed() || M5.BtnPWR.isPressed()) ? 1 : 0;
+  ss.job_age_s = janusRemoteJobRxMs ? (uint16_t)min(65535UL, (now - janusRemoteJobRxMs) / 1000UL) : 65535U;
+  ss.nonce_remaining_l16 = janusRemoteJobActive ? (uint16_t)((janusRemoteRangeEnd > janusRemoteNonce) ? ((janusRemoteRangeEnd - janusRemoteNonce) & 0xFFFF) : 0) : 0;
+  ss.flags = ((uint16_t)janusStickWorld.goal << 8) | (uint16_t)janusStickJobState();
+
+  esp_err_t r = janusEspNowBroadcast("stick-ss", (const uint8_t*)&ss, sizeof(ss));
+  if (r == ESP_OK) janusStickSwarmSenseTx++;
+  else janusStickSwarmSenseFail++;
+#endif
+}
+
+void janusStickDiagTick(uint32_t now) {
+#if JANUS_STICK_BLACKBOARD_ENABLE
+  static uint32_t lastDiagMs = 0;
+  uint32_t interval = janusPowerBrownoutGuard ? JANUS_STICK_DIAG_GUARD_MS : JANUS_STICK_DIAG_NORMAL_MS;
+  if (now - lastDiagMs < interval) return;
+  lastDiagMs = now;
+  uint8_t ch = janusColonyCurrentWifiChannel();
+  Serial.printf("[STICK/DIAG] guard=%u low=%u weak=%u hold=%u wifi=%d ch=%u peer=%u txOk=%lu txFail=%lu je=%lu/%lu skip=%lu pol=%lu k2=%lu tp=%lu ss=%lu/%lu H=%lu batch=%u batt=%dmV temp=%.1f bright=%u sec=%u->%u lastErr=%lu tag=%s order=%s\n",
+                janusPowerBrownoutGuard ? 1U : 0U,
+                janusPowerLowBattery ? 1U : 0U,
+                janusPowerWeakSupply ? 1U : 0U,
+                janusPowerChargeHold ? 1U : 0U,
+                (int)WiFi.status(),
+                (unsigned)ch,
+                (unsigned)janusColonyPeerChannel,
+                (unsigned long)janusColonyTxOk,
+                (unsigned long)janusColonyTxFail,
+                (unsigned long)janusStickEventTx,
+                (unsigned long)janusStickEventFail,
+                (unsigned long)janusStickEventSkip,
+                (unsigned long)janusStickPolicyRx,
+                (unsigned long)janusStickKenshiTx,
+                (unsigned long)janusStickTachyonTx,
+                (unsigned long)janusStickSwarmSenseTx,
+                (unsigned long)janusStickSwarmSenseFail,
+                (unsigned long)janusRemoteHashrate,
+                (unsigned)janusMiningBatch,
+                janusChargeGuardBattMv,
+                janusChargeGuardTempC,
+                (unsigned)brightnessLevels[brightnessIndex],
+                (unsigned)janusStickWorld.sector,
+                (unsigned)janusStickWorld.predictedSector,
+                (unsigned long)janusColonyLastSendErr,
+                janusColonyLastSendTag,
+                janusStickPolicyOrder);
 #endif
 }
 
@@ -6245,6 +7080,13 @@ void janusOnEspNowRecv(const uint8_t *mac, const uint8_t *data, int len) {
 #endif
 #if JANUS_ENABLE_BUZZ_ESPNOW
   if (!data || len < 2) return;
+
+  if (len == sizeof(JanusPolicyPacket) && data[0] == 'J' && data[1] == 'P') {
+    JanusPolicyPacket jp{};
+    memcpy(&jp, data, sizeof(jp));
+    janusHandleBlackboardPolicyPacketRaw(&jp);
+    return;
+  }
 
   if (len == sizeof(JanusColonyPacket)) {
     JanusColonyPacket pkt = {};
@@ -6307,7 +7149,7 @@ void janusBuzzWorkerBegin() {
   esp_now_register_recv_cb(janusOnEspNowRecv);
   janusColonyEnsurePeer();
   janusColonyReady = true;
-  Serial.printf("[BUZZ] worker ready node=%s ch=%d\n", JANUS_NODE_ID, WiFi.channel());
+  Serial.printf("[STICK] v9.6D blackboard pilot/body grove-hold ready node=%s ch=%d peerCh=%u\n", JANUS_NODE_ID, WiFi.channel(), (unsigned)janusColonyPeerChannel);
 #endif
 }
 
@@ -6331,8 +7173,7 @@ void janusSendHeartbeat() {
   pkt.jobAgeMs = janusRemoteJobRxMs ? (millis() - janusRemoteJobRxMs) : 0;
   pkt.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : 0;
   pkt.uptime = millis() / 1000UL;
-  esp_err_t r = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&pkt, sizeof(pkt));
-  if (r == ESP_OK) janusColonyTxOk++; else janusColonyTxFail++;
+  janusEspNowBroadcast("stick-hb", (const uint8_t*)&pkt, sizeof(pkt));
 #endif
 }
 
@@ -6359,7 +7200,7 @@ void janusSendEntropy() {
   er.values[1] = localMagNorm;
   er.values[2] = er.local_entropy;
   er.values[3] = fabsf(janus.aggression - janus.caution);
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&er, sizeof(er));
+  janusEspNowBroadcast("stick-er", (const uint8_t*)&er, sizeof(er));
 #endif
 }
 
@@ -6456,7 +7297,8 @@ void janusSendPilotLink() {
 #if JANUS_ENABLE_BUZZ_ESPNOW
   if (!janusColonyReady) return;
   uint32_t now = millis();
-  if (now - janusPilotLinkLastMs < 2500UL) return;
+  uint32_t pilotLinkInterval = janusPowerBrownoutGuard ? 6500UL : 2500UL;
+  if (now - janusPilotLinkLastMs < pilotLinkInterval) return;
   janusPilotLinkLastMs = now;
   janusColonyEnsurePeer();
 
@@ -6482,7 +7324,7 @@ void janusSendPilotLink() {
   pl.threat = surfaceOp.active ? surfaceOp.threat : galaxy[pilot.currentSystem].danger;
   pl.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
   pl.uptime_ms = now;
-  esp_err_t r = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&pl, sizeof(pl));
+  esp_err_t r = janusEspNowBroadcast("stick-pl", (const uint8_t*)&pl, sizeof(pl));
   if (r == ESP_OK) {
     if (pl.seq <= 3 || (pl.seq % 20UL) == 0) {
       Serial.printf("[PILOTLINK] TX seq=%lu sector=%u sys=%u mode=%u mech=%u armor=%u\n",
@@ -6545,7 +7387,7 @@ void janusRunBuzzMiningSlice() {
       sr.bits = bits;
       sr.total_hashes_l32 = janusRemoteHashesTotal;
       memcpy(sr.hash_tail, shareHash + 28, 4);
-      esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&sr, sizeof(sr));
+      janusEspNowBroadcast("stick-share", (const uint8_t*)&sr, sizeof(sr));
       janusRemoteSharesSent++;
       statusLine = "BUZZ SHARE";
       janus.aggression = clampf(janus.aggression + 0.015f, 0.12f, 0.95f);
@@ -6583,8 +7425,11 @@ void janusAdaptMiningBatch(uint32_t now) {
     else if (janusRemoteHashrate < 900) target -= 25;
   }
 
+  if (janusPowerBrownoutGuard) target = min(target, 55);
   target = constrain(target, 40, 420);
-  if (janusThermalThrottle && janusMiningBatch > 80) {
+  if (janusPowerBrownoutGuard && janusMiningBatch > 60) {
+    janusMiningBatch = (uint16_t)max(40, (int)janusMiningBatch - 70);
+  } else if (janusThermalThrottle && janusMiningBatch > 80) {
     janusMiningBatch = (uint16_t)max(40, (int)janusMiningBatch - 45);
   } else {
     janusMiningBatch = (uint16_t)((janusMiningBatch * 3 + target) / 4);
@@ -6607,16 +7452,27 @@ void janusBuzzWorkerTick() {
     janusRemoteHashesWindow = 0;
     janusRemoteHashrateWindowMs = now;
   }
-  if (now - janusColonyLastTxMs >= JANUS_COLONY_PULSE_MS) {
+  uint32_t pulseMs = janusPowerBrownoutGuard ? 4200UL : JANUS_COLONY_PULSE_MS;
+  uint32_t entropyMs = janusPowerBrownoutGuard ? 9000UL : JANUS_COLONY_ENTROPY_MS;
+  if (now - janusColonyLastTxMs >= pulseMs) {
     janusColonyLastTxMs = now;
     janusSendHeartbeat();
   }
-  if (now - janusColonyLastEntropyMs >= JANUS_COLONY_ENTROPY_MS) {
+  if (now - janusColonyLastEntropyMs >= entropyMs) {
     janusColonyLastEntropyMs = now;
     janusSendEntropy();
   }
 
   janusSendPilotLink();
+  static uint32_t janusPowerLastRichRadioMs = 0;
+  if (!janusPowerBrownoutGuard || now - janusPowerLastRichRadioMs >= JANUS_POWER_GUARD_RADIO_MS) {
+    janusPowerLastRichRadioMs = now;
+    janusStickBlackboardTick(now);
+    janusStickSendKenshi(now, false);
+    janusStickSendTachyon(now, false);
+    janusStickSendSwarmSense(now, false);
+  }
+  janusStickDiagTick(now);
 #endif
 }
 
@@ -7080,7 +7936,7 @@ void setup() {
     pilot.docked = false;
     launchScene();
     statusLine = "JANUS LIVE";
-    Serial.println("[PILOTLINK] Stick v9.5A living pilot MMORPG weapons + adaptive miner + smart charge guard active");
+    Serial.println("[PILOTLINK] Stick v9.6D BLACKBOARD PILOT BODY + GROVE HOLD + K2/TP + S/S active");
   } else {
     shipEnergy = clampf(shipEnergy, 0.0f, 100.0f);
     shipShield = clampf(shipShield, 0.0f, 100.0f);
@@ -7091,7 +7947,7 @@ void setup() {
       uiMode = pilot.docked ? UI_STATUS : UI_FLIGHT;
       statusLine = "JANUS PILOT LIVE";
     }
-    Serial.println("[PILOTLINK] Stick v9.5A living pilot MMORPG weapons + adaptive miner + smart charge guard active");
+    Serial.println("[PILOTLINK] Stick v9.6D BLACKBOARD PILOT BODY + GROVE HOLD + K2/TP + S/S active");
   }
 
   survivalStartMs = millis();
@@ -7106,6 +7962,8 @@ void loop() {
   unsigned long now = millis();
 
   if (paused) {
+    // v9.6: paused game is not a dead node. Keep ESP-NOW pilot body / Buzz worker heartbeat alive.
+    janusBuzzWorkerTick();
     if (now - lastRenderTick >= PAUSED_RENDER_INTERVAL_MS) {
       lastRenderTick = now;
       renderTick();
@@ -7123,7 +7981,7 @@ void loop() {
     now = millis();
   }
 
-  unsigned long renderInterval = janusThermalThrottle ? PAUSED_RENDER_INTERVAL_MS : RENDER_INTERVAL_MS;
+  unsigned long renderInterval = janusPowerBrownoutGuard ? JANUS_POWER_GUARD_RENDER_MS : (janusThermalThrottle ? PAUSED_RENDER_INTERVAL_MS : RENDER_INTERVAL_MS);
   if (now - lastRenderTick >= renderInterval) {
     lastRenderTick = now;
     renderTick();

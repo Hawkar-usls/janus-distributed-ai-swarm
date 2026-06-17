@@ -1,79 +1,113 @@
-# JANUS LastSwarm Firmware Suite
+﻿# JANUS Distributed AI Swarm
 
-## What This Is
+Public firmware surface for the current JANUS ESP32 / M5Stack swarm.
 
-JANUS LastSwarm is a focused ESP32 / M5Stack firmware suite built around eight current LastSwarm sketches. It covers ESP-NOW swarm communication, device UI, sensing, telemetry, local memory, adaptive control hints, and strict separation between sensor truth, prediction, and protocol events.
+This repository tracks the active swarm shape as of June 2026: Core2 station,
+Buzz pool master, BlackHole/BH observer, Cardputer ADV Elite, Yaks Gate,
+Anchor/Gladius brothers, Zim, Blind Eye, Pyramid, legacy body nodes, and the new
+PEA4 ESP32-P4 Titan bring-up.
 
-This public repository is intentionally narrow. It contains the current firmware entrypoints, minimal configuration examples, safety notes, and static audits for these sketches only.
+The repo intentionally stores source sketches, docs, examples and review notes.
+It does not store private credentials, raw runtime dumps, stock firmware images,
+large vendor archives, databases, or model checkpoints.
 
-## Firmware Entrypoints
+## Current Swarm Entrypoints
 
-| component | path | role |
+| component | path | current role |
 | --- | --- | --- |
-| Core2 / SwarmSense | `firmware/core2/CORE2.ino` | Main Core2 display/control surface |
-| Buzz | `firmware/buzz/Buzz.ino` | Audio, worker, ESP-NOW, and Stratum-aware node |
-| Blind Eye | `firmware/blind_eye/BLIND_EYE.ino` | Presence/sensor calibration node |
-| Beacon | `firmware/beacon/Beacon_A1.ino` | Beacon preserve candidate |
-| Stick | `firmware/esp32_swarm/Stick.ino` | Mobile ESP32 swarm node |
-| Atom Swarm TRON | `firmware/esp32_swarm/ATOM_SWARM_TRON.ino` | Atom swarm/TRON node |
-| Atom Matrix Pyramid | `firmware/pyramid/ATOM_MATRIX_Pyramid.ino` | Atom Matrix visual/swarm node |
-| Zim Geek | `firmware/zim_geek/Zim.ino` | ESP32-S3 Geek node with swarm reporting |
+| Core2 / Swarm Station | `firmware/core2/CORE2.ino` | Galaxy station, black-hole lab, swarm telemetry, SD corpus, slow miner study |
+| Buzz | `firmware/buzz/Buzz.ino` | Stratum/pool master, swarm arbiter, audio/UI node, Brother Arena judge |
+| BH / BlackStar | `firmware/blackhole_bh/ATOM_BH.ino` | Black-hole visual/miner observer, silicon trace/lens model, BH study target |
+| ADV Elite | `firmware/adv_elite/ADV_Elite.ino` | Cardputer ADV Elite game node, Beacon tab, LoRa/GNSS sky-anchor, SD miner corpus |
+| Yaks Gate | `firmware/yaks_gate/` | StickS3 gate pilot, IR local beacon, Murph/maze/BlackStar escape telemetry |
+| Anchor | `firmware/anchor/Anchor.ino` | Stable brother miner, baseline method, direct Buzz heartbeat/share protection |
+| Gladius | `firmware/gladius/Gladius.ino` | Experimental brother miner, TailGEX/bandit method search, direct Buzz protection |
+| Zim Geek | `firmware/zim_geek/Zim.ino` | Solo/worker scout, Stratum-aware explorer, Tranception-lite candidate node |
+| Blind Eye | `firmware/blind_eye/BLIND_EYE.ino` | Presence/sensor eye, motion/memory mirror and swarm status source |
+| Pyramid | `firmware/pyramid/ATOM_MATRIX_Pyramid.ino` | Stable visual/swarm pyramid node |
+| Beacon A1 | `firmware/beacon/Beacon_A1.ino` | Legacy Beacon preserve candidate and launcher fallback |
+| Legacy bodies | `firmware/esp32_swarm/`, `firmware/legacy/` | Older Stick/TRON/Slick bodies retained for compatibility and review |
+| PEA4 Pool Probe | `firmware/pea4/PEA4.ino` | ESP32-P4 Titan observer/probe with P/N memory, no share pressure |
+| PEA4 Janus Shell | `firmware/PEA4_JANUS_SHELL/` | ESP32-P4 stock-like Janus shell v0.1 with ST7701/GT911 UI bring-up |
+| P4 Dual Swarm Core | `firmware/p4_dual_swarm_core/` | Full P4_A/P4_B/P4_C compute/protocol core with JP4 frames and NVS memory |
 
-## Hardware
+## Swarm Rules
 
-- M5Stack Core2
-- M5Stick / Cardputer-style ESP32 nodes
-- M5 Atom / Atom Matrix / AtomS3-style nodes
-- ESP32-S3 Geek-style node
-- TMOS / PIR / STHS34PF80-style presence sensing
-- ENV / pressure / temperature / microphone paths where supported by firmware
-- ESP-NOW swarm communication
-- Wi-Fi where a sketch explicitly uses network or Stratum paths
+- Buzz remains the Stratum and pool authority.
+- ESP-NOW packet layouts are treated as ABI unless a migration is explicit.
+- Nodes must keep sensor truth separate from prediction, memory and UI fiction.
+- Adaptive mining may choose nonce order, lane, stride, sector or batch pressure,
+  but must not change SHA256, target math, pool difficulty or submit semantics.
+- Observer-only nodes may record near-tails, stale tails, rejected tails and
+  silicon/heat/load traces, but must not increase pool submit pressure.
+- Swarm visibility must include recovery paths: direct Buzz heartbeat/share,
+  peer rebuild, channel reassertion, stale-node TTL and no-permanent-disappear
+  behavior.
+- IR on Stick-class devices is local optical signaling only. LoRa/GNSS sky-anchor
+  behavior belongs to ADV/LoRa-capable hardware, not Stick IR.
+- NAS Brain may act as a library/Archivarius layer, not as a required hard
+  dependency for firmware loops.
 
-## Design Rules
+## P4 / PEA4 Role
 
-- Preserve working behavior before simplifying.
-- Treat ESP-NOW packet formats as an ABI.
-- Keep current sensor readings separate from memory and prediction.
-- Keep pool/Stratum events separate from local simulation and UI rewards.
-- Prefer non-blocking UI, audio, sensor, and swarm loops.
-- Treat heat, jitter, and throttling as control signals.
-- Keep secrets out of firmware and use examples under `configs/examples/`.
+PEA4 is not just another miner. It is the future large terminal and Titan node:
+
+- dashboard and visual shell
+- camera/sensor preprocessing
+- SD/FATFS corpus and archive surface
+- NAS edge/library bridge
+- P/N Cortex observer
+- future Brother Arena and swarm state monitor
+
+Current PEA4 firmwares are observer-first. They compute and visualize, but do
+not mutate target math and do not submit shares unless explicitly promoted later.
+
+P4 tracks are kept separate:
+
+- `firmware/PEA4_JANUS_SHELL/`: screen/touch shell.
+- `firmware/p4_dual_swarm_core/`: compute/protocol core.
+
+They should be tested independently before a future merged
+`PEA4_TITAN_SHELL_CORE`.
 
 ## Repository Layout
 
-- `firmware/`: the eight current LastSwarm sketches.
-- `docs/`: architecture, hardware, calibration, and technical boundary notes.
-- `audits/`: focused inventory and static firmware audits.
+- `firmware/`: active and compatibility sketches.
+- `docs/`: architecture, technical rules and current swarm notes.
+- `docs/current/`: latest LastSwarm working notes copied from the private lab.
+- `audits/`: previous public inventory/static audit reports.
 - `configs/examples/`: placeholder config and `secrets.example.h`.
 - `tests/static_checks/`: lightweight secret marker check.
 
-## What Is Deliberately Not Here
-
-This public main branch does not include older JANUS experiments, non-firmware side projects, raw runtime dumps, databases, archives, unrelated research notes, or historical scratch files. The goal is a clean technical review surface for the current LastSwarm firmware.
-
 ## Quick Start
 
-1. Open the relevant `.ino` in Arduino IDE or PlatformIO.
-2. Install the board support and libraries required by that sketch.
-3. Copy `configs/examples/secrets.example.h` into a local ignored `secrets.h` if needed.
-4. Fill local Wi-Fi or worker values only in ignored local files.
-5. Verify board pins, optional sensors, and ESP-NOW packet compatibility before flashing mixed firmware generations.
+1. Open the relevant `.ino` in Arduino IDE.
+2. Use the board settings documented next to that sketch or in `docs/current/`.
+3. Keep local Wi-Fi, wallet, API and NAS values in ignored files.
+4. Flash one node at a time and verify serial logs before moving to the next.
+5. After mixed-generation updates, check Buzz and Core2 visibility before
+   assuming a node is healthy.
 
 ## Review Path
 
 Start here:
 
-- `M5STACK_REVIEW_GUIDE.md`
-- `docs/m5stack-showcase.md`
+- `PROJECT_MAP.md`
+- `docs/current-swarm-state.md`
+- `docs/swarm-critical-rules.md`
+- `docs/architecture.md`
 - `docs/technical-boundaries.md`
-- `audits/arduino_static_audit.md`
-- `audits/file_inventory.md`
+- `M5STACK_REVIEW_GUIDE.md`
 
 ## Safety
 
-No private keys, Wi-Fi passwords, tokens, raw databases, model checkpoints, or bulk telemetry dumps are intended to be committed. Mining-related firmware paths are preserved as protocol/telemetry work and require careful network and hardware review before use.
+No private keys, Wi-Fi passwords, tokens, raw databases, stock binary backups or
+large telemetry dumps are intended to be committed. Mining-related firmware
+paths are experimental protocol/telemetry work and require careful network,
+electrical and thermal review before long unattended runs.
 
 ## License
 
-Released under the MIT License. Confirm third-party library and hardware-vendor license requirements before production use.
+Released under the MIT License for the code authored in this repository. Confirm
+third-party library and hardware-vendor license requirements before production
+or redistribution, especially for vendor display/touch/camera sources.

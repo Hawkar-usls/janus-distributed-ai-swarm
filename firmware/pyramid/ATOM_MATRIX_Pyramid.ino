@@ -1,5 +1,5 @@
-/*
-  JANUS_ATOM_MATRIX_ECHO_PYRAMID_BT_COLONY_KNN_v1_8I6_NO_PROMISC_HEAP_SAFE_SWARM_JOIN.ino
+﻿/*
+  JANUS_ATOM_MATRIX_ECHO_PYRAMID_BT_COLONY_KNN_v1_8L_GROVE_STICK_SENTINEL.ino
 
   STRICT Atom Matrix firmware for M5Stack Atom Matrix mounted on Echo/Voice Pyramid. This build intentionally refuses AtomS3/AtomS3R and refuses to compile without A2DP + M5Echo-Pyramid.
 
@@ -18,6 +18,7 @@
     - v0.9: BT-first stability build: ESP-NOW/mining fully disabled by default to keep Classic BT heap stable; re-enable later after audio is proven stable.
     - v1.7: restored working v1.3 audio path; Pyramid output fixed to safe-max 108% gain curve; Pyramid swipes control PHONE AVRCP volume; mute sends phone volume down; Atom Matrix display rotated 180 degrees for USB-port-up orientation; added MUSIC_SMILEYS.
     - v1.8I: Buzz-style always-on colony miner. ESP-NOW/mining stay alive during BT; playback only throttles batch/time-slice, audio hardstop from H2 preserved.
+    - v1.8L: Home Cortex Grove/Stick sentinel: lightweight J/E + J/P observer events for the Pyramid Atom Matrix when it sits physically on the Stick Grove link.
 
   Notes:
     - This is a source replacement, not a patch of the closed M5Burner binary.
@@ -111,7 +112,7 @@ BluetoothA2DPSink a2dp_sink;
 #define JANUS_ROLE_NAME         "bt_worker"
 #define JANUS_BT_NAME           "EchoPyramid-JANUS"
 
-// Must match Buzz/AP channel. If Buzz is connected to YOUR_WIFI Wi-Fi, set this to that router channel.
+// Must match Buzz/AP channel. If Buzz is connected to JANUS_WIFI_PLACEHOLDER Wi-Fi, set this to that router channel.
 #define JANUS_ESPNOW_CHANNEL    10
 
 // Atom Matrix + Echo/Voice Pyramid profile.
@@ -172,6 +173,10 @@ BluetoothA2DPSink a2dp_sink;
 #define JANUS_ENTROPY_MS             2500
 #define JANUS_HIVE_METRICS_MS        3000
 #define JANUS_SWARMSENSE_MS          5000
+#define JANUS_PYRAMID_HOME_CORTEX_ENABLE 1
+#define JANUS_PYRAMID_EVENT_MS       8000UL
+#define JANUS_PYRAMID_TASK_MS        18000UL
+#define JANUS_PYRAMID_GROVE_STICK_LINK 1
 #define JANUS_SERIAL_STATUS_MS       5000
 #define JANUS_AUDIO_CHUNK_FRAMES      256
 #define JANUS_AUDIO_QUEUE_LEN         22
@@ -365,6 +370,92 @@ struct __attribute__((packed)) SwarmSensePacket {
   uint16_t flags;          // future: IMU/audio/touch/env/rf capability bits
 };
 
+
+// Home Cortex lightweight J/E + J/P bridge for Pyramid/Stick-Grove sentinel.
+enum JanusPyramidRoleId : uint8_t {
+  JR_UNKNOWN = 0,
+  JR_CORE    = 1,
+  JR_ZIM     = 2,
+  JR_BUZZ    = 3,
+  JR_BEACON  = 4,
+  JR_TRON    = 5,
+  JR_BLIND   = 6,
+  JR_AUDIO   = 7,
+  JR_PYRAMID = 8,
+  JR_SENSOR  = 9,
+  JR_RELAY   = 10
+};
+
+enum JanusPyramidEventType : uint8_t {
+  JE_NONE        = 0,
+  JE_BOOT        = 1,
+  JE_HEARTBEAT   = 2,
+  JE_ENV         = 3,
+  JE_MOTION      = 4,
+  JE_PRESENCE    = 5,
+  JE_SOUND       = 6,
+  JE_WIFI_WEAK   = 7,
+  JE_LOW_HEAP    = 8,
+  JE_HASH        = 9,
+  JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11,
+  JE_TASK_NEED   = 12,
+  JE_TASK_DONE   = 13,
+  JE_DANGER      = 14,
+  JE_SAFE        = 15,
+  JE_POLICY      = 16,
+  JE_AI_MEMORY   = 17
+};
+
+enum JanusPyramidCapability : uint16_t {
+  JC_TOUCH   = 0x0400,
+  JC_RELAY   = 0x0800,
+  JC_MEMORY  = 0x1000,
+  JC_AI      = 0x2000,
+  JC_RF      = 0x8000,
+  JC_AUDIO   = 0x0100,
+  JC_HASH    = 0x0080
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];        // 'J','E'
+  uint8_t version;         // 1
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;
+  uint8_t urgency;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];        // 'J','P'
+  uint8_t version;         // 1
+  uint8_t swarmMood;
+  uint8_t radioRate;
+  uint8_t buzzBudget;
+  uint8_t sensorRate;
+  uint8_t confidence;
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;   // duration ms from Core
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
 // Buzz v10.11+ Agent reward packet. Keep layout aligned with TD_SWARM/Core/Buzz.
 struct __attribute__((packed)) JanusAgentRewardPacket {
   uint8_t magic[2];        // 'A','R'
@@ -520,6 +611,19 @@ uint32_t lastHeartbeatMs = 0;
 uint32_t lastEntropyMs = 0;
 uint32_t lastHiveMetricsMs = 0;
 uint32_t lastSwarmSenseMs = 0;
+uint32_t janusPyramidLastEventMs = 0;
+uint32_t janusPyramidLastTaskMs = 0;
+uint32_t janusPyramidEventSeq = 0;
+uint32_t janusPyramidPolicyRx = 0;
+uint32_t janusPyramidPolicySeq = 0;
+uint32_t janusPyramidLastPolicyMs = 0;
+uint32_t janusPyramidQuietUntilMs = 0;
+uint8_t janusPyramidMood = 0;
+uint8_t janusPyramidRadioRate = 1;
+uint8_t janusPyramidSensorRate = 1;
+uint8_t janusPyramidPolicyConfidence = 0;
+uint16_t janusPyramidDangerX100 = 0;
+char janusPyramidOrder[40] = "-";
 uint32_t lastSerialStatusMs = 0;
 uint32_t lastLedMs = 0;
 uint32_t touchActivity = 0;
@@ -815,7 +919,7 @@ void migrateLegacyTwoOwnerAcl() {
   esp_bd_addr_t old;
   bool migrated = false;
   if (loadBda("hawkar_bda", old)) {
-    saveTrustedPeer(old, "YOUR_WIFI");
+    saveTrustedPeer(old, "Hawkar");
     migrated = true;
   }
   if (loadBda("rose_bda", old)) {
@@ -1650,6 +1754,126 @@ void applyReward(const JanusAgentRewardPacket& ar) {
   if (rewardLevel >= 3) janusOnShareDetected();
 }
 
+uint16_t janusPyramidHash16(const char* s) {
+  uint16_t h = 21661U;
+  if (!s) return h;
+  while (*s) {
+    h ^= (uint8_t)*s++;
+    h = (uint16_t)(h * 16719U);
+  }
+  return h ? h : 1;
+}
+
+uint16_t janusPyramidCapabilities() {
+  uint16_t caps = JC_TOUCH | JC_RF | JC_AUDIO | JC_HASH | JC_AI;
+#if JANUS_PYRAMID_GROVE_STICK_LINK
+  caps |= JC_RELAY;   // physical Grove/Stick companion sentinel
+#endif
+  return caps;
+}
+
+bool janusPyramidEmitEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                           int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                           uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs) {
+#if JANUS_PYRAMID_HOME_CORTEX_ENABLE
+  if (!espNowReady) return false;
+  JanusEventPacket ev = {};
+  ev.magic[0] = 'J'; ev.magic[1] = 'E';
+  ev.version = 1;
+  ev.eventType = eventType;
+  ev.nodeRole = JR_PYRAMID;
+  ev.confidence = confidence;
+  ev.urgency = urgency;
+  snprintf(ev.nodeId, sizeof(ev.nodeId), "%s", JANUS_DEVICE_NAME);
+  snprintf(ev.kind, sizeof(ev.kind), "%s", kind && kind[0] ? kind : "pyramid_grove");
+  ev.seq = ++janusPyramidEventSeq;
+  ev.uptimeMs = millis();
+  ev.topicHash = topicHash ? topicHash : janusPyramidHash16("pyramid");
+  ev.objectHash = objectHash;
+  ev.capabilities = janusPyramidCapabilities();
+  ev.valueA_x10 = a_x10;
+  ev.valueB_x10 = b_x10;
+  ev.valueC_x10 = c_x10;
+  ev.valueD_x10 = d_x10;
+  ev.eventHash = ((uint32_t)eventType << 24) ^ ((uint32_t)ev.topicHash << 8) ^ ev.seq ^ (uint32_t)workerId;
+  ev.ttlMs = ttlMs ? ttlMs : 12000UL;
+  esp_err_t e = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&ev, sizeof(ev));
+  return e == ESP_OK;
+#else
+  (void)eventType; (void)kind; (void)confidence; (void)urgency; (void)a_x10; (void)b_x10; (void)c_x10; (void)d_x10; (void)topicHash; (void)objectHash; (void)ttlMs;
+  return false;
+#endif
+}
+
+void handlePyramidPolicy(const JanusPolicyPacket& jp) {
+#if JANUS_PYRAMID_HOME_CORTEX_ENABLE
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+  if (jp.seq && jp.seq == janusPyramidPolicySeq) return;
+  janusPyramidPolicySeq = jp.seq;
+  janusPyramidPolicyRx++;
+  janusPyramidLastPolicyMs = millis();
+  janusPyramidMood = jp.swarmMood;
+  janusPyramidRadioRate = jp.radioRate;
+  janusPyramidSensorRate = jp.sensorRate;
+  janusPyramidPolicyConfidence = jp.confidence;
+  janusPyramidDangerX100 = jp.danger_x100;
+  janusPyramidQuietUntilMs = jp.quietUntilMs ? millis() + min<uint32_t>(jp.quietUntilMs, 60000UL) : 0;
+  snprintf(janusPyramidOrder, sizeof(janusPyramidOrder), "%s", jp.order[0] ? jp.order : "-");
+  Serial.printf("PYRAMID POLICY RX | n=%lu mood=%u radio=%u sensor=%u danger=%.2f order=%s\n",
+                (unsigned long)janusPyramidPolicyRx, (unsigned)janusPyramidMood,
+                (unsigned)janusPyramidRadioRate, (unsigned)janusPyramidSensorRate,
+                (float)janusPyramidDangerX100 / 100.0f, janusPyramidOrder);
+#endif
+}
+
+void pyramidBlackboardTick() {
+#if JANUS_PYRAMID_HOME_CORTEX_ENABLE
+  if (!espNowReady) return;
+  uint32_t now = millis();
+  if (janusPyramidQuietUntilMs && now < janusPyramidQuietUntilMs) return;
+
+  uint32_t interval = JANUS_PYRAMID_EVENT_MS;
+  if (janusPyramidRadioRate == 2 || janusPyramidMood == 2 || janusPyramidMood == 4) interval = 3500UL;
+  else if (janusPyramidRadioRate == 0) interval = JANUS_PYRAMID_EVENT_MS * 2UL;
+
+  if (now - janusPyramidLastEventMs >= interval) {
+    janusPyramidLastEventMs = now;
+    uint8_t flags = 0;
+    if (janusExclusiveSwarmMode || janusBtStoppedForSwarm) flags |= 0x01;
+    if (btConnected || btPlaying) flags |= 0x02;
+#if JANUS_PYRAMID_GROVE_STICK_LINK
+    flags |= 0x04;
+#endif
+    janusPyramidEmitEvent(JE_HEARTBEAT, "pyramid_grove_stick", 86, janusThermalLoad > 70 ? 58 : 24,
+                          (int16_t)min<uint32_t>(32767UL, ESP.getFreeHeap() / 1024UL),
+                          (int16_t)min<uint32_t>(32767UL, currentHashRate / 10UL),
+                          (int16_t)flags,
+                          (int16_t)janusThermalLoad,
+                          janusPyramidHash16("pyramid"), janusPyramidHash16("stick_grove"), 14000UL);
+  }
+
+  if (now - janusPyramidLastTaskMs >= JANUS_PYRAMID_TASK_MS) {
+    janusPyramidLastTaskMs = now;
+    if (ESP.getFreeHeap() < JANUS_BATCH_SWARM_HOT_HEAP || janusThermalLoad >= 82) {
+      janusPyramidEmitEvent(JE_TASK_NEED, "pyramid_cooldown", 82, 72,
+                            (int16_t)min<uint32_t>(32767UL, ESP.getFreeHeap() / 1024UL),
+                            (int16_t)loopJitterUsEma,
+                            (int16_t)janusThermalLoad,
+                            (int16_t)effectiveBatch(),
+                            janusPyramidHash16("thermal"), janusPyramidHash16("pyramid"), 20000UL);
+    } else if (janusExclusiveSwarmMode || janusBtStoppedForSwarm) {
+      janusPyramidEmitEvent(JE_SAFE, "pyramid_swarm_ready", 84, 22,
+                            (int16_t)min<uint32_t>(32767UL, ESP.getFreeHeap() / 1024UL),
+                            (int16_t)currentHashRate,
+                            (int16_t)effectiveBatch(),
+                            (int16_t)janusPyramidPolicyRx,
+                            janusPyramidHash16("radio"), janusPyramidHash16("pyramid"), 20000UL);
+    }
+  }
+#endif
+}
+
+
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 void onNowRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
   const uint8_t* mac = info ? info->src_addr : JANUS_BROADCAST_MAC;
@@ -1659,6 +1883,13 @@ void onNowRecv(const uint8_t* mac, const uint8_t* data, int len) {
   int8_t rssi = -127;
 #endif
   if (!data || len < 2) return;
+
+  if (data[0] == 'J' && data[1] == 'P' && len >= (int)sizeof(JanusPolicyPacket)) {
+    JanusPolicyPacket jp = {};
+    memcpy(&jp, data, sizeof(jp));
+    handlePyramidPolicy(jp);
+    return;
+  }
 
   if (data[0] == 'J' && data[1] == 'B' && len >= (int)sizeof(JobPacket)) {
     JobPacket jp = {};
@@ -2066,7 +2297,7 @@ void sendHiveMetrics() {
   hm.prediction_error_x1000 = (int16_t)max<int>(-32768, min<int>(32767, (int)(janusPredictionErrorLocal * 1000.0f)));
   hm.entropy_x1000 = computeEntropyX1000();
   hm.random_tail = (uint16_t)(esp_random() & 0xFFFF);
-  hm.reserved = janusThermalLoad;
+  hm.reserved = (uint16_t)janusThermalLoad | (JANUS_PYRAMID_GROVE_STICK_LINK ? 0x0100 : 0x0000);
   esp_err_t e = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&hm, sizeof(hm));
   static uint32_t lastHmErrMs = 0;
   if (e != ESP_OK && millis() - lastHmErrMs > 2500UL) {
@@ -2116,6 +2347,8 @@ void sendSwarmSense() {
   ss.flags |= 0x0004; // clock drift observable via uptime/micros tail
   ss.flags |= 0x0008; // heap/jitter thermal proxy present
   ss.flags |= 0x0010; // audio/BT state present, even if BT is exclusive
+  ss.flags |= 0x0020; // physical Grove/Stick companion sentinel
+  if (janusPyramidPolicyRx) ss.flags |= 0x0040; // Home Cortex policy has been heard
   esp_err_t e = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&ss, sizeof(ss));
   static uint32_t lastSsErrMs = 0;
   if (e != ESP_OK && millis() - lastSsErrMs > 2500UL) {
@@ -4072,14 +4305,14 @@ void setup() {
   espNowLastStopMs = millis();
   janusLastPlaybackActivityMs = millis();
   janusLastUserInteractionMs = millis();
-  Serial.println("BOOT13 | miner starts after BT stop; long Atom press requests BT; SwarmSense observes before control");
+  Serial.println("BOOT13 | miner starts after BT stop; long Atom press requests BT; SwarmSense + J/E observe before control");
   Serial.flush();
 
   Serial.printf("JANUS Echo Pyramid online | node=%s worker=%u channel=%u\n", JANUS_DEVICE_NAME, workerId, JANUS_ESPNOW_CHANNEL);
   Serial.println("BT gate: unknown phones require Atom button approval. Short press approve, long press reject. Hold Atom button 7s at boot to clear trusted devices.");
   Serial.println("Controls: right side TP1->TP2 next / TP2->TP1 previous; left side swipes steer PHONE volume curve; mute controls device/phone volume; hold TP3/TP4 brightness down/up.");
-  Serial.println("HiveMetricPacket HM/v2 + local k-NN enabled for Buzz/NAS-BRAIN SlimeKNN telemetry.");
-  Serial.println("================ JANUS ECHO v1.8K3 PONG_TENNIS_RETRO_FINAL BOOT COMPLETE ================");
+  Serial.println("HiveMetricPacket HM/v2 + SwarmSense + Pyramid Grove/Stick J/E sentinel enabled.");
+  Serial.println("================ JANUS ECHO v1.8L GROVE_STICK_SENTINEL BOOT COMPLETE ================");
   Serial.flush();
 }
 
@@ -4120,6 +4353,7 @@ void loop() {
     lastHiveMetricsMs = now;
     sendHiveMetrics();
   }
+  pyramidBlackboardTick();
 #endif
 
   updateLeds();

@@ -1,6 +1,6 @@
 ﻿# Scope Audit
 
-Public main is limited to the eight current LastSwarm firmware sketches and directly supporting documentation/audits. Older firmware branches, non-firmware side projects, runtime dumps, databases, archives, logs, and unrelated research notes are excluded from public main.
+Public main is limited to the current active LastSwarm firmware sketches, compatibility firmware, and directly supporting documentation/audits. Older scratch branches, non-firmware side projects, runtime dumps, databases, stock binaries, archives, logs, and unrelated research notes are excluded from public main.
 
 Kept firmware:
 

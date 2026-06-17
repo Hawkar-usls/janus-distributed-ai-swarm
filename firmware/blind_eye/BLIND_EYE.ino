@@ -1,4 +1,4 @@
-#include <M5Unified.h>
+﻿#include <M5Unified.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -6,7 +6,9 @@
 #include <LittleFS.h>
 #include <math.h>
 
-// ========================= JANUS Blind Eye v3.0 EAGLE FOCUS LOCK + TMOS/PIR SMOOTH + MEMORY =========================
+// ========================= JANUS COLONY ESP-NOW v2.12B BLIND EYE RF FUSION =========================
+// v2.12B keeps the v2.12 RF/policy/miner layer and softens TMOS calibration.
+// Boot warmup now lets the baseline settle gently instead of freezing on huge deltas.
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <mbedtls/sha256.h>
@@ -59,45 +61,215 @@
 #define JANUS_EYE_VISION_H                 8
 #define JANUS_EYE_FRAME_PIXELS             (JANUS_EYE_VISION_W * JANUS_EYE_VISION_H)
 #define JANUS_EYE_VISION_DEFAULT_FRAME_MS  160
-#define JANUS_EYE_VISION_IDLE_MS           2600UL
+#define JANUS_EYE_VISION_IDLE_MS           12000UL
 
 // v2.9 Eagle Focus: software aperture/AGC for the single-zone STHS34PF80.
 // It does not fake distance; it makes weak far-field deltas visible without
 // letting the room baseline drift into the target.
 #define JANUS_EYE_EAGLE_FOCUS_ENABLE       1
 #define JANUS_EYE_FOCUS_MIN_GAIN           2.20f
-#define JANUS_EYE_FOCUS_MAX_GAIN           11.80f
-#define JANUS_EYE_BASELINE_ALPHA_QUIET     0.0018f
-#define JANUS_EYE_BASELINE_ALPHA_HOT       0.000018f
-#define JANUS_EYE_NOISE_ALPHA              0.0035f
+#define JANUS_EYE_FOCUS_MAX_GAIN           7.50f
+#define JANUS_EYE_BASELINE_ALPHA_QUIET     0.0030f
+#define JANUS_EYE_BASELINE_ALPHA_HOT       0.00008f
+#define JANUS_EYE_NOISE_ALPHA              0.0060f
 #define JANUS_EYE_PRESENCE_FLAG_LEVEL      18.0f
 #define JANUS_EYE_MOTION_FLAG_LEVEL        14.0f
 
-// v3.0 Eagle Focus Lock: single-zone STHS34PF80 cannot know real distance,
-// but it can behave like a biological eye: calibrate, squint/focus, smooth,
-// remember a coherent target, and then decay ghosts when evidence disappears.
-#define JANUS_EYE_LOCK_ENABLE              1
+// v2.9I TRUTH RELEASE: only signal/core fixes. I2C/TMOS init stays exactly v2.9.
+// Purpose: do not see ghosts when the room is empty after stale saved baseline.
 #define JANUS_EYE_RECALIBRATE_ON_BOOT      1
-#define JANUS_EYE_CALIB_SAMPLES            96
-#define JANUS_EYE_RAW_EMA_ALPHA            0.18f
-#define JANUS_EYE_RAW_SPIKE_ALPHA          0.42f
-#define JANUS_EYE_SIGNAL_RISE_ALPHA        0.34f
-#define JANUS_EYE_SIGNAL_FALL_ALPHA        0.055f
-#define JANUS_EYE_OCC_RISE_ALPHA           0.16f
-#define JANUS_EYE_OCC_FALL_ALPHA           0.018f
-#define JANUS_EYE_MEMORY_DECAY_ALPHA       0.0065f
-#define JANUS_EYE_GHOST_DECAY_ALPHA        0.070f
-#define JANUS_EYE_FAR_LOCK_ALPHA           0.055f
-#define JANUS_EYE_FAR_UNLOCK_ALPHA         0.014f
-#define JANUS_EYE_ABSENT_REBASE_MS         14000UL
-#define JANUS_EYE_QUIET_REBASE_ALPHA       0.0060f
-#define JANUS_EYE_NEGATIVE_REBASE_ALPHA    0.0180f
-#define JANUS_EYE_PRESENT_ON_LEVEL         0.78f
-#define JANUS_EYE_PRESENT_OFF_LEVEL        0.32f
-#define JANUS_EYE_MIN_PRESENT_MS           650UL
+#define JANUS_EYE_STUCK_RAW_ABS            16000
+#define JANUS_EYE_MEMORY_DECAY             0.925f
+#define JANUS_EYE_MEMORY_ATTACK            0.110f
+#define JANUS_EYE_GHOST_DECAY              0.820f
+#define JANUS_EYE_STALE_RELEASE_MS         1800UL
+#define JANUS_EYE_NOW_HOLD_MS              900UL
+#define JANUS_EYE_COOL_PRESENCE_WEIGHT     0.32f
+#define JANUS_EYE_FLAG_PRESENCE_NOW        0x40
+#define JANUS_EYE_FLAG_MOTION_NOW          0x80
+
+
+// v2.10G JANUS BLACKBOARD + Episodic Eye Memory + SwarmSense + Atomic Motion Base scaffold.
+// Atomic Motion Base v1.2 uses I2C @0x38 for 4 servos + 2 DC motors; INA226 power
+// monitor is probed separately. All actuator writes are OFF by default.
+// To physically move the future TMOS/PIR pan head, set JANUS_MOTION_BASE_WRITE_ENABLE to 1
+// and explicitly arm through Core policy or local flag.
+#define JANUS_EVENT_BUS_ENABLE              1
+#define JANUS_EVENT_TX_BASE_MS              3500UL
+#define JANUS_EVENT_TX_ALERT_MS             750UL
+#define JANUS_EVENT_MOTION_COOLDOWN_MS      650UL
+#define JANUS_EVENT_POLICY_TTL_GUARD_MS     15000UL
+
+// v2.10G: Eye semantic memory / task need / SwarmSense mirror.
+#define JANUS_EYE_EPISODE_ENABLE            1
+#define JANUS_EYE_EPISODE_COUNT             16
+#define JANUS_EYE_EPISODE_RECORD_MS         3000UL
+#define JANUS_EYE_AI_MEMORY_TX_MS           30000UL
+#define JANUS_EYE_TASK_NEED_MS              20000UL
+#define JANUS_EYE_TASK_DONE_MS              12000UL
+#define JANUS_EYE_SWARMSENSE_ENABLE         1
+#define JANUS_EYE_SWARMSENSE_TX_MS          5000UL
+#define JANUS_EYE_SWARMSENSE_ALERT_MS       1600UL
+#define JANUS_EYE_RECALIBRATE_GHOST_LEVEL   0.72f
+#define JANUS_EYE_RECALIBRATE_BAD_FRAMES    8
+#define JANUS_EYE_QUIET_STRESS_LEVEL        1.15f
+
+// v2.12 RuView-lite RF Fusion.
+// Stable first stage: no CSI yet, only WiFi RSSI drift + ESP-NOW RX RSSI pressure.
+// It gives BlindEye a camera-free "radio skin" that can be fused with TMOS/mic/IMU.
+#define JANUS_RF_LITE_ENABLE                 1
+#define JANUS_RF_LITE_SAMPLE_MS              120UL
+#define JANUS_RF_LITE_BASELINE_ALPHA_QUIET   0.0060f
+#define JANUS_RF_LITE_BASELINE_ALPHA_HOT     0.0007f
+#define JANUS_RF_LITE_NOISE_ALPHA            0.0250f
+#define JANUS_RF_LITE_MOTION_LEVEL_DB        3.2f
+#define JANUS_RF_LITE_PRESENCE_LEVEL         0.42f
+#define JANUS_RF_LITE_ANOMALY_LEVEL          1.18f
+#define JANUS_RF_LITE_PACKET_TTL_MS          4500UL
+
+// v2.12 safety/debug layer.
+#define JANUS_EYE_VERSION_LABEL              "v2.14C_BASELESS_SENSOR_FALLBACK"
+#define JANUS_RF_LITE_DEBUG_MS               2500UL
+#define JANUS_TMOS_WARMUP_MS                 90000UL
+#define JANUS_POLICY_SMOOTH_MIN_DWELL_MS     2500UL
+#define JANUS_POLICY_ALERT_CONFIRM           2
+#define JANUS_POLICY_RECOVER_CONFIRM         3
+#define JANUS_GHOST_TASKNEED_LEVEL           0.96f
+#define JANUS_GHOST_TASKNEED_HOLD_MS         45000UL
+#define JANUS_GHOST_TASKNEED_COOLDOWN_MS     60000UL
+
+// v2.12B: soft TMOS settling. During the first warmup window the baseline is
+// allowed to glide toward the real room temperature field, while output is damped.
+// This removes the wild several-thousand-count deltas after a bad boot angle.
+#define JANUS_TMOS_WARMUP_SETTLE_ALPHA       0.0450f
+#define JANUS_TMOS_WARMUP_SOFT_ALPHA         0.0180f
+#define JANUS_TMOS_WARMUP_NOISE_ALPHA        0.0220f
+#define JANUS_TMOS_WARMUP_OUTPUT_SCALE       0.18f
+#define JANUS_TMOS_WARMUP_GAIN_MAX           4.20f
+#define JANUS_TMOS_BASELINE_JUMP_LEVEL       850.0f
+#define JANUS_TMOS_POSTWARM_JUMP_ALPHA       0.0012f
+
+
+// Grove TMOS pins must be visible before any I2C helper function.
+// Arduino IDE auto-prototypes functions, so keep these near the top.
+#ifndef GROVE_SDA_PIN
+#define GROVE_SDA_PIN          2
+#endif
+#ifndef GROVE_SCL_PIN
+#define GROVE_SCL_PIN          1
+#endif
+
+// v2.12 Buzz lottery miner scheduler-only imports from RBLGANUL V31.
+// This does NOT change block/header wire bytes. It only changes nonce walk order.
+#define JANUS_MINER_V31_SCHEDULER_ENABLE     1
+#define JANUS_MINER_V31_SECTORS              8
+
+
+#define JANUS_MOTION_BASE_ENABLE            1
+#define JANUS_MOTION_BASE_WRITE_ENABLE      1   // ROBOZOMBIE TEST: physical servo writes ON
+#define JANUS_MOTION_BASE_I2C_ADDR          0x38
+#define JANUS_MOTION_BASE_INA226_ADDR_A     0x40
+#define JANUS_MOTION_BASE_INA226_ADDR_B     0x41
+// Atomic Motion Base is NOT on the external TMOS Grove bus on most ATOM builds.
+// Official M5Atomic-Motion library defaults to SDA=25, SCL=21 for the base MCU.
+#define JANUS_MOTION_BASE_SDA_PIN           38     // ATOM S3 / S3R Atomic Motion Base I2C SDA
+#define JANUS_MOTION_BASE_SCL_PIN           39     // ATOM S3 / S3R Atomic Motion Base I2C SCL
+#define JANUS_MOTION_BASE_TICK_MS           80UL
+#define JANUS_MOTION_BASE_POWER_MS          1000UL
+#define JANUS_MOTION_BASE_STATUS_MS         2500UL
+#define JANUS_MOTION_BASE_ABSENT_STATUS_MS  10000UL  // v2.14C: when Motion Base is absent, report calmly and stay sensor-only
+#define JANUS_MOTION_BASE_OPTIONAL          1        // v2.14C: BlindEye must work normally without the base
+#define JANUS_EYE_POWER_TX_MS                2500UL
+#define JANUS_MOTION_BASE_TRACK_SERVO_CH    0   // register ch0 = physical Servo1
+#define JANUS_MOTION_BASE_TRACK_MIN_DEG     20
+#define JANUS_MOTION_BASE_TRACK_MAX_DEG     160
+#define JANUS_MOTION_BASE_TRACK_CENTER_DEG  90
+#define JANUS_MOTION_BASE_MAX_STEP_DEG      3
+#define JANUS_MOTION_BASE_LOW_MV            3400
+#define JANUS_MOTION_BASE_SLEEP_MV          3200
+#define JANUS_MOTION_BASE_EXT_MV            4350   // USB/boost/charger rail, not raw cell voltage
+#define JANUS_MOTION_BASE_FULL_MV           4170
+#define JANUS_MOTION_BASE_CHG_CURRENT_MIN   2      // raw INA226 current threshold, advisory only
+
+// v2.13 RoboZombie crawler-turret wiring for your current build:
+//   S1 = 180° TMOS/PIR pan head
+//   S2 = left 360° continuous servo arm
+//   S4 = right 360° continuous servo arm
+//   S3 = empty/reserve
+// Continuous servo convention: 90 = stop, below/above 90 = rotate opposite ways.
+#define JANUS_ROBOZOMBIE_ENABLE              1
+#define JANUS_ROBOZOMBIE_LOCAL_TEST_ARM      1   // allows local Serial/auto head test without waiting Core policy
+#define JANUS_ROBOZOMBIE_AUTO_CRAWL_ENABLE   1   // v2.14B: confident auto-crawl when signal/power is good; Serial g still toggles manual
+#define JANUS_ROBOZOMBIE_HEAD_SERVO_CH       0   // physical S1
+#define JANUS_ROBOZOMBIE_LEFT_SERVO_CH       1   // physical S2
+#define JANUS_ROBOZOMBIE_RIGHT_SERVO_CH      3   // physical S4
+#define JANUS_ROBOZOMBIE_LEFT_REVERSE        0   // flip from Serial with 'l' if left pulls wrong way
+#define JANUS_ROBOZOMBIE_RIGHT_REVERSE       1   // flip from Serial with 'r' if right pulls wrong way
+#define JANUS_ROBOZOMBIE_SERVO_STOP          90
+#define JANUS_ROBOZOMBIE_MAX_PULL_DELTA      30  // v2.14B: stronger but confidence/battery gated
+#define JANUS_ROBOZOMBIE_CENTER_DEADBAND     7
+#define JANUS_ROBOZOMBIE_PULSE_MS            185UL
+#define JANUS_ROBOZOMBIE_REST_MS             390UL
+#define JANUS_ROBOZOMBIE_IDLE_STOP_MS        900UL
+#define JANUS_ROBOZOMBIE_CONFIDENT_GAIT       1
+#define JANUS_ROBOZOMBIE_AUTO_MIN_MV          3480   // auto-crawl below this only if USB/external/charging flag is present
+#define JANUS_ROBOZOMBIE_LOW_BATT_PULL_CAP    28
+#define JANUS_ROBOZOMBIE_PIVOT_ERR_DEG        38
+#define JANUS_ROBOZOMBIE_HEAD_PRESENT         1      // set 0 if S1/head servo is physically absent
+#define JANUS_ROBOZOMBIE_LEFT_LEG_PRESENT     1      // set 0 if S2 left 360 servo is absent
+#define JANUS_ROBOZOMBIE_RIGHT_LEG_PRESENT    1      // set 0 if S4 right 360 servo is absent
+#define JANUS_ROBOZOMBIE_ALLOW_HEADLESS       1      // missing head must not break sensors/swarm/miner
+#define JANUS_ROBOZOMBIE_ALLOW_LEGLESS        1      // missing legs must not break head/sensors/swarm/miner
+#define JANUS_ROBOZOMBIE_SERIAL_S_PASSIVE     1      // Serial capital S: hard stop rotors/head and keep BlindEye passive sensor-only until rearmed
 
 
 uint8_t JANUS_BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+// IMPORTANT FIX v2.13E:
+// Do NOT use TwoWire(1) for Atomic Motion on Arduino-ESP32 3.3.x here.
+// It produced "NULL TX buffer pointer" in logs. We use the official M5 approach:
+// one global Wire object, switched between:
+//   Grove/TMOS bus   SDA=2  SCL=1
+//   Motion Base bus  SDA=38 SCL=39 on AtomS3 / AtomS3R
+// Every Motion write/read selects 38/39, then immediately returns Wire to Grove 2/1.
+enum JanusI2CBusMode : uint8_t { JANUS_I2C_UNKNOWN = 0, JANUS_I2C_GROVE = 1, JANUS_I2C_MOTION = 2 };
+static JanusI2CBusMode janusI2cMode = JANUS_I2C_UNKNOWN;
+bool motionBaseUsesMainWire = true;
+bool motionWireStarted = false;
+
+bool janusSelectI2CBus(JanusI2CBusMode mode, bool force = false) {
+  uint8_t sda = GROVE_SDA_PIN;
+  uint8_t scl = GROVE_SCL_PIN;
+  const char* name = "GROVE";
+  if (mode == JANUS_I2C_MOTION) {
+    sda = JANUS_MOTION_BASE_SDA_PIN;
+    scl = JANUS_MOTION_BASE_SCL_PIN;
+    name = "MOTION";
+  } else if (mode != JANUS_I2C_GROVE) {
+    mode = JANUS_I2C_GROVE;
+  }
+
+  if (!force && janusI2cMode == mode) return true;
+
+  // Arduino-ESP32 3.3.x warns "Bus already started" if begin() is called
+  // repeatedly. More importantly, it may keep the old pins. We explicitly end()
+  // before switching between Grove(2/1) and Atomic Motion(38/39).
+  if (janusI2cMode != JANUS_I2C_UNKNOWN || force) {
+    Wire.end();
+    delayMicroseconds(250);
+  }
+
+  bool ok = Wire.begin(sda, scl, 100000);
+  Wire.setTimeOut(30);
+  delayMicroseconds(250);
+  janusI2cMode = ok ? mode : JANUS_I2C_UNKNOWN;
+  if (!ok) {
+    Serial.printf("[I2C] Wire.begin %s SDA=%u SCL=%u FAIL\n", name, (unsigned)sda, (unsigned)scl);
+  }
+  return ok;
+}
+bool janusSelectGroveBus(bool force = false) { return janusSelectI2CBus(JANUS_I2C_GROVE, force); }
+bool janusSelectMotionBus(bool force = false) { return janusSelectI2CBus(JANUS_I2C_MOTION, force); }
 
 struct __attribute__((packed)) JanusColonyPacket {
   char magic[6];
@@ -153,6 +325,41 @@ struct __attribute__((packed)) EntropyReportV2 {
   uint8_t sensor_flags;
   float values[8];
   uint32_t uptime_ms;
+};
+
+// v2.10G: Native SwarmSense mirror. Same S/S ABI used by Stick/TRON class nodes.
+struct __attribute__((packed)) SwarmSensePacket {
+  uint8_t magic[2];        // 'S','S'
+  uint8_t version;         // 1
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t micros_tail;
+  uint32_t free_heap;
+  uint16_t loop_jitter_us;
+  uint16_t loop_max_us;
+  int8_t rssi;
+  uint8_t radio_mode;
+  uint8_t bt_flags;
+  uint8_t palette;
+  uint8_t knn_label;
+  uint8_t knn_confidence;
+  uint8_t ai_hint;
+  uint8_t thermal_load;
+  uint16_t effective_batch;
+  uint16_t dynamic_batch;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint16_t best_bits;
+  uint16_t hash_eff_x1000;
+  int16_t prediction_error_x1000;
+  uint16_t entropy_x1000;
+  uint16_t touch_delta;
+  uint16_t job_age_s;
+  uint16_t nonce_remaining_l16;
+  uint16_t flags;
 };
 
 // v2.5: Buzz Agent reward packet. Buzz v10.11C sends this as ESP-NOW unicast.
@@ -248,6 +455,130 @@ struct __attribute__((packed)) JanusEyeFramePacket {
   uint8_t pixels[JANUS_EYE_FRAME_PIXELS];
 };
 
+// v2.12C: BlindEye -> Core2 power/battery telemetry from Atomic Motion Base INA226.
+// This is a side-channel packet, so old swarm nodes safely ignore it.
+struct __attribute__((packed)) JanusEyePowerPacket {
+  uint8_t magic[2];        // 'E','B' Eye Battery / Energy
+  uint8_t version;         // 1
+  uint8_t flags;           // bit0 base, bit1 INA, bit2 external/USB, bit3 low, bit4 critical, bit5 charging, bit6 full, bit7 pct-estimated
+  char nodeId[24];         // BlindEye
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint16_t bus_mv;
+  int16_t current_raw;
+  int16_t power_raw;
+  uint8_t battery_pct;     // 0..100, estimated 1S Li-ion curve; 100 if external/5V
+  uint8_t source;          // 0 unknown, 1 battery, 2 external, 3 charging, 4 full/float
+  uint16_t servo_angle;
+  uint16_t target_angle;
+  uint32_t crc;
+};
+
+
+// Core v6.41 JANUS BLACKBOARD packets.
+// Keep byte layout identical to Core2_v6_41_JANUS_BLACKBOARD_HOME_CORTEX.
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0,
+  JR_CORE    = 1,
+  JR_ZIM     = 2,
+  JR_BUZZ    = 3,
+  JR_BEACON  = 4,
+  JR_TRON    = 5,
+  JR_BLIND   = 6,
+  JR_AUDIO   = 7,
+  JR_PYRAMID = 8,
+  JR_SENSOR  = 9,
+  JR_RELAY   = 10
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE        = 0,
+  JE_BOOT        = 1,
+  JE_HEARTBEAT   = 2,
+  JE_ENV         = 3,
+  JE_MOTION      = 4,
+  JE_PRESENCE    = 5,
+  JE_SOUND       = 6,
+  JE_WIFI_WEAK   = 7,
+  JE_LOW_HEAP    = 8,
+  JE_HASH        = 9,
+  JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11,
+  JE_TASK_NEED   = 12,
+  JE_TASK_DONE   = 13,
+  JE_DANGER      = 14,
+  JE_SAFE        = 15,
+  JE_POLICY      = 16,
+  JE_AI_MEMORY   = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE    = 0,
+  JM_QUIET   = 1,
+  JM_ALERT   = 2,
+  JM_EXPLORE = 3,
+  JM_GUARD   = 4,
+  JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP     = 0x0001,
+  JC_HUM      = 0x0002,
+  JC_PRESS    = 0x0004,
+  JC_IMU      = 0x0008,
+  JC_MIC      = 0x0010,
+  JC_TMOS     = 0x0020,
+  JC_AIR      = 0x0040,
+  JC_HASH     = 0x0080,
+  JC_AUDIO    = 0x0100,
+  JC_VISION   = 0x0200,
+  JC_TOUCH    = 0x0400,
+  JC_RELAY    = 0x0800,
+  JC_MEMORY   = 0x1000,
+  JC_AI       = 0x2000,
+  JC_BATTERY  = 0x4000,
+  JC_RF       = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];        // 'J','E'
+  uint8_t version;         // 1
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;      // 0..100
+  uint8_t urgency;         // 0..100
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];        // 'J','P'
+  uint8_t version;         // 1
+  uint8_t swarmMood;
+  uint8_t radioRate;       // 0 low, 1 normal, 2 high
+  uint8_t buzzBudget;      // 0 hold, 1 lazy, 2 normal, 3 boost
+  uint8_t sensorRate;      // 0 low, 1 normal, 2 high
+  uint8_t confidence;      // 0..100
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
 struct JanusRemoteProphecyState {
   bool active = false;
   char nodeId[24] = "";
@@ -286,6 +617,20 @@ struct JanusKenshiNode {
   uint8_t flags = 0;
 };
 
+struct JanusEyeEpisode {
+  uint32_t atMs = 0;
+  uint8_t eventType = JE_NONE;
+  uint8_t confidence = 0;
+  uint8_t urgency = 0;
+  uint8_t sector = 0;
+  uint8_t predictedSector = 0;
+  uint8_t flags = 0;
+  int16_t presence_x10 = 0;
+  int16_t motion_x10 = 0;
+  int16_t futureStress_x100 = 0;
+  int16_t servoAngle_x10 = 0;
+};
+
 struct RemoteJobState {
   bool active = false;
   uint8_t job_id[8] = {};
@@ -297,7 +642,30 @@ struct RemoteJobState {
   uint32_t endNonce = 0;      // kept for debug; range wrap is handled by hashesDone
   uint32_t hashesDone = 0;
   uint32_t receivedAt = 0;
+  // v2.12 scheduler-only lane metadata. Header/target bytes are still provided by Buzz.
+  uint8_t minerLane = 0;
+  uint8_t minerSector = 0;
+  uint8_t minerStrideArm = 0;
+  uint32_t minerSeed = 0;
+  uint32_t minerStride = 1;
+  uint32_t minerStartOffset = 0;
 };
+
+// Explicit prototypes for functions with custom Janus types.
+// This prevents Arduino IDE auto-prototype generation from placing these
+// signatures before the struct definitions and breaking compilation.
+void colonyMinerConfigureForJob(RemoteJobState& job);
+uint32_t colonyNextNonceV31(const RemoteJobState& job, uint32_t i);
+bool looksLikeBuzzMaster(const JanusColonyPacket& pkt);
+bool agentRewardTargetsThisEye(const JanusAgentRewardPacket& ar);
+void onJanusAgentReward(const JanusAgentRewardPacket& ar);
+void sendShareResponse(const RemoteJobState& job, uint32_t nonce);
+void onJanusPolicyPacket(const JanusPolicyPacket& jp);
+const JanusEyeEpisode* janusEyeLatestEpisode();
+void onJanusKenshiPacket(const JanusKenshiPacket& kp, int8_t rxRssi);
+void onJanusTachyonProphecy(const JanusTachyonProphecyPacket& tp, int8_t rxRssi);
+bool eyeVisionTargetsThisEye(const JanusEyeVisionControlPacket& ec);
+void onJanusEyeVisionControl(const JanusEyeVisionControlPacket& ec);
 
 RemoteJobState colonyJob;
 volatile bool colonyMasterSeen = false;
@@ -314,10 +682,18 @@ uint32_t colonyJobsDone = 0;
 uint32_t colonyJobsExpired = 0;
 uint32_t colonyBestBits = 0;
 uint32_t colonyHashCounter = 0;
+uint32_t colonyMinerLaneSwitches = 0;
+uint32_t colonyMinerTailHits = 0;
+uint32_t colonyMinerBestNonce = 0;
 uint32_t colonyLastHashTickMs = 0;
 uint16_t colonyWorkerId = 0;
 uint8_t colonyPeerChannel = 0;
 int8_t colonyLastRssi = 0;
+uint32_t colonyPeerRebuilds = 0;
+uint32_t colonyTxOk = 0;
+uint32_t colonyTxFail = 0;
+esp_err_t colonyLastTxErr = ESP_OK;
+char colonyLastTxTag[16] = "-";
 char colonyMode[12] = "SEEK";
 
 // v2.5 Buzz Agent state.
@@ -405,6 +781,134 @@ void hashToShareOrder(const uint8_t in[32], uint8_t out[32]) {
   // Buzz/NerdMiner-compatible worker gate:
   // raw SHA256d bytes -> reversed/display share order -> compare with big-endian target.
   for (int i = 0; i < 32; ++i) out[i] = in[31 - i];
+}
+
+uint32_t janusBitReverse32(uint32_t x) {
+  x = ((x & 0x55555555UL) << 1) | ((x >> 1) & 0x55555555UL);
+  x = ((x & 0x33333333UL) << 2) | ((x >> 2) & 0x33333333UL);
+  x = ((x & 0x0F0F0F0FUL) << 4) | ((x >> 4) & 0x0F0F0F0FUL);
+  x = ((x & 0x00FF00FFUL) << 8) | ((x >> 8) & 0x00FF00FFUL);
+  x = (x << 16) | (x >> 16);
+  return x;
+}
+
+uint32_t janusXorShift32(uint32_t x) {
+  if (!x) x = 0xA5A5A5A5UL;
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  return x;
+}
+
+const char* colonyMinerLaneName(uint8_t lane) {
+  switch (lane) {
+    case 0: return "linear";
+    case 1: return "zim_reverse";
+    case 2: return "bitrev";
+    case 3: return "janus_center";
+    case 4: return "knight";
+    case 5: return "random";
+    default: return "linear";
+  }
+}
+
+uint32_t colonyZimStrideArmValue(uint8_t arm) {
+  static const uint32_t arms[] = {
+    1UL, 3UL, 5UL, 7UL, 11UL, 17UL, 29UL, 31UL, 53UL, 97UL, 257UL, 521UL,
+    4099UL, 65537UL, 0x9E3779B9UL, 0xC4111903UL, 0x4F1BBCDDUL
+  };
+  return arms[arm % (sizeof(arms) / sizeof(arms[0]))] | 1UL;
+}
+
+void colonyMinerConfigureForJob(RemoteJobState& job) {
+#if JANUS_MINER_V31_SCHEDULER_ENABLE
+  uint32_t seed = micros() ^ ESP.getCycleCount() ^ colonyAgentEntropySeed ^ ((uint32_t)colonyJobsSeen << 16) ^ (uint32_t)colonyWorkerId;
+  for (uint8_t i = 0; i < 8; ++i) seed = janusXorShift32(seed ^ job.job_id[i]);
+  job.minerSeed = seed;
+  job.minerStrideArm = (uint8_t)((seed ^ (seed >> 8) ^ colonyAgentLevel) % 17);
+  job.minerStride = colonyZimStrideArmValue(job.minerStrideArm);
+
+  // V31-inspired scheduler-only lane mix: DualLock-ish sector bias + Zim reverse/linear/knight/bitrev/random.
+  uint8_t selector = (uint8_t)((seed ^ (seed >> 11) ^ (uint32_t)colonyAgentHint ^ (uint32_t)colonyJobsSeen) % 100);
+  if (colonyAgentHint >= 3 || colonyAgentLevel >= 2) {
+    if (selector < 42) job.minerLane = 1;       // zim_reverse
+    else if (selector < 64) job.minerLane = 4;  // knight
+    else if (selector < 80) job.minerLane = 2;  // bitrev
+    else if (selector < 92) job.minerLane = 3;  // janus_center
+    else job.minerLane = 5;                     // random baseline
+  } else {
+    if (selector < 38) job.minerLane = 0;       // linear proof lane
+    else if (selector < 67) job.minerLane = 1;  // zim_reverse
+    else if (selector < 80) job.minerLane = 2;  // bitrev
+    else if (selector < 92) job.minerLane = 3;  // janus_center
+    else job.minerLane = 5;
+  }
+
+  // DualLock flavor in 8 local sectors: prefer sector 6 for linear/zim, sector 7 for knight-tail probing.
+  if (job.minerLane == 0 || job.minerLane == 1) job.minerSector = 6 % JANUS_MINER_V31_SECTORS;
+  else if (job.minerLane == 4) job.minerSector = 7 % JANUS_MINER_V31_SECTORS;
+  else job.minerSector = (uint8_t)((seed >> 24) % JANUS_MINER_V31_SECTORS);
+  job.minerStartOffset = janusBitReverse32(seed ^ 0xC4111903UL);
+  colonyMinerLaneSwitches++;
+#else
+  job.minerLane = 0;
+  job.minerSector = 0;
+  job.minerStrideArm = 0;
+  job.minerStride = 1;
+  job.minerSeed = micros();
+  job.minerStartOffset = 0;
+#endif
+}
+
+uint32_t colonyNextNonceV31(const RemoteJobState& job, uint32_t i) {
+#if JANUS_MINER_V31_SCHEDULER_ENABLE
+  uint32_t range = job.rangeSize ? job.rangeSize : COLONY_JOB_RANGE_DEFAULT;
+  if (range == 0) range = 1;
+  uint32_t sectors = JANUS_MINER_V31_SECTORS;
+  uint32_t sector = job.minerSector % sectors;
+  uint32_t sectorWidth = max<uint32_t>(1UL, range / sectors);
+  uint32_t sectorStart = min<uint32_t>(range - 1UL, sector * sectorWidth);
+  if (sector == sectors - 1 || sectorStart + sectorWidth > range) sectorWidth = range - sectorStart;
+  sectorWidth = max<uint32_t>(1UL, sectorWidth);
+
+  uint32_t local = 0;
+  uint32_t stride = job.minerStride | 1UL;
+  uint32_t seed = job.minerSeed ^ job.minerStartOffset;
+
+  switch (job.minerLane) {
+    case 1: { // zim_reverse: seeded cursor, odd reverse stride.
+      uint32_t cursor = seed % sectorWidth;
+      uint32_t walk = (uint32_t)(((uint64_t)(i % sectorWidth) * stride) % sectorWidth);
+      local = sectorStart + ((cursor + sectorWidth - walk) % sectorWidth);
+      break;
+    }
+    case 2: // bitrev: jump across scales.
+      local = janusBitReverse32(seed + i) % range;
+      break;
+    case 3: { // janus_center: center, -1, +1, -2, +2...
+      uint32_t step = (i + 1UL) >> 1;
+      uint32_t center = sectorWidth >> 1;
+      uint32_t off = (i & 1UL) ? (center + step) : (center + sectorWidth - (step % sectorWidth));
+      local = sectorStart + (off % sectorWidth);
+      break;
+    }
+    case 4: // knight: golden-ratio odd walk inside a locked sector.
+      local = sectorStart + ((seed + i * 0x9E3779B9UL) % sectorWidth);
+      break;
+    case 5: { // random baseline, deterministic/reproducible per job.
+      uint32_t x = janusXorShift32(seed + i * 0xA5A5A5A5UL);
+      local = x % range;
+      break;
+    }
+    case 0:
+    default:
+      local = (job.minerStartOffset + i) % range;
+      break;
+  }
+  return job.startNonce + local;
+#else
+  return job.nonce;
+#endif
 }
 
 bool looksLikeBuzzMaster(const JanusColonyPacket& pkt) {
@@ -497,13 +1001,47 @@ void onJanusEyeVisionControl(const JanusEyeVisionControlPacket& ec);
 void eyeVisionTick();
 void sendEyeVisionFrame();
 
+void onJanusPolicyPacket(const JanusPolicyPacket& jp);
+bool janusEmitEyeEvent(uint8_t eventType, uint8_t confidence, uint8_t urgency,
+                       int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                       uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs);
+void janusEventTick(bool force=false);
+void initMotionBase();
+void motionBaseTick();
+void motionBaseSafeStop();
+void motionBaseStopCrawler(const char* reason);
+void motionBaseCrawlerTick(uint32_t now);
+bool motionBaseWriteServoAngle(uint8_t ch, uint8_t angle, const char* tag);
+void handleRoboZombieSerial();
+void motionBasePlanTarget();
+void motionBaseSendStatusEvent(bool force=false);
+void motionBaseSendPowerPacket(bool force=false);
+void ensureColonyPeer();
+bool janusEyeEspNowSend(const char* tag, const void* payload, size_t len, bool repairOnFail=true);
+bool forceColonyPeerRebuild(const char* reason);
+
+void janusEyeRecordEpisode(uint8_t eventType, uint8_t confidence, uint8_t urgency, uint8_t flags=0);
+void janusEyeSemanticTick(uint32_t now, bool force=false);
+void janusEyeSwarmSenseTick(uint32_t now, bool force=false);
+void rfLiteOnPacketRssi(int8_t rssi);
+void rfLiteTick(uint32_t now);
+void rfLiteDebugTick(uint32_t now, bool force=false);
+float rfLiteFusionScore();
+bool tmosWarmupActive(uint32_t now);
+uint8_t janusPolicySmoothMood(uint8_t rawMood, uint8_t confidence, uint32_t now);
+const char* janusMoodName(uint8_t mood);
+uint32_t colonyNextNonceV31(const RemoteJobState& job, uint32_t i);
+void colonyMinerConfigureForJob(RemoteJobState& job);
+const char* colonyMinerLaneName(uint8_t lane);
+
+
 void sendShareResponse(const RemoteJobState& job, uint32_t nonce) {
   ShareResponse sr{};
   sr.magic[0] = 'S'; sr.magic[1] = 'R';
   memcpy(sr.job_id, job.job_id, 8);
   sr.nonce = nonce;
   sr.worker_id = colonyWorkerId;
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&sr, sizeof(sr));
+  janusEyeEspNowSend("share", &sr, sizeof(sr), true);
   // This is a worker-found ticket sent to Buzz. Pool ACCEPT is counted by Buzz.
   colonyRemoteShares++;
 }
@@ -541,7 +1079,8 @@ void runRemoteMiningBatch() {
       break;
     }
 
-    uint32_t nonce = colonyJob.nonce++;
+    uint32_t nonce = colonyNextNonceV31(colonyJob, colonyJob.hashesDone);
+    colonyJob.nonce = nonce + 1;
     colonyJob.hashesDone++;
 
     memcpy(header, colonyJob.header, 80);
@@ -552,7 +1091,11 @@ void runRemoteMiningBatch() {
 
     colonyHashCounter++;
     uint16_t bits = countLeadingZeroBitsBE(shareHash);
-    if (bits > colonyBestBits) colonyBestBits = bits;
+    if (bits > colonyBestBits) {
+      colonyBestBits = bits;
+      colonyMinerBestNonce = nonce;
+    }
+    if (bits >= 22) colonyMinerTailHits++;
 
     if ((bits >= colonyTargetBits) && hashMeetsTargetBE(shareHash, colonyJob.target)) {
       sendShareResponse(colonyJob, nonce);
@@ -576,16 +1119,87 @@ uint8_t getWifiChannelSafe() {
   return primary;
 }
 
-void ensureColonyPeer() {
+bool forceColonyPeerRebuild(const char* reason) {
+#if JANUS_COLONY_ENABLE
+  if (WiFi.status() != WL_CONNECTED) return false;
+
   uint8_t ch = getWifiChannelSafe();
-  if (ch == 0) ch = JANUS_BROADCAST_CHANNEL;
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC) && colonyPeerChannel == ch) return;
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
+
+  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) {
+    esp_now_del_peer(JANUS_BROADCAST_MAC);
+  }
+
   esp_now_peer_info_t peer{};
   memcpy(peer.peer_addr, JANUS_BROADCAST_MAC, 6);
   peer.channel = ch;
   peer.encrypt = false;
-  if (esp_now_add_peer(&peer) == ESP_OK) colonyPeerChannel = ch;
+
+  esp_err_t err = esp_now_add_peer(&peer);
+  if (err == ESP_OK || err == ESP_ERR_ESPNOW_EXIST) {
+    colonyPeerChannel = ch;
+    colonyPeerRebuilds++;
+    Serial.printf("[COLONY/EYE] peer ready ch=%u rebuilds=%lu reason=%s\n",
+                  (unsigned)ch, (unsigned long)colonyPeerRebuilds, reason ? reason : "-");
+    return true;
+  }
+
+  colonyPeerChannel = 0;
+  Serial.printf("[COLONY/EYE] peer rebuild FAIL err=%d ch=%u reason=%s\n",
+                (int)err, (unsigned)ch, reason ? reason : "-");
+  return false;
+#else
+  (void)reason;
+  return false;
+#endif
+}
+
+void ensureColonyPeer() {
+#if JANUS_COLONY_ENABLE
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  uint8_t ch = getWifiChannelSafe();
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
+
+  bool exists = esp_now_is_peer_exist(JANUS_BROADCAST_MAC);
+  if (exists && colonyPeerChannel == ch) return;
+
+  // Non-destructive fast path: only rebuild when the peer vanished or channel changed.
+  forceColonyPeerRebuild(exists ? "channel-change" : "ensure");
+#endif
+}
+
+bool janusEyeEspNowSend(const char* tag, const void* payload, size_t len, bool repairOnFail) {
+#if JANUS_COLONY_ENABLE
+  if (!payload || len == 0) return false;
+  if (WiFi.status() != WL_CONNECTED) {
+    colonyTxFail++;
+    colonyLastTxErr = ESP_ERR_ESPNOW_IF;
+    strlcpy(colonyLastTxTag, tag ? tag : "wifi-off", sizeof(colonyLastTxTag));
+    return false;
+  }
+
+  ensureColonyPeer();
+  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)payload, len);
+  if (err == ESP_OK) {
+    colonyTxOk++;
+    return true;
+  }
+
+  colonyTxFail++;
+  colonyLastTxErr = err;
+  strlcpy(colonyLastTxTag, tag ? tag : "send", sizeof(colonyLastTxTag));
+  colonyPeerChannel = 0;
+  Serial.printf("[COLONY/EYE] TX FAIL tag=%s err=%d fail=%lu ch=%u\n",
+                colonyLastTxTag, (int)err, (unsigned long)colonyTxFail, (unsigned)colonyPeerChannel);
+  if (repairOnFail) forceColonyPeerRebuild(tag ? tag : "tx-fail");
+  return false;
+#else
+  (void)tag; (void)payload; (void)len; (void)repairOnFail;
+  return false;
+#endif
 }
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -598,6 +1212,18 @@ void onColonyRecv(const uint8_t *mac, const uint8_t *data, int len)
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
   if (info && info->rx_ctrl) colonyLastRssi = info->rx_ctrl->rssi;
 #endif
+  rfLiteOnPacketRssi(colonyLastRssi);
+
+  if (len == sizeof(JanusPolicyPacket) && data[0] == 'J' && data[1] == 'P') {
+    JanusPolicyPacket jp{};
+    memcpy(&jp, data, sizeof(jp));
+    onJanusPolicyPacket(jp);
+    return;
+  }
+  if (len == sizeof(JanusEventPacket) && data[0] == 'J' && data[1] == 'E') {
+    // Core consumes J/E. BlindEye only ignores echoes/other semantic events for now.
+    return;
+  }
 
   if (len == sizeof(JanusColonyPacket)) {
     JanusColonyPacket pkt{}; memcpy(&pkt, data, sizeof(pkt));
@@ -620,6 +1246,7 @@ void onColonyRecv(const uint8_t *mac, const uint8_t *data, int len)
     colonyJob.endNonce = jp.start_nonce + colonyJob.rangeSize;
     colonyJob.hashesDone = 0;
     colonyJob.receivedAt = millis();
+    colonyMinerConfigureForJob(colonyJob);
     colonyJob.active = true;
     colonyTargetBits = countLeadingZeroBitsBE(colonyJob.target);
     colonyJobsSeen++;
@@ -689,9 +1316,10 @@ extern "C" {
 // ========================= JANUS BLIND EYE =========================
 
 #define DEVICE_ID              "atom_s3r_blind_eye"
-#define DEVICE_KIND            "blind_eye_full_v2_9_kenshi_tachyon_prophecy_eagle_focus"
-#define WIFI_SSID "YOUR_WIFI"
-#define WIFI_PASSWORD "YOUR_PASSWORD"
+#define DEVICE_KIND            "blind_eye_rf_fusion_v2_11_ruview_lite_buzz_miner"
+
+#define WIFI_SSID              "JANUS_WIFI_PLACEHOLDER"
+#define WIFI_PASSWORD          "JANUS_NET_PLACEHOLDER"
 #define SERVER_BASE            "http://192.168.1.92:5000"
 
 #define EP_DEVICE_DATA         "/api/device/data"
@@ -709,8 +1337,12 @@ extern "C" {
 #define WIFI_RETRY_MS          7000UL
 
 // Grove TMOS
+#ifndef GROVE_SDA_PIN
 #define GROVE_SDA_PIN          2
+#endif
+#ifndef GROVE_SCL_PIN
 #define GROVE_SCL_PIN          1
+#endif
 
 // Bottom mic base
 #define MIC_I2S_BCLK_PIN       6
@@ -757,31 +1389,50 @@ float tmos_focus_gain = 3.2f;
 float tmos_focus_confidence = 0.0f;
 bool tmos_focus_ready = false;
 uint32_t tmos_last_focus_ms = 0;
-
-// v3.0 Eagle Focus Lock runtime state.
-// Raw -> EMA -> baseline/noise -> signal -> occupancy/memory.
-// "presence_now" is real evidence; "memory" is not allowed to set a hard presence flag.
-float tmos_raw_presence_ema = 0.0f;
-float tmos_raw_motion_ema = 0.0f;
-float tmos_presence_signal = 0.0f;
-float tmos_motion_signal = 0.0f;
-float tmos_presence_integrator = 0.0f;
-float tmos_motion_integrator = 0.0f;
-float tmos_focus_lock = 0.0f;
+float tmos_presence_memory = 0.0f;
+float tmos_motion_memory = 0.0f;
 float tmos_occupancy = 0.0f;
-float tmos_memory = 0.0f;
-float tmos_ghost_pressure = 0.0f;
-float tmos_calibration_quality = 0.0f;
-bool tmos_raw_filter_ready = false;
+float tmos_ghost_score = 0.0f;
+uint32_t tmos_last_valid_ms = 0;
+uint16_t tmos_bad_frames = 0;
 bool tmos_presence_now = false;
 bool tmos_motion_now = false;
-uint32_t tmos_present_since_ms = 0;
-uint32_t tmos_last_real_ms = 0;
-uint32_t tmos_last_absent_ms = 0;
-uint16_t tmos_absent_frames = 0;
-uint16_t tmos_present_frames = 0;
 float mic_rms = 0;
 int wifi_rssi = -127;
+
+// v2.12 RuView-lite RF Fusion runtime state.
+float rf_rssi_ema = -127.0f;
+float rf_rssi_baseline = -127.0f;
+float rf_rssi_noise = 2.8f;
+float rf_abs_drift = 0.0f;
+float rf_motion_energy = 0.0f;
+float rf_presence_score = 0.0f;
+float rf_entropy = 0.0f;
+float rf_packet_pressure = 0.0f;
+float rf_last_packet_drift = 0.0f;
+int8_t rf_last_packet_rssi = -127;
+bool rf_ready = false;
+bool rf_presence_now = false;
+bool rf_motion_now = false;
+uint32_t rf_samples = 0;
+uint32_t rf_rx_packets = 0;
+uint32_t rf_last_sample_ms = 0;
+uint32_t rf_last_packet_ms = 0;
+uint32_t rf_anomaly_count = 0;
+uint32_t rf_last_debug_ms = 0;
+
+// v2.12 TMOS warmup / ghost damping / policy smoothing runtime state.
+uint32_t janusEyeBootMs = 0;
+uint32_t tmosWarmupUntilMs = 0;
+uint32_t tmosGhostHighSinceMs = 0;
+uint32_t tmosLastGhostTaskNeedMs = 0;
+uint8_t janusPolicyCandidateMood = JM_IDLE;
+uint8_t janusPolicyCandidateCount = 0;
+uint8_t janusPolicyRawLastMood = JM_IDLE;
+uint32_t janusPolicyLastMoodChangeMs = 0;
+uint32_t janusPolicySmoothedDrops = 0;
+uint32_t janusPolicyAcceptedChanges = 0;
+
 
 float model_w[FEATURE_DIM] = {0.10f, -0.02f, 0.08f, 0.12f, 0.05f, 0.03f, 0.06f, 0.05f, 0.04f, -0.02f};
 float model_b = 0.0f;
@@ -842,6 +1493,96 @@ uint32_t eyeVisionFramesTx = 0;
 uint32_t eyeVisionControlsRx = 0;
 uint32_t eyeVisionControlsIgnored = 0;
 char eyeVisionSource[16] = "-";
+
+
+// JANUS BLACKBOARD runtime state.
+uint32_t janusEventSeq = 0;
+uint32_t janusEventLastTxMs = 0;
+uint32_t janusEventLastMotionMs = 0;
+uint32_t janusEventLastPresenceMs = 0;
+uint32_t janusEventLastStatusMs = 0;
+uint32_t janusPolicyRx = 0;
+uint32_t janusPolicySeq = 0;
+uint32_t janusPolicyUntilMs = 0;
+uint32_t janusPolicyQuietUntilMs = 0;
+uint8_t janusPolicyMood = JM_IDLE;
+uint8_t janusPolicyRadioRate = 1;
+uint8_t janusPolicySensorRate = 1;
+uint8_t janusPolicyBuzzBudget = 1;
+uint8_t janusPolicyConfidence = 0;
+char janusPolicyOrder[40] = "-";
+uint16_t janusPolicySensorIntervalMs = SENSOR_INTERVAL_MS;
+
+// v2.10G Eye episodic memory / semantic task bridge / S/S telemetry.
+JanusEyeEpisode janusEyeEpisodes[JANUS_EYE_EPISODE_COUNT];
+uint8_t janusEyeEpisodeHead = 0;
+uint8_t janusEyeEpisodeCount = 0;
+uint32_t janusEyeLastEpisodeMs = 0;
+uint32_t janusEyeLastAiMemoryMs = 0;
+uint32_t janusEyeLastTaskNeedMs = 0;
+uint32_t janusEyeLastTaskDoneMs = 0;
+uint32_t janusEyeTaskNeedTx = 0;
+uint32_t janusEyeTaskDoneTx = 0;
+uint32_t janusEyeAiMemoryTx = 0;
+uint32_t janusEyeSwarmSenseSeq = 0;
+uint32_t janusEyeSwarmSenseTx = 0;
+uint32_t janusEyeSwarmSenseFail = 0;
+uint32_t janusEyeLastSwarmSenseMs = 0;
+bool janusEyePrevPresenceNow = false;
+bool janusEyePrevMotionNow = false;
+
+// Atomic Motion Base v1.2 scaffold/runtime state.
+bool motionBasePresent = false;
+bool motionBasePowerPresent = false;
+bool motionBaseArmed = false;       // Core policy may arm; writes still require compile flag.
+bool motionBaseTrackEnabled = true; // planner is enabled, physical writes are safe-gated.
+uint8_t motionBasePowerAddr = 0;
+uint32_t motionBaseLastTickMs = 0;
+uint32_t motionBaseLastPowerMs = 0;
+uint32_t motionBaseLastStatusMs = 0;
+uint32_t motionBaseServoWrites = 0;
+uint32_t motionBaseI2cErrors = 0;
+int16_t motionBaseBusMv = 0;
+int16_t motionBaseCurrentRaw = 0;
+int16_t motionBasePowerRaw = 0;
+int16_t motionBaseServoAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+int16_t motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+int16_t motionBaseLastSentAngle = -1;
+int8_t motionBaseMotorSpeed[2] = {0, 0};
+uint8_t motionBaseBatteryPct = 0;
+uint8_t motionBasePowerFlags = 0;
+uint8_t motionBasePowerSource = 0;
+uint16_t motionBaseLastCellMv = 0;       // last real 1S battery voltage seen before USB/boost rail
+uint8_t motionBaseLastCellPct = 0;       // kept while USB-C is connected, so we do not fake 100%
+uint32_t motionBaseExternalSinceMs = 0;
+uint32_t motionBaseBatterySeq = 0;
+uint32_t motionBaseLastBatteryTxMs = 0;
+// v2.14D: Motion Base is optional. If absent, BlindEye becomes a normal sensor/swarm node. Serial S enters PASSIVE_EYE mode.
+bool motionBaseOptionalAbsent = false;
+bool motionBaseEverDetected = false;
+uint32_t motionBaseAbsentSinceMs = 0;
+// v2.13 RoboZombie crawler runtime.
+bool roboZombieLocalArm = JANUS_ROBOZOMBIE_LOCAL_TEST_ARM != 0;
+bool roboZombieCrawlerManualEnable = false;
+bool roboZombiePassiveMode = false;   // Serial capital S: passive eye, no actuator writes until a/g/manual target re-enables
+bool roboZombieLeftReverse = JANUS_ROBOZOMBIE_LEFT_REVERSE != 0;
+bool roboZombieRightReverse = JANUS_ROBOZOMBIE_RIGHT_REVERSE != 0;
+bool roboZombieHeadPresent = JANUS_ROBOZOMBIE_HEAD_PRESENT != 0;
+bool roboZombieLeftLegPresent = JANUS_ROBOZOMBIE_LEFT_LEG_PRESENT != 0;
+bool roboZombieRightLegPresent = JANUS_ROBOZOMBIE_RIGHT_LEG_PRESENT != 0;
+uint8_t roboZombieBasePull = 30;
+uint32_t roboZombieCrawlerPulses = 0;
+uint32_t roboZombieCrawlerLastStopMs = 0;
+uint32_t roboZombieCrawlerLastPulseMs = 0;
+int8_t roboZombieLastLeftSpeed = 0;
+int8_t roboZombieLastRightSpeed = 0;
+uint8_t roboZombieLastLeftValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+uint8_t roboZombieLastRightValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+float roboZombieGaitConfidence = 0.0f;
+uint32_t roboZombieLastConfidentMs = 0;
+uint32_t roboZombieAutoBlockedLowPowerMs = 0;
+
+
 
 float hist_activity[HIST_SIZE] = {0};
 float hist_loss[HIST_SIZE] = {0};
@@ -908,51 +1649,6 @@ void initTMOS() {
   else if (tmos.begin(&Wire, 0x5B)) tmos_ready = true;
   else tmos_ready = false;
 }
-float janusEmaF(float prev, float cur, float alpha) {
-  if (!isfinite(prev)) return cur;
-  if (!isfinite(cur)) return prev;
-  return prev * (1.0f - alpha) + cur * alpha;
-}
-
-float janusApproachF(float prev, float target, float riseAlpha, float fallAlpha) {
-  float a = (target > prev) ? riseAlpha : fallAlpha;
-  return janusEmaF(prev, target, a);
-}
-
-void tmosResetFocusRuntime(float baseP, float baseM, float noiseP, float noiseM) {
-  tmos_presence_baseline = baseP;
-  tmos_motion_baseline = baseM;
-  tmos_presence_noise = constrain(noiseP, 2.5f, 95.0f);
-  tmos_motion_noise = constrain(noiseM, 2.0f, 90.0f);
-  tmos_focus_gain = 3.2f;
-  tmos_focus_confidence = 0.0f;
-  tmos_focus_lock = 0.0f;
-  tmos_presence_signal = 0.0f;
-  tmos_motion_signal = 0.0f;
-  tmos_presence_integrator = 0.0f;
-  tmos_motion_integrator = 0.0f;
-  tmos_occupancy = 0.0f;
-  tmos_memory = 0.0f;
-  tmos_ghost_pressure = 0.0f;
-  tmos_presence_now = false;
-  tmos_motion_now = false;
-  tmos_absent_frames = 0;
-  tmos_present_frames = 0;
-  tmos_raw_presence_ema = baseP;
-  tmos_raw_motion_ema = baseM;
-  tmos_raw_filter_ready = true;
-  tmos_focus_ready = true;
-  tmos_last_absent_ms = millis();
-  tmos_last_real_ms = 0;
-}
-
-bool tmosStrongPresenceEvidence() {
-  return tmos_presence_now || tmos_motion_now ||
-         tmos_presence > JANUS_EYE_PRESENCE_FLAG_LEVEL ||
-         tmos_motion > JANUS_EYE_MOTION_FLAG_LEVEL ||
-         tmos_occupancy > 0.48f;
-}
-
 
 void calibrateTMOS() {
   if (!tmos_ready) return;
@@ -961,15 +1657,11 @@ void calibrateTMOS() {
   int32_t sumM = 0;
   int32_t minP = 32767, maxP = -32768;
   int32_t minM = 32767, maxM = -32768;
-  const int samples = JANUS_EYE_CALIB_SAMPLES;
+  const int samples = 48;
 
-  // v3.0: longer boot calibration. Keep the eye aimed at a neutral/empty part
-  // of the room for ~3 seconds. If this was not possible, negative-rebase logic
-  // below can recover from a too-hot baseline instead of staying blind.
-  int16_t prevP = 0;
-  int16_t prevM = 0;
-  int32_t jumpAccum = 0;
-
+  // Keep the sensor still and preferably aim it at an empty/neutral part of the room
+  // during this boot window. If the operator is inside the beam, Eagle Focus will
+  // still recover slowly, but the first minute will be less sensitive.
   for (int i = 0; i < samples; ++i) {
     tmos.getPresenceValue(&raw_presence);
     tmos.getMotionValue(&raw_motion);
@@ -979,29 +1671,33 @@ void calibrateTMOS() {
     maxP = max<int32_t>(maxP, raw_presence);
     minM = min<int32_t>(minM, raw_motion);
     maxM = max<int32_t>(maxM, raw_motion);
-    if (i > 0) jumpAccum += abs((int)raw_presence - (int)prevP) + abs((int)raw_motion - (int)prevM);
-    prevP = raw_presence;
-    prevM = raw_motion;
-    delay(26);
+    delay(28);
   }
 
   calib_presence = sumP / samples;
   calib_motion = sumM / samples;
-
-  float spanP = (float)(maxP - minP);
-  float spanM = (float)(maxM - minM);
-  tmos_calibration_quality = constrain(1.0f - ((float)jumpAccum / max(1, samples - 1)) / 180.0f, 0.0f, 1.0f);
-
-  float noiseP = spanP * 0.38f + 5.0f;
-  float noiseM = spanM * 0.38f + 3.5f;
-
-  tmosResetFocusRuntime((float)calib_presence, (float)calib_motion, noiseP, noiseM);
+  tmos_presence_baseline = (float)calib_presence;
+  tmos_motion_baseline = (float)calib_motion;
+  tmos_presence_noise = constrain((float)(maxP - minP) * 0.55f + 8.0f, 6.0f, 80.0f);
+  tmos_motion_noise = constrain((float)(maxM - minM) * 0.55f + 5.0f, 4.0f, 70.0f);
+  tmos_focus_gain = 3.2f;
+  tmos_focus_confidence = 0.0f;
+  tmos_presence_memory = 0.0f;
+  tmos_motion_memory = 0.0f;
+  tmos_occupancy = 0.0f;
+  tmos_ghost_score = 0.0f;
+  tmos_presence_now = false;
+  tmos_motion_now = false;
+  tmos_last_focus_ms = 0;
+  tmos_last_valid_ms = millis();
+  tmos_focus_ready = true;
   calibrated = true;
-
-  Serial.printf("[EYE/CAL] TMOS base=%d/%d span=%.1f/%.1f noise=%.1f/%.1f q=%.2f\n",
-                calib_presence, calib_motion, spanP, spanM,
-                tmos_presence_noise, tmos_motion_noise, tmos_calibration_quality);
+  Serial.printf("[EYE/CAL] v2.9I truth base=%.1f/%.1f noise=%.1f/%.1f room-empty=%u\n",
+                tmos_presence_baseline, tmos_motion_baseline,
+                tmos_presence_noise, tmos_motion_noise,
+                (unsigned)JANUS_EYE_RECALIBRATE_ON_BOOT);
 }
+
 void readTMOS() {
   if (!tmos_ready) {
     tmos_presence = 0.0f;
@@ -1009,11 +1705,29 @@ void readTMOS() {
     tmos_focus_confidence = 0.0f;
     tmos_presence_now = false;
     tmos_motion_now = false;
+    tmos_occupancy *= JANUS_EYE_MEMORY_DECAY;
+    tmos_presence_memory *= JANUS_EYE_MEMORY_DECAY;
+    tmos_motion_memory *= JANUS_EYE_MEMORY_DECAY;
     return;
   }
 
   tmos.getPresenceValue(&raw_presence);
   tmos.getMotionValue(&raw_motion);
+
+  // v2.9H: защита от залипших/мусорных raw вроде 16334/16334.
+  // Важно: это НЕ включает TMOS насильно и НЕ перезапускает I2C.
+  if (abs((int)raw_presence) >= JANUS_EYE_STUCK_RAW_ABS ||
+      abs((int)raw_motion) >= JANUS_EYE_STUCK_RAW_ABS) {
+    tmos_bad_frames++;
+    tmos_presence = 0.0f;
+    tmos_motion = 0.0f;
+    tmos_focus_confidence *= 0.80f;
+    tmos_presence_now = false;
+    tmos_motion_now = false;
+    tmos_occupancy *= JANUS_EYE_GHOST_DECAY;
+    return;
+  }
+  tmos_last_valid_ms = millis();
 
   if (!calibrated) {
     tmos_presence = 0.0f;
@@ -1026,147 +1740,121 @@ void readTMOS() {
 
 #if JANUS_EYE_EAGLE_FOCUS_ENABLE
   if (!tmos_focus_ready) {
-    tmosResetFocusRuntime((float)calib_presence, (float)calib_motion, 12.0f, 8.0f);
+    tmos_presence_baseline = (float)calib_presence;
+    tmos_motion_baseline = (float)calib_motion;
+    tmos_presence_noise = 12.0f;
+    tmos_motion_noise = 8.0f;
+    tmos_focus_gain = 3.2f;
+    tmos_focus_ready = true;
   }
 
   float rawP = (float)raw_presence;
   float rawM = (float)raw_motion;
-
-  if (!tmos_raw_filter_ready) {
-    tmos_raw_presence_ema = rawP;
-    tmos_raw_motion_ema = rawM;
-    tmos_raw_filter_ready = true;
-  }
-
-  // Smooth the raw STHS34PF80 presence/motion readings. Big jumps are allowed
-  // to enter faster, but still not as single-frame chaos.
-  float rawJump = max(fabsf(rawP - tmos_raw_presence_ema), fabsf(rawM - tmos_raw_motion_ema));
-  float rawAlpha = (rawJump > 160.0f) ? JANUS_EYE_RAW_SPIKE_ALPHA : JANUS_EYE_RAW_EMA_ALPHA;
-  tmos_raw_presence_ema = janusEmaF(tmos_raw_presence_ema, rawP, rawAlpha);
-  tmos_raw_motion_ema = janusEmaF(tmos_raw_motion_ema, rawM, rawAlpha);
-
-  float filtP = tmos_raw_presence_ema;
-  float filtM = tmos_raw_motion_ema;
-  float dP = filtP - tmos_presence_baseline;
-  float dM = filtM - tmos_motion_baseline;
+  float dP = rawP - tmos_presence_baseline;
+  float dM = rawM - tmos_motion_baseline;
   float aP = fabsf(dP);
   float aM = fabsf(dM);
 
-  // Negative rebase recovers from boot calibration made while a person/hand was in the beam.
-  float hotGate = max(11.0f, tmos_presence_noise * 1.65f + tmos_motion_noise * 0.85f);
-  bool negativeRebase = (dP < -(tmos_presence_noise * 2.6f + 8.0f)) || (dM < -(tmos_motion_noise * 2.4f + 6.0f));
-
-  // Far targets create small slow deltas. A "hot" field freezes the baseline;
-  // quiet room slowly follows. This prevents a sitting human at ~2m from being
-  // absorbed into the zero point.
-  bool hot = (max(aP, aM * 1.25f) > hotGate) || tmos_occupancy > 0.42f;
-  float baseAlpha = hot ? JANUS_EYE_BASELINE_ALPHA_HOT : JANUS_EYE_BASELINE_ALPHA_QUIET;
-  if (negativeRebase) baseAlpha = JANUS_EYE_NEGATIVE_REBASE_ALPHA;
-
-  tmos_presence_baseline = tmos_presence_baseline * (1.0f - baseAlpha) + filtP * baseAlpha;
-  tmos_motion_baseline   = tmos_motion_baseline   * (1.0f - baseAlpha) + filtM * baseAlpha;
-
-  // Noise learns only from quiet frames. Strong movement should not raise the threshold.
-  if (!hot && !negativeRebase) {
-    tmos_presence_noise = janusEmaF(tmos_presence_noise, aP, JANUS_EYE_NOISE_ALPHA);
-    tmos_motion_noise = janusEmaF(tmos_motion_noise, aM, JANUS_EYE_NOISE_ALPHA);
+  // v2.12B soft calibration:
+  // - during warmup, baseline is allowed to settle toward the actual room field;
+  // - after warmup, hot targets still mostly freeze baseline, but extreme jumps
+  //   get a tiny release valve so the sensor can recover from a bad boot sample.
+  bool warmup = tmosWarmupActive(millis());
+  float hotGate = max(16.0f, tmos_presence_noise * 2.3f + tmos_motion_noise * 1.4f);
+  bool hugeJump = (max(aP, aM) > JANUS_TMOS_BASELINE_JUMP_LEVEL);
+  bool hot = (max(aP, aM * 1.35f) > hotGate);
+  float baseAlpha = 0.0f;
+  if (warmup) {
+    baseAlpha = hugeJump ? JANUS_TMOS_WARMUP_SETTLE_ALPHA : JANUS_TMOS_WARMUP_SOFT_ALPHA;
   } else {
-    tmos_presence_noise = tmos_presence_noise * 0.9995f + min(aP, tmos_presence_noise) * 0.0005f;
-    tmos_motion_noise = tmos_motion_noise * 0.9995f + min(aM, tmos_motion_noise) * 0.0005f;
+    baseAlpha = hot ? (hugeJump ? JANUS_TMOS_POSTWARM_JUMP_ALPHA : JANUS_EYE_BASELINE_ALPHA_HOT)
+                    : JANUS_EYE_BASELINE_ALPHA_QUIET;
   }
-  tmos_presence_noise = constrain(tmos_presence_noise, 2.5f, 120.0f);
-  tmos_motion_noise = constrain(tmos_motion_noise, 2.0f, 110.0f);
+  tmos_presence_baseline = tmos_presence_baseline * (1.0f - baseAlpha) + rawP * baseAlpha;
+  tmos_motion_baseline   = tmos_motion_baseline   * (1.0f - baseAlpha) + rawM * baseAlpha;
 
-  // Software "squint": weak but coherent positive presence increases focus lock.
-  float pWeak = max(0.0f, dP - (tmos_presence_noise * 0.28f + 0.8f));
-  float mWeak = max(0.0f, aM - (tmos_motion_noise * 0.25f + 0.7f));
-  bool coherentFar = (pWeak > 0.55f && dP > 0.0f && aP < 180.0f && aM < 260.0f);
-  float lockTarget = coherentFar ? constrain(pWeak / max(9.0f, tmos_presence_noise * 2.0f), 0.0f, 1.0f) : 0.0f;
-  tmos_focus_lock = janusApproachF(tmos_focus_lock, lockTarget, JANUS_EYE_FAR_LOCK_ALPHA, JANUS_EYE_FAR_UNLOCK_ALPHA);
+  // Recompute deltas after the baseline glide. This is the key anti-wild-calibration fix.
+  dP = rawP - tmos_presence_baseline;
+  dM = rawM - tmos_motion_baseline;
+  aP = fabsf(dP);
+  aM = fabsf(dM);
 
-  float targetGain = constrain(10.8f - (tmos_presence_noise + tmos_motion_noise) * 0.028f + tmos_focus_lock * 3.8f,
-                               JANUS_EYE_FOCUS_MIN_GAIN, JANUS_EYE_FOCUS_MAX_GAIN);
-  if (hot) targetGain = min(JANUS_EYE_FOCUS_MAX_GAIN, targetGain + 0.65f);
-  tmos_focus_gain = janusEmaF(tmos_focus_gain, targetGain, 0.12f);
+  // Noise follows quiet room breathing; warmup gets a softer, faster settle.
+  float noiseAlpha = warmup ? JANUS_TMOS_WARMUP_NOISE_ALPHA : JANUS_EYE_NOISE_ALPHA;
+  if (!hot || warmup) {
+    tmos_presence_noise = tmos_presence_noise * (1.0f - noiseAlpha) + aP * noiseAlpha;
+    tmos_motion_noise   = tmos_motion_noise   * (1.0f - noiseAlpha) + aM * noiseAlpha;
+  } else {
+    tmos_presence_noise = tmos_presence_noise * 0.999f + min(aP, tmos_presence_noise) * 0.001f;
+    tmos_motion_noise   = tmos_motion_noise   * 0.999f + min(aM, tmos_motion_noise) * 0.001f;
+  }
+  tmos_presence_noise = constrain(tmos_presence_noise, 4.0f, 220.0f);
+  tmos_motion_noise = constrain(tmos_motion_noise, 3.0f, 200.0f);
 
-  // Detection math: lower threshold for far-field, but integrate slowly so
-  // random TMOS/PIR jumps do not become a permanent ghost.
-  float pSignal = max(0.0f, dP - (tmos_presence_noise * 0.34f + 1.15f));
-  float mSignal = max(0.0f, aM - (tmos_motion_noise * 0.32f + 0.95f));
+  float targetGain = constrain(9.0f - (tmos_presence_noise + tmos_motion_noise) * 0.035f,
+                               JANUS_EYE_FOCUS_MIN_GAIN, warmup ? JANUS_TMOS_WARMUP_GAIN_MAX : JANUS_EYE_FOCUS_MAX_GAIN);
+  if (hot && !warmup) targetGain = min(JANUS_EYE_FOCUS_MAX_GAIN, targetGain + 0.8f);
+  float gainAlpha = warmup ? 0.045f : 0.14f;
+  tmos_focus_gain = tmos_focus_gain * (1.0f - gainAlpha) + targetGain * gainAlpha;
+
+  // v2.9I TRUTH RELEASE:
+  // 1) positive/warm presence is trusted directly;
+  // 2) negative/cool delta is allowed only through a gated, weak path;
+  // 3) focus_confidence never creates NOW by itself, so ghosts can decay.
+  float warmSignal = max(0.0f, dP - (tmos_presence_noise * 0.85f + 5.0f));
+  float coolSignal = max(0.0f, -dP - (tmos_presence_noise * 2.60f + 12.0f));
+  float mSignal = max(0.0f, aM - (tmos_motion_noise * 0.85f + 5.0f));
+  float coolGate = constrain(mSignal / max(JANUS_EYE_MOTION_FLAG_LEVEL * 2.0f, 1.0f), 0.0f, 1.0f);
+  float pSignal = warmSignal + coolSignal * coolGate * JANUS_EYE_COOL_PRESENCE_WEIGHT;
   tmos_presence_delta = dP;
   tmos_motion_delta = dM;
 
-  tmos_presence_integrator = constrain(tmos_presence_integrator * 0.955f + pSignal * 0.180f, 0.0f, 260.0f);
-  tmos_motion_integrator = constrain(tmos_motion_integrator * 0.900f + mSignal * 0.210f, 0.0f, 220.0f);
-
-  float pOut = (pSignal * 0.58f + tmos_presence_integrator * 0.92f) * tmos_focus_gain;
-  float mOut = (mSignal * 0.66f + tmos_motion_integrator * 0.54f) * tmos_focus_gain;
-
-  tmos_presence_signal = constrain(pOut, 0.0f, 1400.0f);
-  tmos_motion_signal = constrain(mOut, 0.0f, 800.0f);
-
-  tmos_presence = janusApproachF(tmos_presence, tmos_presence_signal, JANUS_EYE_SIGNAL_RISE_ALPHA, JANUS_EYE_SIGNAL_FALL_ALPHA);
-  tmos_motion = janusApproachF(tmos_motion, tmos_motion_signal, JANUS_EYE_SIGNAL_RISE_ALPHA, JANUS_EYE_SIGNAL_FALL_ALPHA);
+  // Keep far-field sensitivity, but do not let a stale baseline become permanent presence.
+  if (warmup) {
+    pSignal *= JANUS_TMOS_WARMUP_OUTPUT_SCALE;
+    mSignal *= JANUS_TMOS_WARMUP_OUTPUT_SCALE;
+  }
+  tmos_presence = constrain(pSignal * 0.22f * tmos_focus_gain, 0.0f, 1400.0f);
+  tmos_motion   = constrain(mSignal * 0.22f * tmos_focus_gain, 0.0f, 800.0f);
 
   float pNorm = tmos_presence / max(JANUS_EYE_PRESENCE_FLAG_LEVEL, 1.0f);
   float mNorm = tmos_motion / max(JANUS_EYE_MOTION_FLAG_LEVEL, 1.0f);
-  float evidence = constrain(max(pNorm, mNorm * 0.88f) + tmos_focus_lock * 0.55f, 0.0f, 3.0f);
-  bool evidenceNow = evidence > JANUS_EYE_PRESENT_ON_LEVEL;
+  float evidence = max(pNorm, mNorm);
 
-  if (evidenceNow) {
-    tmos_present_frames++;
-    tmos_absent_frames = 0;
-    if (tmos_present_since_ms == 0) tmos_present_since_ms = millis();
-    if (millis() - tmos_present_since_ms >= JANUS_EYE_MIN_PRESENT_MS) {
-      tmos_last_real_ms = millis();
+  tmos_focus_confidence = constrain(tmos_focus_confidence * 0.82f + evidence * 0.18f, 0.0f, 2.0f);
+
+  bool currentPresence = (pNorm > 1.10f) || (pNorm > 0.72f && mNorm > 0.65f);
+  bool currentMotion = (mNorm > 1.18f);
+  if (warmup) {
+    // During warmup we still display soft evidence, but NOW flags require strong proof.
+    currentPresence = (pNorm > 2.80f) || (pNorm > 1.80f && mNorm > 1.40f);
+    currentMotion = (mNorm > 2.60f);
+  }
+  if (currentPresence || currentMotion) tmos_last_focus_ms = millis();
+
+  // v2.9I: NOW is current evidence only. Confidence/memory are not allowed to hallucinate NOW.
+  tmos_presence_now = currentPresence;
+  tmos_motion_now = currentMotion;
+
+  if (tmos_presence_now) tmos_presence_memory = tmos_presence_memory * (1.0f - JANUS_EYE_MEMORY_ATTACK) + min(2.0f, pNorm) * JANUS_EYE_MEMORY_ATTACK;
+  else tmos_presence_memory *= JANUS_EYE_MEMORY_DECAY;
+
+  if (tmos_motion_now) tmos_motion_memory = tmos_motion_memory * (1.0f - JANUS_EYE_MEMORY_ATTACK) + min(2.0f, mNorm) * JANUS_EYE_MEMORY_ATTACK;
+  else tmos_motion_memory *= JANUS_EYE_MEMORY_DECAY;
+
+  tmos_occupancy = constrain(max(tmos_presence_memory, tmos_motion_memory), 0.0f, 2.0f);
+
+  if (!tmos_presence_now && !tmos_motion_now) {
+    if (millis() - tmos_last_focus_ms > JANUS_EYE_STALE_RELEASE_MS) {
+      tmos_focus_confidence *= 0.72f;
+      tmos_occupancy *= JANUS_EYE_GHOST_DECAY;
+      tmos_presence_memory *= JANUS_EYE_GHOST_DECAY;
+      tmos_motion_memory *= JANUS_EYE_GHOST_DECAY;
+      tmos_ghost_score = constrain(tmos_ghost_score * 0.88f + 0.12f, 0.0f, 1.0f);
     }
   } else {
-    tmos_absent_frames++;
-    if (tmos_absent_frames > 8) {
-      tmos_present_frames = 0;
-      tmos_present_since_ms = 0;
-    }
+    tmos_ghost_score *= 0.80f;
   }
-
-  float occTarget = evidenceNow ? constrain(evidence / 1.35f, 0.0f, 1.0f) : 0.0f;
-  tmos_occupancy = janusApproachF(tmos_occupancy, occTarget, JANUS_EYE_OCC_RISE_ALPHA, JANUS_EYE_OCC_FALL_ALPHA);
-  tmos_memory = max(tmos_memory * (1.0f - JANUS_EYE_MEMORY_DECAY_ALPHA), tmos_occupancy);
-
-  bool hardOn = (tmos_occupancy > 0.36f && evidence > JANUS_EYE_PRESENT_ON_LEVEL);
-  bool hardOff = (tmos_occupancy < JANUS_EYE_PRESENT_OFF_LEVEL && evidence < 0.55f && tmos_absent_frames > 12);
-
-  if (hardOn) {
-    tmos_presence_now = true;
-    tmos_motion_now = mNorm > 0.80f;
-    tmos_last_absent_ms = 0;
-  } else if (hardOff) {
-    tmos_presence_now = false;
-    tmos_motion_now = false;
-    if (tmos_last_absent_ms == 0) tmos_last_absent_ms = millis();
-  }
-
-  // Anti-ghost: if the room is quiet for long enough, decay outputs and allow
-  // the baseline to settle. Predictions may remember, but the sensor no longer
-  // claims "present now".
-  bool quietFrame = !evidenceNow && aP < (tmos_presence_noise * 0.85f + 3.0f) && aM < (tmos_motion_noise * 0.85f + 2.5f);
-  if (quietFrame && tmos_absent_frames > 18) {
-    tmos_ghost_pressure = constrain(tmos_ghost_pressure + 0.025f, 0.0f, 1.0f);
-    tmos_presence *= (1.0f - JANUS_EYE_GHOST_DECAY_ALPHA);
-    tmos_motion *= (1.0f - JANUS_EYE_GHOST_DECAY_ALPHA * 1.4f);
-    tmos_presence_integrator *= 0.88f;
-    tmos_motion_integrator *= 0.82f;
-  } else {
-    tmos_ghost_pressure = max(0.0f, tmos_ghost_pressure - 0.050f);
-  }
-
-  if (quietFrame && tmos_last_absent_ms != 0 && millis() - tmos_last_absent_ms > JANUS_EYE_ABSENT_REBASE_MS) {
-    tmos_presence_baseline = janusEmaF(tmos_presence_baseline, filtP, JANUS_EYE_QUIET_REBASE_ALPHA);
-    tmos_motion_baseline = janusEmaF(tmos_motion_baseline, filtM, JANUS_EYE_QUIET_REBASE_ALPHA);
-  }
-
-  tmos_focus_confidence = constrain(tmos_focus_confidence * 0.82f + (tmos_occupancy + tmos_focus_lock * 0.65f) * 0.18f, 0.0f, 2.0f);
-  if (tmos_presence_now || tmos_motion_now) tmos_last_focus_ms = millis();
-
 #else
   tmos_presence = constrain((raw_presence - calib_presence) / 10.0f, 0.0f, 1000.0f);
   tmos_motion   = constrain((raw_motion - calib_motion) / 10.0f, 0.0f, 500.0f);
@@ -1174,7 +1862,6 @@ void readTMOS() {
   tmos_motion_now = tmos_motion > JANUS_EYE_MOTION_FLAG_LEVEL;
 #endif
 }
-
 
 // ========================= MIC =========================
 
@@ -1254,42 +1941,41 @@ void readIMUClassic() {
 }
 
 // ========================= MODEL =========================
+
 void buildFeatures(float x[FEATURE_DIM]) {
   x[0] = constrain(tmos_presence / 1000.0f, 0.0f, 1.0f);
   x[1] = constrain(tmos_motion / 500.0f, 0.0f, 1.0f);
   x[2] = constrain(mic_rms * 10.0f, 0.0f, 4.0f);
   x[3] = constrain(mag_norm / 200.0f, 0.0f, 4.0f);
   x[4] = constrain(imu_shock / 5.0f, 0.0f, 4.0f);
-  x[5] = constrain((float)wifi_rssi / -100.0f, 0.0f, 2.0f);
+  x[5] = constrain(((float)wifi_rssi / -100.0f) + rf_presence_score * 0.35f + rf_motion_energy * 0.020f, 0.0f, 2.5f);
 
   // Tachyon/Physarious micro-features: future pressure, movement viscosity,
-  // remote prophecies and Markov sector confidence. v3.0 gates predictions so
-  // "memory" can help attention but cannot masquerade as real present evidence.
-  x[6] = constrain((tmos_presence_now ? tachyonPredPresence1 : tachyonPredPresence1 * 0.35f) / 1000.0f, 0.0f, 2.0f);
-  x[7] = constrain((tmos_motion_now ? tachyonPredMotion1 : tachyonPredMotion1 * 0.35f) / 500.0f, 0.0f, 2.0f);
-  x[8] = constrain(tachyonSwarmPressure + kenshiConfidence * 0.25f + tmos_focus_confidence * 0.08f + tmos_occupancy * 0.42f, 0.0f, 2.0f);
-  x[9] = constrain(tachyonFutureStress * (0.55f + tmos_occupancy * 0.45f), 0.0f, 2.0f);
+  // remote prophecies and Markov sector confidence. These are bounded so old
+  // bad frames cannot destroy the tiny linear model.
+  x[6] = constrain(tachyonPredPresence1 / 1000.0f, 0.0f, 2.0f);
+  x[7] = constrain(tachyonPredMotion1 / 500.0f, 0.0f, 2.0f);
+  x[8] = constrain(tachyonSwarmPressure + kenshiConfidence * 0.25f + tmos_focus_confidence * 0.12f + rfLiteFusionScore() * 0.25f, 0.0f, 2.4f);
+  x[9] = constrain(tachyonFutureStress, 0.0f, 2.0f);
 }
-
 
 float predict(const float x[FEATURE_DIM]) {
   float y = model_b;
   for (int i = 0; i < FEATURE_DIM; ++i) y += model_w[i] * x[i];
   return y;
 }
+
 float computeActivity() {
-  // v3.0: activity follows smoothed real evidence and occupancy, not raw TMOS jumps.
   return
-    tmos_presence * 0.00165f +
-    tmos_motion * 0.00325f +
-    tmos_occupancy * 1.10f +
+    tmos_presence * 0.002f +
+    tmos_motion * 0.004f +
     mic_rms * 20.0f +
     mag_norm * 0.010f +
     imu_shock * 0.20f +
-    tmos_focus_confidence * 0.06f -
-    tmos_ghost_pressure * 0.55f;
+    tmos_focus_confidence * 0.10f +
+    rf_motion_energy * 0.10f +
+    rf_presence_score * 0.35f;
 }
-
 
 void train(const float target, const float x[FEATURE_DIM]) {
   float pred = predict(x);
@@ -1382,9 +2068,6 @@ void updateMiniGPT() {
     else if (colonyAgentLevel == 1) statusLine = "agent praise";
     else statusLine = "agent observe";
   }
-  else if (tmos_presence_now && tmos_motion_now) statusLine = "eye locked moving";
-  else if (tmos_presence_now) statusLine = "eye locked";
-  else if (tmos_ghost_pressure > 0.55f) statusLine = "eye clearing ghost";
   else if (loss < 0.04f) statusLine = "eye guessed";
   else if (loss > 0.40f) statusLine = "eye training";
   else statusLine = "eye stable";
@@ -1475,19 +2158,12 @@ void saveState() {
   File f = LittleFS.open(STATE_FILE, "w");
   if (!f) return;
 
-  StaticJsonDocument<768> doc;
+  StaticJsonDocument<512> doc;
   doc["calibrated"] = calibrated;
   doc["fit_best"] = fit_best;
   doc["model_lr"] = model_lr;
   doc["calib_presence"] = calib_presence;
   doc["calib_motion"] = calib_motion;
-  doc["focus_base_p"] = tmos_presence_baseline;
-  doc["focus_base_m"] = tmos_motion_baseline;
-  doc["focus_noise_p"] = tmos_presence_noise;
-  doc["focus_noise_m"] = tmos_motion_noise;
-  doc["focus_gain"] = tmos_focus_gain;
-  doc["focus_lock"] = tmos_focus_lock;
-  doc["calib_q"] = tmos_calibration_quality;
   doc["tachyon_pg"] = tachyonPresenceConfidence;
   doc["tachyon_mg"] = tachyonMotionConfidence;
   doc["tachyon_tg"] = tachyonTrendGain;
@@ -1501,7 +2177,7 @@ void loadState() {
   File f = LittleFS.open(STATE_FILE, FILE_READ);
   if (!f) return;
 
-  StaticJsonDocument<768> doc;
+  StaticJsonDocument<512> doc;
   if (deserializeJson(doc, f) != DeserializationError::Ok) {
     f.close();
     return;
@@ -1513,14 +2189,6 @@ void loadState() {
   model_lr = doc["model_lr"] | model_lr;
   calib_presence = doc["calib_presence"] | calib_presence;
   calib_motion = doc["calib_motion"] | calib_motion;
-  tmos_presence_baseline = doc["focus_base_p"] | (float)calib_presence;
-  tmos_motion_baseline = doc["focus_base_m"] | (float)calib_motion;
-  tmos_presence_noise = constrain(doc["focus_noise_p"] | tmos_presence_noise, 2.5f, 120.0f);
-  tmos_motion_noise = constrain(doc["focus_noise_m"] | tmos_motion_noise, 2.0f, 110.0f);
-  tmos_focus_gain = constrain(doc["focus_gain"] | tmos_focus_gain, JANUS_EYE_FOCUS_MIN_GAIN, JANUS_EYE_FOCUS_MAX_GAIN);
-  tmos_focus_lock = constrain(doc["focus_lock"] | tmos_focus_lock, 0.0f, 1.0f);
-  tmos_calibration_quality = constrain(doc["calib_q"] | tmos_calibration_quality, 0.0f, 1.0f);
-  tmos_focus_ready = calibrated;
   tachyonPresenceConfidence = doc["tachyon_pg"] | tachyonPresenceConfidence;
   tachyonMotionConfidence = doc["tachyon_mg"] | tachyonMotionConfidence;
   tachyonTrendGain = constrain(doc["tachyon_tg"] | tachyonTrendGain, 0.10f, 1.50f);
@@ -1531,7 +2199,7 @@ void loadState() {
 // ========================= IO =========================
 
 String buildPayload() {
-  StaticJsonDocument<1536> doc;
+  StaticJsonDocument<1024> doc;
   doc["device_id"] = DEVICE_ID;
   JsonObject d = doc["data"].to<JsonObject>();
 
@@ -1550,20 +2218,17 @@ String buildPayload() {
   d["shock"] = imu_shock;
   d["tmos_presence"] = tmos_presence;
   d["tmos_motion"] = tmos_motion;
-  d["tmos_presence_now"] = tmos_presence_now ? 1 : 0;
-  d["tmos_motion_now"] = tmos_motion_now ? 1 : 0;
-  d["tmos_occupancy"] = tmos_occupancy;
-  d["tmos_memory"] = tmos_memory;
-  d["tmos_focus_lock"] = tmos_focus_lock;
-  d["tmos_ghost"] = tmos_ghost_pressure;
-  d["tmos_base_p"] = tmos_presence_baseline;
-  d["tmos_base_m"] = tmos_motion_baseline;
-  d["tmos_noise_p"] = tmos_presence_noise;
-  d["tmos_noise_m"] = tmos_motion_noise;
-  d["raw_presence"] = raw_presence;
-  d["raw_motion"] = raw_motion;
   d["mic_rms"] = mic_rms;
   d["wifi_rssi"] = wifi_rssi;
+  d["rf_ready"] = rf_ready;
+  d["rf_presence_now"] = rf_presence_now;
+  d["rf_motion_now"] = rf_motion_now;
+  d["rf_presence_score"] = rf_presence_score;
+  d["rf_motion_energy"] = rf_motion_energy;
+  d["rf_abs_drift"] = rf_abs_drift;
+  d["rf_noise"] = rf_rssi_noise;
+  d["rf_entropy"] = rf_entropy;
+  d["rf_packets"] = rf_rx_packets;
   d["calibrated"] = calibrated;
   d["uptime_ms"] = millis();
   d["activity"] = activity;
@@ -1586,6 +2251,17 @@ String buildPayload() {
   d["tachyon_swarm_pressure"] = tachyonSwarmPressure;
   d["vision_enabled"] = eyeVisionEnabled;
   d["vision_frames"] = eyeVisionFramesTx;
+  d["motion_base_present"] = motionBasePresent;
+  d["motion_base_power"] = motionBasePowerPresent;
+  d["motion_base_armed"] = motionBaseArmed;
+  d["motion_base_servo_angle"] = motionBaseServoAngle;
+  d["motion_base_target_angle"] = motionBaseTargetAngle;
+  d["motion_base_bus_mv"] = motionBaseBusMv;
+  d["motion_base_battery_pct"] = motionBaseBatteryPct;
+  d["motion_base_power_flags"] = motionBasePowerFlags;
+  d["motion_base_i2c_errors"] = motionBaseI2cErrors;
+  d["janus_policy_mood"] = janusPolicyMood;
+  d["janus_policy_order"] = janusPolicyOrder;
   d["status"] = statusLine;
   d["diag"] = diagLine;
   d["colony_mode"] = colonyMode;
@@ -1636,6 +2312,1251 @@ void fetchCommand() {
 
 
 
+
+// ========================= JANUS BLACKBOARD EVENT BUS + MOTION BASE =========================
+
+uint16_t janusHash16(const char* s) {
+  uint16_t h = 21661U;
+  if (!s) return h;
+  while (*s) {
+    h ^= (uint8_t)*s++;
+    h = (uint16_t)(h * 16719U);
+  }
+  return h ? h : 1;
+}
+
+uint16_t janusEyeCapabilities() {
+  uint16_t caps = JC_IMU | JC_MIC | JC_TMOS | JC_VISION | JC_AI | JC_RF;
+  if (motionBasePresent) caps |= JC_RELAY;     // actuator base attached
+  if (motionBasePowerPresent) caps |= JC_BATTERY;
+  return caps;
+}
+
+const char* janusEyeEventKind(uint8_t eventType) {
+  switch (eventType) {
+    case JE_BOOT: return "eye_boot";
+    case JE_HEARTBEAT: return "eye_status";
+    case JE_ENV: return "eye_env";
+    case JE_MOTION: return "eye_motion";
+    case JE_PRESENCE: return "eye_presence";
+    case JE_WIFI_WEAK: return "eye_wifi_weak";
+    case JE_LOW_HEAP: return "eye_low_heap";
+    case JE_TASK_NEED: return "eye_task_need";
+    case JE_TASK_DONE: return "eye_task_done";
+    case JE_DANGER: return "eye_danger";
+    case JE_SAFE: return "eye_safe";
+    case JE_AI_MEMORY: return "eye_memory";
+    default: return "eye_tmos_motion";
+  }
+}
+
+bool janusEmitEyeEvent(uint8_t eventType, uint8_t confidence, uint8_t urgency,
+                       int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                       uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs) {
+#if JANUS_EVENT_BUS_ENABLE
+  JanusEventPacket ev{};
+  ev.magic[0] = 'J'; ev.magic[1] = 'E';
+  ev.version = 1;
+  ev.eventType = eventType;
+  ev.nodeRole = JR_BLIND;
+  ev.confidence = constrain((int)confidence, 0, 100);
+  ev.urgency = constrain((int)urgency, 0, 100);
+  strlcpy(ev.nodeId, "BlindEye", sizeof(ev.nodeId));
+  strlcpy(ev.kind, janusEyeEventKind(eventType), sizeof(ev.kind));
+  ev.seq = ++janusEventSeq;
+  ev.uptimeMs = millis();
+  ev.topicHash = topicHash ? topicHash : janusHash16("blind_eye");
+  ev.objectHash = objectHash;
+  ev.capabilities = janusEyeCapabilities();
+  ev.valueA_x10 = a_x10;
+  ev.valueB_x10 = b_x10;
+  ev.valueC_x10 = c_x10;
+  ev.valueD_x10 = d_x10;
+  ev.eventHash = ((uint32_t)eventType << 24) ^ ((uint32_t)ev.topicHash << 8) ^ ev.seq ^ (uint32_t)colonyWorkerId;
+  ev.ttlMs = ttlMs ? ttlMs : 7000UL;
+  bool ok = janusEyeEspNowSend("J/E", &ev, sizeof(ev), true);
+  if (ok) janusEventLastTxMs = millis();
+  return ok;
+#else
+  (void)eventType; (void)confidence; (void)urgency; (void)a_x10; (void)b_x10; (void)c_x10; (void)d_x10; (void)topicHash; (void)objectHash; (void)ttlMs;
+  return false;
+#endif
+}
+
+const char* janusMoodName(uint8_t mood) {
+  switch (mood) {
+    case JM_IDLE: return "IDLE";
+    case JM_QUIET: return "QUIET";
+    case JM_ALERT: return "ALERT";
+    case JM_EXPLORE: return "EXPLORE";
+    case JM_GUARD: return "GUARD";
+    case JM_RECOVER: return "RECOVER";
+    default: return "?";
+  }
+}
+
+uint8_t janusPolicySmoothMood(uint8_t rawMood, uint8_t confidence, uint32_t now) {
+  if (rawMood > JM_RECOVER) rawMood = JM_IDLE;
+  if (janusPolicyRx <= 1) {
+    janusPolicyCandidateMood = rawMood;
+    janusPolicyCandidateCount = 1;
+    janusPolicyRawLastMood = rawMood;
+    janusPolicyLastMoodChangeMs = now;
+    return rawMood;
+  }
+
+  if (rawMood == janusPolicyMood) {
+    janusPolicyCandidateMood = rawMood;
+    janusPolicyCandidateCount = 0;
+    return janusPolicyMood;
+  }
+
+  if (rawMood != janusPolicyCandidateMood) {
+    janusPolicyCandidateMood = rawMood;
+    janusPolicyCandidateCount = 1;
+  } else if (janusPolicyCandidateCount < 255) {
+    janusPolicyCandidateCount++;
+  }
+  janusPolicyRawLastMood = rawMood;
+
+  uint8_t needed = 1;
+  if (rawMood == JM_ALERT || rawMood == JM_GUARD) needed = JANUS_POLICY_ALERT_CONFIRM;
+  else if (rawMood == JM_RECOVER || rawMood == JM_QUIET) needed = JANUS_POLICY_RECOVER_CONFIRM;
+
+  bool dwellOk = (now - janusPolicyLastMoodChangeMs) >= JANUS_POLICY_SMOOTH_MIN_DWELL_MS;
+  bool strongOverride = (confidence >= 70 && (rawMood == JM_ALERT || rawMood == JM_GUARD));
+  if ((janusPolicyCandidateCount >= needed && dwellOk) || strongOverride) {
+    janusPolicyLastMoodChangeMs = now;
+    janusPolicyAcceptedChanges++;
+    janusPolicyCandidateCount = 0;
+    return rawMood;
+  }
+
+  janusPolicySmoothedDrops++;
+  return janusPolicyMood;
+}
+
+void onJanusPolicyPacket(const JanusPolicyPacket& jp) {
+#if JANUS_EVENT_BUS_ENABLE
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+  if (jp.seq && jp.seq == janusPolicySeq) return;
+  janusPolicyRx++;
+  janusPolicySeq = jp.seq;
+  uint32_t now = millis();
+  uint8_t rawMood = constrain((int)jp.swarmMood, 0, (int)JM_RECOVER);
+  uint8_t smoothedMood = janusPolicySmoothMood(rawMood, jp.confidence, now);
+  bool moodAccepted = (smoothedMood == rawMood);
+  janusPolicyMood = smoothedMood;
+  if (moodAccepted || jp.confidence >= 65 || janusPolicyRx < 3) {
+    janusPolicyRadioRate = constrain((int)jp.radioRate, 0, 2);
+    janusPolicySensorRate = constrain((int)jp.sensorRate, 0, 2);
+  }
+  janusPolicyBuzzBudget = constrain((int)jp.buzzBudget, 0, 3);
+  janusPolicyConfidence = constrain((int)jp.confidence, 0, 100);
+  janusPolicyUntilMs = now + (jp.ttlMs ? jp.ttlMs : JANUS_EVENT_POLICY_TTL_GUARD_MS);
+  janusPolicyQuietUntilMs = jp.quietUntilMs
+    ? now + min((uint32_t)jp.quietUntilMs, 60000UL)
+    : 0;
+  strlcpy(janusPolicyOrder, jp.order[0] ? jp.order : "-", sizeof(janusPolicyOrder));
+
+  if (janusPolicySensorRate == 0) janusPolicySensorIntervalMs = 220;
+  else if (janusPolicySensorRate == 2) janusPolicySensorIntervalMs = 70;
+  else janusPolicySensorIntervalMs = SENSOR_INTERVAL_MS;
+
+  // Core can arm future tracker only when explicitly confident. Compile-time write gate still wins.
+  motionBaseArmed = motionBasePresent && !roboZombiePassiveMode && (janusPolicyMood == JM_GUARD || janusPolicyMood == JM_ALERT) && jp.confidence >= 55 && !(jp.flags & 0x0001);
+  Serial.printf("[EYE/POLICY] rx=%lu raw=%s mood=%s radio=%u sensor=%u conf=%u armed=%u smoothDrop=%lu accept=%lu order=%s\n",
+                (unsigned long)janusPolicyRx, janusMoodName(rawMood), janusMoodName(janusPolicyMood),
+                (unsigned)janusPolicyRadioRate, (unsigned)janusPolicySensorRate,
+                (unsigned)janusPolicyConfidence, motionBaseArmed ? 1 : 0,
+                (unsigned long)janusPolicySmoothedDrops, (unsigned long)janusPolicyAcceptedChanges, janusPolicyOrder);
+#endif
+}
+
+uint32_t janusEventIntervalNow() {
+  if (tmos_motion_now || tmos_presence_now || tachyonFutureStress > 0.90f || kenshiBubbleState >= 2) return JANUS_EVENT_TX_ALERT_MS;
+  if (janusPolicyRadioRate == 0 || (janusPolicyQuietUntilMs && millis() < janusPolicyQuietUntilMs)) return JANUS_EVENT_TX_BASE_MS * 2UL;
+  if (janusPolicyRadioRate == 2) {
+    uint32_t fast = JANUS_EVENT_TX_BASE_MS / 2UL;
+    return fast < 900UL ? 900UL : fast;
+  }
+  return JANUS_EVENT_TX_BASE_MS;
+}
+
+void janusEventTick(bool force) {
+#if JANUS_EVENT_BUS_ENABLE
+  uint32_t now = millis();
+
+  if (force || now - janusEventLastStatusMs >= janusEventIntervalNow()) {
+    janusEventLastStatusMs = now;
+    uint8_t conf = (uint8_t)constrain((int)((tachyonPresenceConfidence * 0.5f + tachyonMotionConfidence * 0.5f) * 100.0f), 10, 100);
+    janusEmitEyeEvent(JE_HEARTBEAT, conf, kenshiPriority,
+                      (int16_t)constrain((int)(tmos_presence * 10.0f), -32768, 32767),
+                      (int16_t)constrain((int)(tmos_motion * 10.0f), -32768, 32767),
+                      (int16_t)constrain((int)(tachyonFutureStress * 100.0f), -32768, 32767),
+                      (int16_t)constrain((int)(motionBaseServoAngle * 10), -32768, 32767),
+                      janusHash16("home_eye"), janusHash16("blind_eye"), 8000UL);
+  }
+
+  if (tmos_motion_now && now - janusEventLastMotionMs >= JANUS_EVENT_MOTION_COOLDOWN_MS) {
+    janusEventLastMotionMs = now;
+    janusEmitEyeEvent(JE_MOTION, (uint8_t)constrain((int)(tachyonMotionConfidence * 100.0f), 30, 100), 86,
+                      (int16_t)constrain((int)(tmos_motion * 10.0f), -32768, 32767),
+                      (int16_t)constrain((int)(tachyonPredMotion1 * 10.0f), -32768, 32767),
+                      (int16_t)motionBaseTargetAngle,
+                      (int16_t)kenshiPredSector,
+                      janusHash16("motion"), janusHash16("blind_eye_tmos"), 4500UL);
+  }
+
+  if (tmos_presence_now && now - janusEventLastPresenceMs >= JANUS_EVENT_MOTION_COOLDOWN_MS) {
+    janusEventLastPresenceMs = now;
+    janusEmitEyeEvent(JE_PRESENCE, (uint8_t)constrain((int)(tachyonPresenceConfidence * 100.0f), 30, 100), 78,
+                      (int16_t)constrain((int)(tmos_presence * 10.0f), -32768, 32767),
+                      (int16_t)constrain((int)(tachyonPredPresence1 * 10.0f), -32768, 32767),
+                      (int16_t)motionBaseTargetAngle,
+                      (int16_t)kenshiSector,
+                      janusHash16("presence"), janusHash16("blind_eye_tmos"), 4500UL);
+  }
+
+  if (wifi_rssi != -127 && wifi_rssi < -74) {
+    static uint32_t lastWeak = 0;
+    if (now - lastWeak > 12000UL) {
+      lastWeak = now;
+      janusEmitEyeEvent(JE_WIFI_WEAK, 80, 52, (int16_t)(wifi_rssi * 10), 0, 0, 0,
+                        janusHash16("radio"), janusHash16("blind_eye_wifi"), 10000UL);
+    }
+  }
+
+  if (rf_ready && (rf_motion_now || rf_presence_now)) {
+    static uint32_t lastRfEvent = 0;
+    if (now - lastRfEvent > 1800UL) {
+      lastRfEvent = now;
+      uint8_t rfConf = (uint8_t)constrain((int)(rf_presence_score * 64.0f + rf_motion_energy * 4.0f), 25, 100);
+      uint8_t rfUrg = rf_motion_now ? 70 : 48;
+      janusEmitEyeEvent(rf_motion_now ? JE_MOTION : JE_PRESENCE, rfConf, rfUrg,
+                        (int16_t)constrain((int)(rf_presence_score * 1000.0f), -32768, 32767),
+                        (int16_t)constrain((int)(rf_motion_energy * 100.0f), -32768, 32767),
+                        (int16_t)constrain((int)(rf_abs_drift * 100.0f), -32768, 32767),
+                        (int16_t)constrain((int)(rf_entropy * 100.0f), -32768, 32767),
+                        janusHash16("rf_eye"), janusHash16("blind_eye_ruview_lite"), 5000UL);
+    }
+  }
+
+  if (ESP.getFreeHeap() < 65000) {
+    static uint32_t lastHeap = 0;
+    if (now - lastHeap > 15000UL) {
+      lastHeap = now;
+      janusEmitEyeEvent(JE_LOW_HEAP, 75, 55, (int16_t)(ESP.getFreeHeap() / 1024), 0, 0, 0,
+                        janusHash16("heap"), janusHash16("blind_eye_heap"), 10000UL);
+    }
+  }
+
+  janusEyeSemanticTick(now, force);
+#endif
+}
+
+void janusEyeRecordEpisode(uint8_t eventType, uint8_t confidence, uint8_t urgency, uint8_t flags) {
+#if JANUS_EYE_EPISODE_ENABLE
+  uint32_t now = millis();
+  JanusEyeEpisode& ep = janusEyeEpisodes[janusEyeEpisodeHead];
+  ep.atMs = now;
+  ep.eventType = eventType;
+  ep.confidence = constrain((int)confidence, 0, 100);
+  ep.urgency = constrain((int)urgency, 0, 100);
+  ep.sector = kenshiSector;
+  ep.predictedSector = kenshiPredSector;
+  ep.flags = flags;
+  ep.presence_x10 = (int16_t)constrain((int)(tmos_presence * 10.0f), -32768, 32767);
+  ep.motion_x10 = (int16_t)constrain((int)(tmos_motion * 10.0f), -32768, 32767);
+  ep.futureStress_x100 = (int16_t)constrain((int)(tachyonFutureStress * 100.0f), -32768, 32767);
+  ep.servoAngle_x10 = (int16_t)constrain((int)(motionBaseServoAngle * 10), -32768, 32767);
+  janusEyeEpisodeHead = (janusEyeEpisodeHead + 1) % JANUS_EYE_EPISODE_COUNT;
+  if (janusEyeEpisodeCount < JANUS_EYE_EPISODE_COUNT) janusEyeEpisodeCount++;
+  janusEyeLastEpisodeMs = now;
+#else
+  (void)eventType; (void)confidence; (void)urgency; (void)flags;
+#endif
+}
+
+const JanusEyeEpisode* janusEyeLatestEpisode() {
+#if JANUS_EYE_EPISODE_ENABLE
+  if (janusEyeEpisodeCount == 0) return nullptr;
+  uint8_t idx = (janusEyeEpisodeHead == 0) ? (JANUS_EYE_EPISODE_COUNT - 1) : (janusEyeEpisodeHead - 1);
+  return &janusEyeEpisodes[idx];
+#else
+  return nullptr;
+#endif
+}
+
+void janusEyeEmitAiMemory(uint32_t now, bool force) {
+#if JANUS_EVENT_BUS_ENABLE && JANUS_EYE_EPISODE_ENABLE
+  if (!force && now - janusEyeLastAiMemoryMs < JANUS_EYE_AI_MEMORY_TX_MS) return;
+  const JanusEyeEpisode* ep = janusEyeLatestEpisode();
+  if (!ep) return;
+  janusEyeLastAiMemoryMs = now;
+  bool ok = janusEmitEyeEvent(JE_AI_MEMORY, ep->confidence, ep->urgency,
+                              ep->presence_x10, ep->motion_x10, ep->futureStress_x100,
+                              (int16_t)(((uint16_t)ep->sector << 8) | ep->predictedSector),
+                              janusHash16("eye_memory"), janusHash16("last_episode"), 60000UL);
+  if (ok) janusEyeAiMemoryTx++;
+#else
+  (void)now; (void)force;
+#endif
+}
+
+void janusEyeEmitTaskNeed(uint8_t urgency, const char* object, int16_t a, int16_t b, int16_t c, int16_t d) {
+#if JANUS_EVENT_BUS_ENABLE
+  bool ok = janusEmitEyeEvent(JE_TASK_NEED, 82, urgency, a, b, c, d,
+                              janusHash16("eye_task_need"), janusHash16(object ? object : "eye_need"), 30000UL);
+  if (ok) janusEyeTaskNeedTx++;
+#else
+  (void)urgency; (void)object; (void)a; (void)b; (void)c; (void)d;
+#endif
+}
+
+void janusEyeEmitTaskDone(uint8_t confidence, const char* object, int16_t a, int16_t b, int16_t c, int16_t d) {
+#if JANUS_EVENT_BUS_ENABLE
+  bool ok = janusEmitEyeEvent(JE_TASK_DONE, confidence, 22, a, b, c, d,
+                              janusHash16("eye_task_done"), janusHash16(object ? object : "eye_done"), 20000UL);
+  if (ok) janusEyeTaskDoneTx++;
+#else
+  (void)confidence; (void)object; (void)a; (void)b; (void)c; (void)d;
+#endif
+}
+
+void janusEyeSemanticTick(uint32_t now, bool force) {
+#if JANUS_EVENT_BUS_ENABLE
+  bool warmup = tmosWarmupActive(now);
+  bool currentHot = !warmup && (tmos_presence_now || tmos_motion_now);
+  bool wasHot = !warmup && (janusEyePrevPresenceNow || janusEyePrevMotionNow);
+
+  if (!warmup && (tmos_motion_now || tmos_presence_now) &&
+      (force || now - janusEyeLastEpisodeMs >= JANUS_EYE_EPISODE_RECORD_MS)) {
+    uint8_t eventType = tmos_motion_now ? JE_MOTION : JE_PRESENCE;
+    uint8_t conf = (uint8_t)constrain((int)((tachyonPresenceConfidence * 0.5f + tachyonMotionConfidence * 0.5f) * 100.0f), 30, 100);
+    uint8_t urg = tmos_motion_now ? 86 : 78;
+    uint8_t flags = 0;
+    if (tmos_presence_now) flags |= 0x01;
+    if (tmos_motion_now) flags |= 0x02;
+    if (motionBasePresent) flags |= 0x04;
+    if (motionBasePowerPresent) flags |= 0x08;
+    if (rf_presence_now || rf_motion_now) flags |= 0x10;
+    janusEyeRecordEpisode(eventType, conf, urg, flags);
+  }
+
+  if (wasHot && !currentHot && now - janusEyeLastTaskDoneMs >= JANUS_EYE_TASK_DONE_MS) {
+    janusEyeLastTaskDoneMs = now;
+    janusEyeEmitTaskDone(76, "eye_area_clear",
+                         (int16_t)constrain((int)(tmos_occupancy * 100.0f), -32768, 32767),
+                         (int16_t)constrain((int)(tmos_ghost_score * 100.0f), -32768, 32767),
+                         (int16_t)kenshiSector, (int16_t)kenshiPredSector);
+  }
+
+  bool ghostHigh = tmos_ghost_score >= JANUS_GHOST_TASKNEED_LEVEL;
+  if (ghostHigh && !tmosGhostHighSinceMs) tmosGhostHighSinceMs = now;
+  if (!ghostHigh) tmosGhostHighSinceMs = 0;
+
+  if (!warmup && (force || now - janusEyeLastTaskNeedMs >= JANUS_EYE_TASK_NEED_MS)) {
+    bool emittedNeed = false;
+    bool ghostNeedAllowed = (tmos_bad_frames >= JANUS_EYE_RECALIBRATE_BAD_FRAMES) ||
+      (ghostHigh && tmosGhostHighSinceMs &&
+       now - tmosGhostHighSinceMs >= JANUS_GHOST_TASKNEED_HOLD_MS &&
+       now - tmosLastGhostTaskNeedMs >= JANUS_GHOST_TASKNEED_COOLDOWN_MS);
+    if (ghostNeedAllowed) {
+      janusEyeLastTaskNeedMs = now;
+      tmosLastGhostTaskNeedMs = now;
+      emittedNeed = true;
+      janusEyeEmitTaskNeed(82, "eye_needs_recalibration",
+                           (int16_t)tmos_bad_frames,
+                           (int16_t)constrain((int)(tmos_ghost_score * 100.0f), 0, 32767),
+                           (int16_t)constrain((int)(tmos_focus_confidence * 100.0f), 0, 32767),
+                           (int16_t)constrain((int)(tmos_occupancy * 100.0f), 0, 32767));
+    } else if (tachyonFutureStress >= JANUS_EYE_QUIET_STRESS_LEVEL && !currentHot) {
+      janusEyeLastTaskNeedMs = now;
+      emittedNeed = true;
+      janusEyeEmitTaskNeed(66, "eye_needs_quiet",
+                           (int16_t)constrain((int)(tachyonFutureStress * 100.0f), 0, 32767),
+                           (int16_t)constrain((int)(loss * 1000.0f), 0, 32767),
+                           (int16_t)kenshiSector, (int16_t)kenshiPredSector);
+    } else if (motionBasePresent && motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV && !(motionBasePowerFlags & 0x04)) {
+      janusEyeLastTaskNeedMs = now;
+      emittedNeed = true;
+      janusEyeEmitTaskNeed(78, "motionbase_power_low", motionBaseBusMv, motionBaseCurrentRaw, motionBasePowerRaw, motionBaseServoAngle);
+    } else if (motionBasePresent && !motionBasePowerPresent) {
+      janusEyeLastTaskNeedMs = now;
+      emittedNeed = true;
+      janusEyeEmitTaskNeed(42, "motionbase_needs_power_monitor",
+                           (int16_t)motionBasePresent, (int16_t)motionBasePowerPresent, (int16_t)motionBaseI2cErrors, 0);
+    } else if ((motionBasePresent || motionBaseEverDetected) && motionBaseI2cErrors > 20) {
+      janusEyeLastTaskNeedMs = now;
+      emittedNeed = true;
+      janusEyeEmitTaskNeed(62, "motionbase_i2c_errors",
+                           (int16_t)constrain((int)motionBaseI2cErrors, 0, 32767), motionBaseBusMv, motionBaseCurrentRaw, 0);
+    }
+    (void)emittedNeed;
+  }
+
+  janusEyeEmitAiMemory(now, force);
+  janusEyePrevPresenceNow = tmos_presence_now;
+  janusEyePrevMotionNow = tmos_motion_now;
+#else
+  (void)now; (void)force;
+#endif
+}
+
+void janusEyeSwarmSenseTick(uint32_t now, bool force) {
+#if JANUS_EYE_SWARMSENSE_ENABLE
+  uint32_t interval = (tmos_motion_now || tmos_presence_now || rf_motion_now || rf_presence_now || tachyonFutureStress > 0.90f || kenshiPriority >= 120)
+                      ? JANUS_EYE_SWARMSENSE_ALERT_MS
+                      : JANUS_EYE_SWARMSENSE_TX_MS;
+  if (!force && now - janusEyeLastSwarmSenseMs < interval) return;
+  janusEyeLastSwarmSenseMs = now;
+
+  SwarmSensePacket ss{};
+  ss.magic[0] = 'S'; ss.magic[1] = 'S';
+  ss.version = 1;
+  ss.worker_id = colonyWorkerId;
+  strlcpy(ss.nodeId, "BlindEye", sizeof(ss.nodeId));
+  strlcpy(ss.kind, "eye_rf_fusion", sizeof(ss.kind));
+  ss.seq = ++janusEyeSwarmSenseSeq;
+  ss.uptime_ms = now;
+  ss.micros_tail = micros();
+  ss.free_heap = ESP.getFreeHeap();
+  ss.loop_jitter_us = (uint16_t)constrain((int32_t)(now - lastSensorAt), 0L, 65535L);
+  ss.loop_max_us = (uint16_t)constrain((int32_t)janusPolicySensorIntervalMs, 0L, 65535L);
+  ss.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
+  ss.radio_mode = janusPolicyRadioRate;
+  ss.bt_flags = 0;
+  if (janusPolicyRx && now < janusPolicyUntilMs) ss.bt_flags |= 0x01;
+  if (tmos_presence_now) ss.bt_flags |= 0x02;
+  if (tmos_motion_now) ss.bt_flags |= 0x04;
+  if (motionBasePresent) ss.bt_flags |= 0x08;
+  if (motionBasePowerPresent) ss.bt_flags |= 0x10;
+  if (motionBasePowerPresent && motionBaseBatteryPct <= 20) ss.bt_flags |= 0x80;
+  if (motionBaseArmed) ss.bt_flags |= 0x20;
+  if (eyeVisionEnabled || rf_ready) ss.bt_flags |= 0x40;
+  if (tmosWarmupActive(now)) ss.bt_flags |= 0x04;
+  if ((!tmosWarmupActive(now) && tmos_ghost_score > 0.70f) || rf_entropy > JANUS_RF_LITE_ANOMALY_LEVEL) ss.bt_flags |= 0x80;
+  ss.palette = rf_ready ? 2 : (eyeVisionEnabled ? 1 : 0);
+  ss.knn_label = kenshiSector;
+  ss.knn_confidence = (uint8_t)constrain((int)((kenshiConfidence * 0.72f + rf_presence_score * 0.28f) * 100.0f), 0, 100);
+  ss.ai_hint = (tachyonFutureStress > 0.90f || kenshiPriority > 140 || rf_entropy > JANUS_RF_LITE_ANOMALY_LEVEL) ? 3 : ((loss > 0.25f) ? 2 : 1);
+  ss.thermal_load = (uint8_t)constrain((int)roundf(imu_temp), 0, 100);
+  ss.effective_batch = effectiveColonyRemoteBatch();
+  ss.dynamic_batch = effectiveColonyRemoteBatch();
+  ss.hash_rate = colonyRemoteHashrate;
+  ss.total_hashes = colonyJob.active ? colonyJob.hashesDone : colonyJobsDone;
+  ss.best_bits = colonyBestBits;
+  ss.hash_eff_x1000 = (uint16_t)constrain((int32_t)(sync_hint * 1000.0f), 0L, 65535L);
+  ss.prediction_error_x1000 = (int16_t)constrain((int32_t)((loss + rf_abs_drift * 0.015f) * 1000.0f), -32768L, 32767L);
+  ss.entropy_x1000 = (uint16_t)constrain((int32_t)(eyeLocalEntropy() * 100.0f), 0L, 65535L);
+  ss.touch_delta = (uint16_t)constrain((int32_t)max(max(tmos_presence, tmos_motion), rf_presence_score * 100.0f + rf_motion_energy * 12.0f), 0L, 65535L);
+  ss.job_age_s = colonyJob.active ? (uint16_t)min(65535UL, (now - colonyJob.receivedAt) / 1000UL) : 65535U;
+  ss.nonce_remaining_l16 = (colonyJob.active && colonyJob.rangeSize > colonyJob.hashesDone) ? (uint16_t)((colonyJob.rangeSize - colonyJob.hashesDone) & 0xFFFF) : 0;
+  ss.flags = ((uint16_t)(motionBasePresent ? 1 : 0) << 15) |
+             ((uint16_t)(motionBasePowerPresent ? 1 : 0) << 14) |
+             ((uint16_t)(eyeVisionEnabled ? 1 : 0) << 13) |
+             ((uint16_t)kenshiJobState << 8) |
+             (uint16_t)(kenshiPredSector & 0xFF);
+
+  if (janusEyeEspNowSend("S/S", &ss, sizeof(ss), true)) janusEyeSwarmSenseTx++;
+  else janusEyeSwarmSenseFail++;
+#else
+  (void)now; (void)force;
+#endif
+}
+
+bool motionI2cWrite8(uint8_t addr, uint8_t reg, uint8_t value) {
+  if (!janusSelectMotionBus()) { motionBaseI2cErrors++; return false; }
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  Wire.write(value);
+  uint8_t err = Wire.endTransmission();
+  if (err) motionBaseI2cErrors++;
+  janusSelectGroveBus();
+  return err == 0;
+}
+
+bool motionI2cRead16(uint8_t addr, uint8_t reg, uint16_t& value) {
+  if (!janusSelectMotionBus()) { motionBaseI2cErrors++; return false; }
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  uint8_t err = Wire.endTransmission(false);
+  if (err) { motionBaseI2cErrors++; janusSelectGroveBus(); return false; }
+  uint8_t got = Wire.requestFrom((int)addr, 2);
+  if (got != 2) { motionBaseI2cErrors++; janusSelectGroveBus(); return false; }
+  value = ((uint16_t)Wire.read() << 8) | Wire.read();
+  janusSelectGroveBus();
+  return true;
+}
+
+bool motionI2cProbeOnSelectedBus(uint8_t addr) {
+  Wire.beginTransmission(addr);
+  uint8_t err = Wire.endTransmission();
+  return err == 0;
+}
+
+bool motionI2cProbe(uint8_t addr) {
+  if (!janusSelectMotionBus()) { motionBaseI2cErrors++; return false; }
+  bool ok = motionI2cProbeOnSelectedBus(addr);
+  janusSelectGroveBus();
+  return ok;
+}
+
+void motionBaseScanCurrentBus(const char* name) {
+  Serial.printf("[MOTION/I2C] scan %s:", name ? name : "bus");
+  bool any = false;
+  for (uint8_t a = 0x08; a <= 0x77; ++a) {
+    if (motionI2cProbeOnSelectedBus(a)) {
+      Serial.printf(" 0x%02X", (unsigned)a);
+      any = true;
+    }
+    delay(1);
+  }
+  if (!any) Serial.print(" none");
+  Serial.println();
+}
+
+void motionBaseScanBuses() {
+  if (janusSelectMotionBus(true)) motionBaseScanCurrentBus("MotionBase SDA38/SCL39");
+  if (janusSelectGroveBus(true)) motionBaseScanCurrentBus("Grove/TMOS SDA2/SCL1");
+}
+
+
+bool motionBasePowerOkForActuators() {
+#if JANUS_MOTION_BASE_ENABLE
+  if (!motionBasePowerPresent) return true;
+  if (motionBaseBusMv <= 0) return true;
+  if (motionBasePowerFlags & 0x04) return true; // USB/external rail present
+  return motionBaseBusMv >= JANUS_MOTION_BASE_SLEEP_MV;
+#else
+  return false;
+#endif
+}
+
+bool motionBaseWriteServoAngle(uint8_t ch, uint8_t angle, const char* tag) {
+#if JANUS_MOTION_BASE_ENABLE && JANUS_MOTION_BASE_WRITE_ENABLE
+  if (!motionBasePresent) return false;
+  if (!motionBasePowerOkForActuators()) return false;
+  uint8_t reg = 0x00 + (ch & 0x03);
+  bool ok = motionI2cWrite8(JANUS_MOTION_BASE_I2C_ADDR, reg, (uint8_t)constrain((int)angle, 0, 180));
+  if (ok) motionBaseServoWrites++;
+  else Serial.printf("[ROBOZOMBIE] servo write FAIL tag=%s ch=S%u val=%u i2cErr=%lu\n",
+                     tag ? tag : "servo", (unsigned)((ch & 0x03) + 1), (unsigned)angle,
+                     (unsigned long)motionBaseI2cErrors);
+  return ok;
+#else
+  (void)ch; (void)angle; (void)tag;
+  return false;
+#endif
+}
+
+bool roboZombieAnyLegPresent() {
+#if JANUS_ROBOZOMBIE_ENABLE
+  return roboZombieLeftLegPresent || roboZombieRightLegPresent;
+#else
+  return false;
+#endif
+}
+
+const char* roboZombieBodyModeName() {
+#if JANUS_ROBOZOMBIE_ENABLE
+  // v2.14C: configured servos are not enough. If the ATOMIC Motion Base is absent,
+  // the eye is intentionally a sensor-only node and must not pretend to be FULL.
+  if (!motionBasePresent) return "BASELESS_SENSOR";
+  if (roboZombieHeadPresent && roboZombieAnyLegPresent()) return "FULL";
+  if (roboZombieHeadPresent && !roboZombieAnyLegPresent()) return "HEAD_ONLY";
+  if (!roboZombieHeadPresent && roboZombieAnyLegPresent()) return "CRAWLER_ONLY";
+  return "SENSOR_ONLY";
+#else
+  return "OFF";
+#endif
+}
+
+uint8_t roboZombieSpeedToServoValue(int8_t speed, bool reverse) {
+  speed = (int8_t)constrain((int)speed, -100, 100);
+  if (reverse) speed = (int8_t)-speed;
+  int delta = (int)roundf((float)speed * (float)JANUS_ROBOZOMBIE_MAX_PULL_DELTA / 100.0f);
+  return (uint8_t)constrain(JANUS_ROBOZOMBIE_SERVO_STOP + delta, 0, 180);
+}
+
+float roboZombieComputeConfidence() {
+#if JANUS_ROBOZOMBIE_ENABLE
+  float tmos = constrain(max(tmos_presence_memory, tmos_motion_memory), 0.0f, 2.0f);
+  float rf = rf_ready ? constrain(rfLiteFusionScore() / 1.8f, 0.0f, 1.8f) : 0.0f;
+  float tach = constrain(tachyonFutureStress * 0.65f + tachyonPredMotion1 / 95.0f, 0.0f, 1.6f);
+  float bubble = constrain(kenshiConfidence + (kenshiBubbleState >= 2 ? 0.35f : 0.0f), 0.0f, 1.4f);
+  float nowHit = (tmos_motion_now || tmos_presence_now || rf_motion_now || rf_presence_now) ? 0.45f : 0.0f;
+  float raw = tmos * 0.35f + rf * 0.28f + tach * 0.22f + bubble * 0.15f + nowHit;
+  roboZombieGaitConfidence = constrain(roboZombieGaitConfidence * 0.78f + raw * 0.22f, 0.0f, 2.4f);
+  if (roboZombieGaitConfidence > 0.55f) roboZombieLastConfidentMs = millis();
+  return roboZombieGaitConfidence;
+#else
+  return 0.0f;
+#endif
+}
+
+void motionBaseStopCrawler(const char* reason) {
+#if JANUS_ROBOZOMBIE_ENABLE
+  roboZombieLastLeftSpeed = 0;
+  roboZombieLastRightSpeed = 0;
+  roboZombieLastLeftValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+  roboZombieLastRightValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+#if JANUS_MOTION_BASE_WRITE_ENABLE
+  if (motionBasePresent && motionBasePowerOkForActuators()) {
+    if (roboZombieLeftLegPresent) motionBaseWriteServoAngle(JANUS_ROBOZOMBIE_LEFT_SERVO_CH, JANUS_ROBOZOMBIE_SERVO_STOP, "crawl-stop-L");
+    if (roboZombieRightLegPresent) motionBaseWriteServoAngle(JANUS_ROBOZOMBIE_RIGHT_SERVO_CH, JANUS_ROBOZOMBIE_SERVO_STOP, "crawl-stop-R");
+  }
+#endif
+  roboZombieCrawlerLastStopMs = millis();
+  if (reason && reason[0] && (motionBasePresent || !motionBaseOptionalAbsent)) Serial.printf("[ROBOZOMBIE] crawler stop reason=%s mode=%s Lp=%u Rp=%u\n",
+                                         reason, roboZombieBodyModeName(),
+                                         roboZombieLeftLegPresent ? 1 : 0,
+                                         roboZombieRightLegPresent ? 1 : 0);
+#else
+  (void)reason;
+#endif
+}
+
+void motionBaseCrawlerWriteSpeeds(int8_t leftSpeed, int8_t rightSpeed, const char* tag) {
+#if JANUS_ROBOZOMBIE_ENABLE
+  // If one leg is missing, the other one may still pulse gently; if both are missing,
+  // this becomes a harmless no-op and the rest of BlindEye keeps running.
+  if (!roboZombieLeftLegPresent) leftSpeed = 0;
+  if (!roboZombieRightLegPresent) rightSpeed = 0;
+
+  roboZombieLastLeftSpeed = leftSpeed;
+  roboZombieLastRightSpeed = rightSpeed;
+  roboZombieLastLeftValue = roboZombieSpeedToServoValue(leftSpeed, roboZombieLeftReverse);
+  roboZombieLastRightValue = roboZombieSpeedToServoValue(rightSpeed, roboZombieRightReverse);
+#if JANUS_MOTION_BASE_WRITE_ENABLE
+  if (motionBasePresent && motionBasePowerOkForActuators()) {
+    if (roboZombieLeftLegPresent) motionBaseWriteServoAngle(JANUS_ROBOZOMBIE_LEFT_SERVO_CH, roboZombieLastLeftValue, "crawl-L");
+    if (roboZombieRightLegPresent) motionBaseWriteServoAngle(JANUS_ROBOZOMBIE_RIGHT_SERVO_CH, roboZombieLastRightValue, "crawl-R");
+  }
+#endif
+  Serial.printf("[ROBOZOMBIE] pulse tag=%s mode=%s Lp=%u L=%d val=%u rev=%u Rp=%u R=%d val=%u rev=%u target=%d angle=%d pull=%u conf=%.2f\n",
+                tag ? tag : "crawl", roboZombieBodyModeName(),
+                roboZombieLeftLegPresent ? 1 : 0,
+                (int)leftSpeed, (unsigned)roboZombieLastLeftValue, roboZombieLeftReverse ? 1 : 0,
+                roboZombieRightLegPresent ? 1 : 0,
+                (int)rightSpeed, (unsigned)roboZombieLastRightValue, roboZombieRightReverse ? 1 : 0,
+                (int)motionBaseTargetAngle, (int)motionBaseServoAngle,
+                (unsigned)roboZombieBasePull, roboZombieGaitConfidence);
+#else
+  (void)leftSpeed; (void)rightSpeed; (void)tag;
+#endif
+}
+
+void motionBaseCrawlerTick(uint32_t now) {
+#if JANUS_ROBOZOMBIE_ENABLE
+  static bool pulseActive = false;
+  static uint32_t phaseUntilMs = 0;
+
+  if (!motionBasePresent) {
+    // v2.14C: no base = штатный sensor-only mode. No actuator writes, no stop spam.
+    pulseActive = false;
+    phaseUntilMs = now + JANUS_ROBOZOMBIE_REST_MS;
+    roboZombieLastLeftValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    roboZombieLastRightValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    return;
+  }
+
+  if (!roboZombieAnyLegPresent()) {
+    // Modular build: no legs installed. Keep sensors/head/swarm/miner alive.
+    pulseActive = false;
+    phaseUntilMs = now + JANUS_ROBOZOMBIE_REST_MS;
+    roboZombieLastLeftValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    roboZombieLastRightValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    return;
+  }
+
+  bool powerOk = motionBasePowerOkForActuators();
+  float conf = roboZombieComputeConfidence();
+  bool hot = tmos_motion_now || tmos_presence_now || rf_motion_now || rf_presence_now ||
+             tachyonPredMotion1 > 30.0f || tachyonFutureStress > 0.72f || kenshiBubbleState >= 2 || conf > 0.72f;
+
+  bool externalOrCharging = (motionBasePowerFlags & (0x04 | 0x20 | 0x40)) != 0;
+  bool autoPowerOk = externalOrCharging || !motionBasePowerPresent || motionBaseBusMv <= 0 || motionBaseBusMv >= JANUS_ROBOZOMBIE_AUTO_MIN_MV;
+  if (!autoPowerOk) roboZombieAutoBlockedLowPowerMs = now;
+
+  bool autoAllowed = (JANUS_ROBOZOMBIE_AUTO_CRAWL_ENABLE != 0) && hot && autoPowerOk && (motionBaseArmed || roboZombieLocalArm);
+  bool manualAllowed = roboZombieCrawlerManualEnable && !roboZombiePassiveMode;
+  if (roboZombiePassiveMode) autoAllowed = false;
+  bool allowed = motionBasePresent && !roboZombiePassiveMode && powerOk && (motionBaseArmed || roboZombieLocalArm) && (manualAllowed || autoAllowed);
+
+  if (!allowed) {
+    if (now - roboZombieCrawlerLastStopMs >= JANUS_ROBOZOMBIE_IDLE_STOP_MS ||
+        roboZombieLastLeftValue != JANUS_ROBOZOMBIE_SERVO_STOP || roboZombieLastRightValue != JANUS_ROBOZOMBIE_SERVO_STOP) {
+      motionBaseStopCrawler(powerOk ? (autoPowerOk ? "idle" : "auto-low-batt") : "low-power");
+    }
+    pulseActive = false;
+    phaseUntilMs = now + JANUS_ROBOZOMBIE_REST_MS;
+    return;
+  }
+
+  if (pulseActive) {
+    if (now < phaseUntilMs) return;
+    motionBaseStopCrawler("pulse-end");
+    pulseActive = false;
+    uint16_t rest = JANUS_ROBOZOMBIE_REST_MS;
+    if (conf > 1.15f || manualAllowed) rest = (uint16_t)max(250, (int)JANUS_ROBOZOMBIE_REST_MS - 110);
+    if (motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV && !externalOrCharging) rest += 180;
+    phaseUntilMs = now + rest;
+    return;
+  }
+
+  if (now < phaseUntilMs) return;
+
+  int16_t err = motionBaseTargetAngle - JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+  int8_t base = (int8_t)constrain((int)roboZombieBasePull, 12, 78);
+
+  // Confidence makes it braver; weak battery makes it polite.
+  if (!manualAllowed) {
+    base = (int8_t)constrain((int)roundf(16.0f + conf * 19.0f), 14, (int)roboZombieBasePull);
+  }
+  if (motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV && !externalOrCharging) {
+    if (base > JANUS_ROBOZOMBIE_LOW_BATT_PULL_CAP) base = JANUS_ROBOZOMBIE_LOW_BATT_PULL_CAP;
+  }
+
+  int8_t soft = (int8_t)max(7, base / 3);
+  int8_t pivot = (int8_t)max(6, base / 4);
+  int8_t left = base;
+  int8_t right = base;
+  const char* tag = "forward-conf";
+
+  if (err < -JANUS_ROBOZOMBIE_PIVOT_ERR_DEG && conf > 0.85f) {
+    left = -pivot;
+    right = base;
+    tag = "pivot-left";
+  } else if (err > JANUS_ROBOZOMBIE_PIVOT_ERR_DEG && conf > 0.85f) {
+    left = base;
+    right = -pivot;
+    tag = "pivot-right";
+  } else if (err < -JANUS_ROBOZOMBIE_CENTER_DEADBAND) {
+    left = soft;
+    right = base;
+    tag = "turn-left";
+  } else if (err > JANUS_ROBOZOMBIE_CENTER_DEADBAND) {
+    left = base;
+    right = soft;
+    tag = "turn-right";
+  }
+
+  // One-legged fallback: don't try to pivot with a missing opposite leg.
+  if (roboZombieLeftLegPresent && !roboZombieRightLegPresent) {
+    left = (err > JANUS_ROBOZOMBIE_CENTER_DEADBAND) ? base : soft;
+    right = 0;
+    tag = "one-leg-left";
+  } else if (!roboZombieLeftLegPresent && roboZombieRightLegPresent) {
+    left = 0;
+    right = (err < -JANUS_ROBOZOMBIE_CENTER_DEADBAND) ? base : soft;
+    tag = "one-leg-right";
+  }
+
+  motionBaseCrawlerWriteSpeeds(left, right, tag);
+  roboZombieCrawlerPulses++;
+  roboZombieCrawlerLastPulseMs = now;
+  pulseActive = true;
+  uint16_t pulse = JANUS_ROBOZOMBIE_PULSE_MS;
+  if (conf > 1.25f || manualAllowed) pulse = (uint16_t)min(240, (int)JANUS_ROBOZOMBIE_PULSE_MS + 35);
+  phaseUntilMs = now + pulse;
+#else
+  (void)now;
+#endif
+}
+
+void handleRoboZombieSerial() {
+#if JANUS_ROBOZOMBIE_ENABLE
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\r' || c == '\n' || c == ' ') continue;
+    switch (c) {
+      case 'a': case 'A':
+        if (roboZombiePassiveMode) {
+          roboZombiePassiveMode = false;
+          motionBaseTrackEnabled = true;
+          Serial.println("[ROBOZOMBIE] PASSIVE_EYE OFF by arm key");
+        }
+        roboZombieLocalArm = !roboZombieLocalArm;
+        if (!roboZombieLocalArm) motionBaseStopCrawler("local-disarm");
+        Serial.printf("[ROBOZOMBIE] localArm=%u passive=%u\n", roboZombieLocalArm ? 1 : 0, roboZombiePassiveMode ? 1 : 0);
+        break;
+      case 'g': case 'G':
+        if (roboZombiePassiveMode) {
+          roboZombiePassiveMode = false;
+          motionBaseTrackEnabled = true;
+          roboZombieLocalArm = true;
+          Serial.println("[ROBOZOMBIE] PASSIVE_EYE OFF by crawl key");
+        }
+        roboZombieCrawlerManualEnable = !roboZombieCrawlerManualEnable;
+        if (!roboZombieCrawlerManualEnable) motionBaseStopCrawler("manual-off");
+        Serial.printf("[ROBOZOMBIE] crawlerManual=%u passive=%u\n", roboZombieCrawlerManualEnable ? 1 : 0, roboZombiePassiveMode ? 1 : 0);
+        break;
+      case 'h': case 'H':
+        roboZombieHeadPresent = !roboZombieHeadPresent;
+        motionBaseLastSentAngle = -1;
+        Serial.printf("[ROBOZOMBIE] headPresent=%u mode=%s\n", roboZombieHeadPresent ? 1 : 0, roboZombieBodyModeName());
+        break;
+      case 'j': case 'J':
+        roboZombieLeftLegPresent = !roboZombieLeftLegPresent;
+        motionBaseStopCrawler("left-present-toggle");
+        Serial.printf("[ROBOZOMBIE] leftLegPresent=%u mode=%s\n", roboZombieLeftLegPresent ? 1 : 0, roboZombieBodyModeName());
+        break;
+      case 'k': case 'K':
+        roboZombieRightLegPresent = !roboZombieRightLegPresent;
+        motionBaseStopCrawler("right-present-toggle");
+        Serial.printf("[ROBOZOMBIE] rightLegPresent=%u mode=%s\n", roboZombieRightLegPresent ? 1 : 0, roboZombieBodyModeName());
+        break;
+      case 'S':
+        // HARD PASSIVE SENSOR MODE: stop S2/S4 rotors, disarm local/Core motion,
+        // freeze head writes, but keep TMOS/RF/ESP-NOW/miner/learning alive.
+        roboZombiePassiveMode = true;
+        roboZombieCrawlerManualEnable = false;
+        roboZombieLocalArm = false;
+        motionBaseArmed = false;
+        motionBaseTrackEnabled = false;
+        motionBaseTargetAngle = motionBaseServoAngle;
+        motionBaseStopCrawler("SERIAL-S-PASSIVE");
+        Serial.println("[ROBOZOMBIE] PASSIVE_EYE ON: S2/S4 rotors stopped, head frozen, sensors/swarm alive. Press a/g/1/2/3 to wake.");
+        break;
+      case 's': case '0':
+        roboZombieCrawlerManualEnable = false;
+        motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+        motionBaseStopCrawler("serial-stop");
+        Serial.println("[ROBOZOMBIE] STOP once + head center. Capital S = persistent PASSIVE_EYE.");
+        break;
+      case '1':
+        if (roboZombiePassiveMode) { roboZombiePassiveMode = false; motionBaseTrackEnabled = true; roboZombieLocalArm = true; Serial.println("[ROBOZOMBIE] PASSIVE_EYE OFF by manual target"); }
+        motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_MIN_DEG;
+        motionBaseTrackEnabled = true;
+        Serial.printf("[ROBOZOMBIE] manual target LEFT %d\n", (int)motionBaseTargetAngle);
+        break;
+      case '2':
+        if (roboZombiePassiveMode) { roboZombiePassiveMode = false; motionBaseTrackEnabled = true; roboZombieLocalArm = true; Serial.println("[ROBOZOMBIE] PASSIVE_EYE OFF by manual target"); }
+        motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+        motionBaseTrackEnabled = true;
+        Serial.printf("[ROBOZOMBIE] manual target CENTER %d\n", (int)motionBaseTargetAngle);
+        break;
+      case '3':
+        if (roboZombiePassiveMode) { roboZombiePassiveMode = false; motionBaseTrackEnabled = true; roboZombieLocalArm = true; Serial.println("[ROBOZOMBIE] PASSIVE_EYE OFF by manual target"); }
+        motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_MAX_DEG;
+        motionBaseTrackEnabled = true;
+        Serial.printf("[ROBOZOMBIE] manual target RIGHT %d\n", (int)motionBaseTargetAngle);
+        break;
+      case '+': case '=':
+        roboZombieBasePull = (uint8_t)constrain((int)roboZombieBasePull + 4, 10, 70);
+        Serial.printf("[ROBOZOMBIE] pull=%u\n", (unsigned)roboZombieBasePull);
+        break;
+      case '-': case '_':
+        roboZombieBasePull = (uint8_t)constrain((int)roboZombieBasePull - 4, 10, 70);
+        Serial.printf("[ROBOZOMBIE] pull=%u\n", (unsigned)roboZombieBasePull);
+        break;
+      case 'l': case 'L':
+        roboZombieLeftReverse = !roboZombieLeftReverse;
+        motionBaseStopCrawler("flip-left");
+        Serial.printf("[ROBOZOMBIE] leftReverse=%u\n", roboZombieLeftReverse ? 1 : 0);
+        break;
+      case 'r': case 'R':
+        roboZombieRightReverse = !roboZombieRightReverse;
+        motionBaseStopCrawler("flip-right");
+        Serial.printf("[ROBOZOMBIE] rightReverse=%u\n", roboZombieRightReverse ? 1 : 0);
+        break;
+      case 'p': case 'P':
+        Serial.printf("[ROBOZOMBIE] mode=%s map S1=head S2=left360 S4=right360 headP=%u leftP=%u rightP=%u arm=%u crawl=%u passive=%u Lrev=%u Rrev=%u pull=%u conf=%.2f Lval=%u Rval=%u base=%u power=%u mv=%d pct=%u flags=0x%02X pulses=%lu\n",
+                      roboZombieBodyModeName(), roboZombieHeadPresent ? 1 : 0,
+                      roboZombieLeftLegPresent ? 1 : 0, roboZombieRightLegPresent ? 1 : 0,
+                      roboZombieLocalArm ? 1 : 0, roboZombieCrawlerManualEnable ? 1 : 0, roboZombiePassiveMode ? 1 : 0,
+                      roboZombieLeftReverse ? 1 : 0, roboZombieRightReverse ? 1 : 0,
+                      (unsigned)roboZombieBasePull, roboZombieGaitConfidence,
+                      (unsigned)roboZombieLastLeftValue, (unsigned)roboZombieLastRightValue,
+                      motionBasePresent ? 1 : 0, motionBasePowerPresent ? 1 : 0,
+                      (int)motionBaseBusMv, (unsigned)motionBaseBatteryPct,
+                      (unsigned)motionBasePowerFlags, (unsigned long)roboZombieCrawlerPulses);
+        break;
+      default:
+        Serial.printf("[ROBOZOMBIE] keys: S passive, s stop, a arm/wake, g crawl/wake, h head-present, j left-present, k right-present, 1/2/3 target, +/- pull, l/r reverse, p print. got='%c'\n", c);
+        break;
+    }
+  }
+#endif
+}
+
+void initMotionBase() {
+#if JANUS_MOTION_BASE_ENABLE
+  // Official M5Atomic-Motion wiring for AtomS3 / AtomS3R:
+  // Motion Base MCU = I2C 0x38 on SDA=38 / SCL=39.
+  // Servo registers: 0..3. DC motor registers: 32..33.
+  // v2.14C: the base is OPTIONAL. If it is not present, BlindEye continues as
+  // a normal TMOS/RF/ESP-NOW swarm sensor. No endless fault mode.
+  motionBaseScanBuses();
+
+  motionBaseUsesMainWire = true;
+  motionWireStarted = janusSelectMotionBus(true);
+  motionBasePresent = motionWireStarted && motionI2cProbeOnSelectedBus(JANUS_MOTION_BASE_I2C_ADDR);
+  motionBaseEverDetected = motionBaseEverDetected || motionBasePresent;
+  motionBaseOptionalAbsent = !motionBasePresent;
+  if (motionBaseOptionalAbsent && !motionBaseAbsentSinceMs) motionBaseAbsentSinceMs = millis();
+
+  motionBasePowerPresent = false;
+  motionBasePowerAddr = 0;
+  motionBaseServoAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+  motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+  motionBaseLastSentAngle = -1;
+  motionBaseMotorSpeed[0] = 0;
+  motionBaseMotorSpeed[1] = 0;
+
+  if (!motionBasePresent) {
+    // Do not count absence as an I2C fault. It is a supported hardware profile.
+    motionBaseI2cErrors = 0;
+    motionBaseBusMv = 0;
+    motionBaseCurrentRaw = 0;
+    motionBasePowerRaw = 0;
+    motionBasePowerFlags = 0;
+    motionBasePowerSource = 5;   // local name: NOBASE
+    motionBaseBatteryPct = 0;
+    motionBaseArmed = false;
+    roboZombieCrawlerManualEnable = false;
+    roboZombieLastLeftSpeed = 0;
+    roboZombieLastRightSpeed = 0;
+    roboZombieLastLeftValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    roboZombieLastRightValue = JANUS_ROBOZOMBIE_SERVO_STOP;
+    janusSelectGroveBus(true);
+
+    Serial.printf("[MOTIONBASE] OPTIONAL ABSENT -> штатный SENSOR MODE. expected=0x%02X on SDA%u/SCL%u; TMOS/RF/ESP-NOW/miner continue.\n",
+                  (unsigned)JANUS_MOTION_BASE_I2C_ADDR,
+                  (unsigned)JANUS_MOTION_BASE_SDA_PIN,
+                  (unsigned)JANUS_MOTION_BASE_SCL_PIN);
+    Serial.printf("[ROBOZOMBIE] mode=%s base=0 headConfigured=%u leftConfigured=%u rightConfigured=%u. Actuators disabled, sensor brain alive.\n",
+                  roboZombieBodyModeName(),
+                  roboZombieHeadPresent ? 1 : 0,
+                  roboZombieLeftLegPresent ? 1 : 0,
+                  roboZombieRightLegPresent ? 1 : 0);
+    motionBaseSendPowerPacket(true);
+    return;
+  }
+
+  if (motionI2cProbeOnSelectedBus(JANUS_MOTION_BASE_INA226_ADDR_A)) {
+    motionBasePowerPresent = true;
+    motionBasePowerAddr = JANUS_MOTION_BASE_INA226_ADDR_A;
+  } else if (motionI2cProbeOnSelectedBus(JANUS_MOTION_BASE_INA226_ADDR_B)) {
+    motionBasePowerPresent = true;
+    motionBasePowerAddr = JANUS_MOTION_BASE_INA226_ADDR_B;
+  }
+  janusSelectGroveBus(true);
+
+  motionBaseSafeStop();
+  motionBaseReadPower();
+  motionBaseUpdateBatteryState();
+
+  Serial.printf("[MOTIONBASE] Atomic Motion Base v1.2 OFFICIAL present=%u power=%u addr=0x%02X bus=WireMux-38/39 batt=%u%% mv=%d flags=0x%02X writes=%u trackServo=S%u span=%d..%d i2cErr=%lu\n",
+                motionBasePresent ? 1 : 0, motionBasePowerPresent ? 1 : 0,
+                motionBasePowerAddr,
+                (unsigned)motionBaseBatteryPct, (int)motionBaseBusMv, (unsigned)motionBasePowerFlags,
+                (unsigned)JANUS_MOTION_BASE_WRITE_ENABLE,
+                (unsigned)(JANUS_MOTION_BASE_TRACK_SERVO_CH + 1),
+                JANUS_MOTION_BASE_TRACK_MIN_DEG, JANUS_MOTION_BASE_TRACK_MAX_DEG,
+                (unsigned long)motionBaseI2cErrors);
+
+  Serial.printf("[ROBOZOMBIE] modular mode=%s headP=%u leftP=%u rightP=%u auto=%u pull=%u keys: S passive, s stop, a/g wake, h/j/k toggle installed parts, g manual crawl\n",
+                roboZombieBodyModeName(), roboZombieHeadPresent ? 1 : 0,
+                roboZombieLeftLegPresent ? 1 : 0, roboZombieRightLegPresent ? 1 : 0,
+                (unsigned)JANUS_ROBOZOMBIE_AUTO_CRAWL_ENABLE, (unsigned)roboZombieBasePull);
+
+#endif
+}
+
+
+void motionBaseSafeStop() {
+#if JANUS_MOTION_BASE_ENABLE
+  motionBaseMotorSpeed[0] = 0;
+  motionBaseMotorSpeed[1] = 0;
+#if JANUS_MOTION_BASE_WRITE_ENABLE
+  if (motionBasePresent) {
+    motionI2cWrite8(JANUS_MOTION_BASE_I2C_ADDR, 0x20, 0);
+    motionI2cWrite8(JANUS_MOTION_BASE_I2C_ADDR, 0x21, 0);
+  }
+#endif
+  motionBaseStopCrawler("safe-stop");
+#endif
+}
+
+uint8_t motionBaseEstimateBatteryPct(uint16_t mv) {
+  if (mv == 0) return 0;
+  // Atomic Motion Base usually sees a 1S Li-ion/LiPo pack through INA226.
+  // If the bus is above Li-ion range, treat it as external/boost/USB-like power.
+  if (mv >= 4400) return 100;
+  struct P { uint16_t mv; uint8_t pct; } curve[] = {
+    {4200,100}, {4120,92}, {4060,84}, {4000,76}, {3940,68}, {3880,60},
+    {3820,52}, {3760,44}, {3710,36}, {3660,28}, {3600,20}, {3520,12},
+    {3440,6}, {3350,2}, {3200,0}
+  };
+  if (mv >= curve[0].mv) return curve[0].pct;
+  for (size_t i = 1; i < sizeof(curve) / sizeof(curve[0]); ++i) {
+    if (mv >= curve[i].mv) {
+      uint16_t hiMv = curve[i - 1].mv, loMv = curve[i].mv;
+      uint8_t hiPct = curve[i - 1].pct, loPct = curve[i].pct;
+      float t = (float)(mv - loMv) / (float)max((int)(hiMv - loMv), 1);
+      return (uint8_t)constrain((int)roundf((float)loPct + t * (float)(hiPct - loPct)), 0, 100);
+    }
+  }
+  return 0;
+}
+
+void motionBaseUpdateBatteryState() {
+#if JANUS_MOTION_BASE_ENABLE
+  motionBasePowerFlags = 0;
+  if (!motionBasePresent) {
+    // v2.14C: base is optional and absent is not a battery fault.
+    motionBasePowerSource = 5; // NOBASE
+    motionBaseBatteryPct = 0;
+    motionBaseBusMv = 0;
+    motionBaseCurrentRaw = 0;
+    motionBasePowerRaw = 0;
+    return;
+  }
+  if (motionBasePresent) motionBasePowerFlags |= 0x01;
+  if (motionBasePowerPresent) motionBasePowerFlags |= 0x02;
+
+  if (motionBasePowerPresent && motionBaseBusMv > 0) {
+    const bool external = motionBaseBusMv >= JANUS_MOTION_BASE_EXT_MV;
+    const bool rawCurrentSeen = abs((int)motionBaseCurrentRaw) >= JANUS_MOTION_BASE_CHG_CURRENT_MIN;
+
+    if (!external) {
+      // Real 1S cell range. This is the only moment where INA bus voltage can be used
+      // as a believable battery percentage.
+      motionBasePowerSource = 1;
+      motionBaseLastCellMv = (uint16_t)motionBaseBusMv;
+      motionBaseBatteryPct = motionBaseEstimateBatteryPct(motionBaseLastCellMv);
+      motionBaseLastCellPct = motionBaseBatteryPct;
+      motionBaseExternalSinceMs = 0;
+      if (motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV) motionBasePowerFlags |= 0x08;
+      if (motionBaseBusMv < JANUS_MOTION_BASE_SLEEP_MV) motionBasePowerFlags |= 0x10;
+    } else {
+      // USB-C / boost / charger rail. Do NOT blindly report 100%: the INA226 now sees
+      // the powered rail, not necessarily the bare cell voltage. Keep last known cell
+      // estimate and mark the packet as charge-aware.
+      motionBasePowerFlags |= 0x04; // external/USB present
+      if (!motionBaseExternalSinceMs) motionBaseExternalSinceMs = millis();
+
+      uint8_t heldPct = motionBaseLastCellMv ? motionBaseLastCellPct : motionBaseEstimateBatteryPct(JANUS_MOTION_BASE_FULL_MV);
+      bool estimateOnly = motionBaseLastCellMv == 0;
+      if (estimateOnly) motionBasePowerFlags |= 0x80;
+
+      bool likelyFull = (!estimateOnly && heldPct >= 96) || (motionBaseBusMv >= 5000 && !rawCurrentSeen && heldPct >= 92);
+      bool likelyCharging = !likelyFull;
+
+      if (likelyCharging) {
+        motionBasePowerSource = 3; // charging / USB-C attached
+        motionBasePowerFlags |= 0x20;
+      } else {
+        motionBasePowerSource = 4; // full/float/external hold
+        motionBasePowerFlags |= 0x40;
+      }
+      motionBaseBatteryPct = constrain((int)heldPct, 0, 100);
+    }
+  } else {
+    motionBasePowerSource = 0;
+    motionBaseBatteryPct = 0;
+  }
+#else
+  motionBasePowerFlags = 0; motionBasePowerSource = 0; motionBaseBatteryPct = 0;
+#endif
+}
+
+uint32_t janusEyePowerCrc32(const void* data, size_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+  uint32_t h = 2166136261UL;
+  for (size_t i = 0; i < len; ++i) { h ^= p[i]; h *= 16777619UL; }
+  return h;
+}
+
+
+const char* motionBasePowerSourceName(uint8_t src, uint8_t flags) {
+  if (src == 5 || !motionBasePresent) return "NOBASE";
+  if (flags & 0x20) return "CHG";
+  if (flags & 0x40) return "FULL";
+  if (src == 3) return "CHG";
+  if (src == 4) return "FULL";
+  if (src == 2 || (flags & 0x04)) return "EXT";
+  if (src == 1) return "BAT";
+  return "UNK";
+}
+
+void motionBaseSendPowerPacket(bool force) {
+#if JANUS_MOTION_BASE_ENABLE
+  uint32_t now = millis();
+  uint32_t txInterval = motionBasePresent ? JANUS_EYE_POWER_TX_MS : JANUS_MOTION_BASE_ABSENT_STATUS_MS;
+  if (!force && now - motionBaseLastBatteryTxMs < txInterval) return;
+  motionBaseLastBatteryTxMs = now;
+  motionBaseUpdateBatteryState();
+
+  JanusEyePowerPacket eb{};
+  eb.magic[0] = 'E'; eb.magic[1] = 'B';
+  eb.version = 1;
+  eb.flags = motionBasePowerFlags;
+  strlcpy(eb.nodeId, "BlindEye", sizeof(eb.nodeId));
+  eb.seq = ++motionBaseBatterySeq;
+  eb.uptime_ms = now;
+  eb.bus_mv = (uint16_t)constrain((int)motionBaseBusMv, 0, 65535);
+  eb.current_raw = motionBaseCurrentRaw;
+  eb.power_raw = motionBasePowerRaw;
+  eb.battery_pct = motionBaseBatteryPct;
+  eb.source = motionBasePowerSource;
+  eb.servo_angle = (uint16_t)constrain((int)motionBaseServoAngle, 0, 65535);
+  eb.target_angle = (uint16_t)constrain((int)motionBaseTargetAngle, 0, 65535);
+  eb.crc = 0;
+  eb.crc = janusEyePowerCrc32(&eb, sizeof(eb));
+  bool ok = janusEyeEspNowSend("E/B", &eb, sizeof(eb), true);
+  if (force || eb.seq <= 3 || (eb.seq % 20UL) == 0) {
+    Serial.printf("[EYE/BATT] tx=%s seq=%lu pct=%u mv=%u flags=0x%02X src=%u/%s cell=%umV cur=%d pwr=%d\n",
+                  ok ? "OK" : "FAIL", (unsigned long)eb.seq, (unsigned)eb.battery_pct,
+                  (unsigned)eb.bus_mv, (unsigned)eb.flags, (unsigned)eb.source,
+                  motionBasePowerSourceName(eb.source, eb.flags), (unsigned)motionBaseLastCellMv,
+                  (int)eb.current_raw, (int)eb.power_raw);
+  }
+#else
+  (void)force;
+#endif
+}
+
+void motionBaseReadPower() {
+#if JANUS_MOTION_BASE_ENABLE
+  if (!motionBasePowerPresent || !motionBasePowerAddr) return;
+  uint16_t bus = 0, current = 0, power = 0;
+  if (motionI2cRead16(motionBasePowerAddr, 0x02, bus)) {
+    // INA226 bus voltage LSB is 1.25mV.
+    motionBaseBusMv = (int16_t)constrain((int)((uint32_t)bus * 125UL / 100UL), 0, 32767);
+  }
+  if (motionI2cRead16(motionBasePowerAddr, 0x04, current)) motionBaseCurrentRaw = (int16_t)current;
+  if (motionI2cRead16(motionBasePowerAddr, 0x03, power)) motionBasePowerRaw = (int16_t)power;
+  motionBaseUpdateBatteryState();
+#endif
+}
+
+int16_t motionBaseSectorToAngle(uint8_t sector) {
+  sector %= JANUS_KENSHI_SECTORS;
+  float t = (JANUS_KENSHI_SECTORS <= 1) ? 0.5f : ((float)sector / (float)(JANUS_KENSHI_SECTORS - 1));
+  return (int16_t)constrain((int)roundf(JANUS_MOTION_BASE_TRACK_MIN_DEG + t * (JANUS_MOTION_BASE_TRACK_MAX_DEG - JANUS_MOTION_BASE_TRACK_MIN_DEG)),
+                            JANUS_MOTION_BASE_TRACK_MIN_DEG, JANUS_MOTION_BASE_TRACK_MAX_DEG);
+}
+
+void motionBasePlanTarget() {
+#if JANUS_MOTION_BASE_ENABLE
+  if (!motionBaseTrackEnabled) {
+    motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+    return;
+  }
+
+  bool hot = tmos_motion_now || tmos_presence_now || tachyonPredMotion1 > 38.0f || tachyonFutureStress > 0.85f || kenshiBubbleState >= 2;
+  if (hot) {
+    uint8_t sector = (tachyonFutureStress > 0.75f) ? kenshiPredSector : kenshiSector;
+    int16_t sectorAngle = motionBaseSectorToAngle(sector);
+    float memory = constrain(max(tmos_motion_memory, tmos_presence_memory), 0.0f, 1.0f);
+    float alpha = constrain(0.22f + memory * 0.38f + tachyonFutureStress * 0.14f, 0.20f, 0.74f);
+    motionBaseTargetAngle = (int16_t)constrain((int)roundf(motionBaseTargetAngle * (1.0f - alpha) + sectorAngle * alpha),
+                                               JANUS_MOTION_BASE_TRACK_MIN_DEG, JANUS_MOTION_BASE_TRACK_MAX_DEG);
+  } else {
+    // No target: relax toward center slowly.
+    motionBaseTargetAngle = (int16_t)roundf(motionBaseTargetAngle * 0.96f + JANUS_MOTION_BASE_TRACK_CENTER_DEG * 0.04f);
+  }
+
+  if (motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV && !(motionBasePowerFlags & 0x04)) {
+    // Low battery: do not chase aggressively.
+    motionBaseTargetAngle = (int16_t)roundf(motionBaseTargetAngle * 0.90f + JANUS_MOTION_BASE_TRACK_CENTER_DEG * 0.10f);
+  }
+#endif
+}
+
+void motionBaseTick() {
+#if JANUS_MOTION_BASE_ENABLE
+  uint32_t now = millis();
+
+  if (!motionBasePresent) {
+    // v2.14C: no ATOMIC Motion Base attached. Stay in штатный sensor-only mode.
+    // Keep telemetry alive for Core2, but do not touch the missing actuator bus.
+    motionBaseArmed = false;
+    roboZombieCrawlerManualEnable = false;
+    motionBaseServoAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+    motionBaseTargetAngle = JANUS_MOTION_BASE_TRACK_CENTER_DEG;
+    motionBaseSendPowerPacket(false);
+    motionBaseSendStatusEvent(false);
+    return;
+  }
+
+  if (now - motionBaseLastPowerMs >= JANUS_MOTION_BASE_POWER_MS) {
+    motionBaseLastPowerMs = now;
+    motionBaseReadPower();
+  }
+
+  if (now - motionBaseLastTickMs < JANUS_MOTION_BASE_TICK_MS) return;
+  motionBaseLastTickMs = now;
+
+  if (roboZombiePassiveMode) {
+    motionBaseTargetAngle = motionBaseServoAngle;
+    // Keep passive mode quiet: do not spam stop writes/logs every 80 ms.
+    if (roboZombieCrawlerManualEnable ||
+        roboZombieLastLeftValue != JANUS_ROBOZOMBIE_SERVO_STOP ||
+        roboZombieLastRightValue != JANUS_ROBOZOMBIE_SERVO_STOP) {
+      roboZombieCrawlerManualEnable = false;
+      motionBaseStopCrawler("passive-s");
+    }
+    motionBaseSendStatusEvent(false);
+    return;
+  }
+
+  motionBasePlanTarget();
+
+  int16_t diff = motionBaseTargetAngle - motionBaseServoAngle;
+  if (diff > JANUS_MOTION_BASE_MAX_STEP_DEG) diff = JANUS_MOTION_BASE_MAX_STEP_DEG;
+  if (diff < -JANUS_MOTION_BASE_MAX_STEP_DEG) diff = -JANUS_MOTION_BASE_MAX_STEP_DEG;
+  motionBaseServoAngle = constrain((int)(motionBaseServoAngle + diff), JANUS_MOTION_BASE_TRACK_MIN_DEG, JANUS_MOTION_BASE_TRACK_MAX_DEG);
+
+#if JANUS_MOTION_BASE_WRITE_ENABLE
+  bool powerOk = motionBasePowerOkForActuators();
+  bool headAllowed = motionBasePresent && !roboZombiePassiveMode && roboZombieHeadPresent && (motionBaseArmed || roboZombieLocalArm) && powerOk;
+  if (headAllowed && abs(motionBaseServoAngle - motionBaseLastSentAngle) >= 1) {
+    if (motionBaseWriteServoAngle(JANUS_MOTION_BASE_TRACK_SERVO_CH, (uint8_t)constrain((int)motionBaseServoAngle, 0, 180), "head-S1")) {
+      motionBaseLastSentAngle = motionBaseServoAngle;
+    }
+  } else if (!roboZombieHeadPresent) {
+    // Modular build: no head servo installed. Planner still runs for Core2 telemetry and leg steering.
+    motionBaseLastSentAngle = motionBaseServoAngle;
+  }
+#else
+  // Dry-run: planner runs, no physical write.
+  motionBaseLastSentAngle = motionBaseServoAngle;
+#endif
+
+  motionBaseCrawlerTick(now);
+  motionBaseSendStatusEvent(false);
+#endif
+}
+
+void motionBaseSendStatusEvent(bool force) {
+#if JANUS_MOTION_BASE_ENABLE && JANUS_EVENT_BUS_ENABLE
+  uint32_t now = millis();
+  if (!force && now - motionBaseLastStatusMs < JANUS_MOTION_BASE_STATUS_MS) return;
+  motionBaseLastStatusMs = now;
+
+  uint8_t conf = motionBasePresent ? 82 : 78;
+  uint8_t urg = motionBasePresent ? 18 : 4;
+  uint8_t eventType = motionBasePresent ? JE_ENV : JE_SAFE;
+  uint16_t topic = motionBasePresent ? janusHash16("motion_base") : janusHash16("motion_base_absent");
+  uint16_t object = motionBasePresent ? janusHash16("blind_eye_pan") : janusHash16("sensor_only");
+  if (motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_LOW_MV && !(motionBasePowerFlags & 0x04)) urg = 72;
+  if (motionBasePowerPresent && motionBaseBusMv > 0 && motionBaseBusMv < JANUS_MOTION_BASE_SLEEP_MV && !(motionBasePowerFlags & 0x04)) urg = 90;
+  if (urg >= 72) eventType = JE_DANGER;
+
+  janusEmitEyeEvent(eventType, conf, urg,
+                    (int16_t)(motionBaseServoAngle * 10),
+                    (int16_t)(motionBaseTargetAngle * 10),
+                    motionBaseBusMv,
+                    motionBaseCurrentRaw,
+                    topic, object, motionBasePresent ? 9000UL : 20000UL);
+#endif
+}
+
 // ========================= JANUS KENSHI BUBBLE BUS =========================
 // Inspired by the "visible bubble / virtual world" idea: ESP-NOW remains simple,
 // but the Eye stops thinking every peer must be fully simulated every tick.
@@ -1652,7 +3573,8 @@ enum JanusKenshiWorldFlags : uint32_t {
   K_WORLD_AGENT    = 1UL << 6,
   K_WORLD_UNSTABLE = 1UL << 7,
   K_WORLD_TRAINING = 1UL << 8,
-  K_WORLD_LOW_SYNC = 1UL << 9
+  K_WORLD_LOW_SYNC = 1UL << 9,
+  K_WORLD_RF       = 1UL << 10
 };
 
 uint8_t kenshiFindNodeSlot(const char* nodeId) {
@@ -1775,6 +3697,7 @@ void updateKenshiVirtualWorld() {
     constrain(tmos_motion / 180.0f, 0.0f, 1.6f) +
     constrain(mic_rms * 9.0f, 0.0f, 1.2f) +
     constrain(imu_shock / 5.0f, 0.0f, 1.1f) +
+    constrain(rf_motion_energy / 8.0f + rf_presence_score * 0.50f, 0.0f, 1.2f) +
     constrain(loss * 1.4f, 0.0f, 1.0f);
 
   if (colonyMasterSeen) sensorPower += 0.18f;
@@ -1801,11 +3724,12 @@ void updateKenshiVirtualWorld() {
   if (loss > 0.35f)          kenshiWorldFlags |= K_WORLD_UNSTABLE;
   if (loss > 0.12f)          kenshiWorldFlags |= K_WORLD_TRAINING;
   if (sync_hint < 0.45f)     kenshiWorldFlags |= K_WORLD_LOW_SYNC;
+  if (rf_presence_now || rf_motion_now) kenshiWorldFlags |= K_WORLD_RF;
 
   if (kenshiEventPower > 2.05f || fabsf(z_activity) > 3.2f || fabsf(z_loss) > 3.0f) {
     kenshiBubbleState = 3;
     kenshiJobState = 3; // alert
-  } else if (tmos_motion > 9.0f || tmos_presence > 25.0f || mic_rms > 0.02f) {
+  } else if (tmos_motion > 9.0f || tmos_presence > 25.0f || mic_rms > 0.02f || rf_motion_now || rf_presence_now) {
     kenshiBubbleState = 2;
     kenshiJobState = 2; // track
   } else if (loss > 0.12f || kenshiVirtualNodes > 0) {
@@ -1869,7 +3793,7 @@ void sendKenshiBubblePacket() {
   if (kenshiBubbleState >= 2) kp.flags |= 0x01;
   if (kenshiBubbleState >= 3) kp.flags |= 0x02;
   if (kenshiVirtualNodes > 0) kp.flags |= 0x04;
-  kp.flags |= 0x08; // future Motion Base/servo planner compatible
+  if (motionBasePresent) kp.flags |= 0x08; // Atomic Motion Base / servo planner present
   strlcpy(kp.nodeId, "BlindEye", sizeof(kp.nodeId));
   kp.seq = ++kenshiSeq;
   kp.worker_id = colonyWorkerId;
@@ -1890,10 +3814,9 @@ void sendKenshiBubblePacket() {
   kp.values[2] = mic_rms;
   kp.values[3] = imu_shock;
   kp.values[4] = loss;
-  kp.values[5] = fit;
+  kp.values[5] = fit + (motionBasePresent ? (float)motionBaseServoAngle / 180.0f : 0.0f);
 
-  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&kp, sizeof(kp));
-  if (err == ESP_OK) {
+  if (janusEyeEspNowSend("K2", &kp, sizeof(kp), true)) {
     kenshiTxPackets++;
     kenshiLastTxMs = millis();
   }
@@ -2115,19 +4038,6 @@ void updateTachyonProphecy() {
   tachyonPredPresence3 = constrain(tachyonPredPresence3 * 0.80f + (tachyonPredPresence2 + trendP * 0.22f) * 0.20f, 0.0f, 3000.0f);
   tachyonPredMotion3 = constrain(tachyonPredMotion3 * 0.80f + (tachyonPredMotion2 + trendM * 0.22f) * 0.20f, 0.0f, 2000.0f);
 
-  // Anti-ghost: if no real evidence is present for a while, prophecy decays.
-  // The eye may remember a path, but it must not keep broadcasting "human now".
-  if (!tmos_presence_now && !tmos_motion_now && tmos_absent_frames > 24) {
-    float decay = constrain(0.985f - tmos_ghost_pressure * 0.075f, 0.86f, 0.985f);
-    tachyonPredPresence1 *= decay;
-    tachyonPredPresence2 *= decay;
-    tachyonPredPresence3 *= decay;
-    tachyonPredMotion1 *= (decay * 0.96f);
-    tachyonPredMotion2 *= (decay * 0.96f);
-    tachyonPredMotion3 *= (decay * 0.96f);
-    tachyonFutureStress *= (decay * 0.94f);
-  }
-
   float pNorm = constrain(max(tachyonPredPresence1, tmos_presence) / 850.0f, 0.0f, 2.0f);
   float mNorm = constrain(max(tachyonPredMotion1, tmos_motion) / 420.0f, 0.0f, 2.0f);
   tachyonFutureStress = constrain(tachyonFutureStress * 0.84f + (pNorm * 0.34f + mNorm * 0.42f + tachyonSwarmPressure * 0.14f + tachyonLossEma * 0.10f) * 0.16f, 0.0f, 2.5f);
@@ -2190,8 +4100,6 @@ void sendTachyonProphecyPacket(bool force) {
   tp.magic[0] = 'T'; tp.magic[1] = 'P';
   tp.version = 1;
   tp.flags = 0;
-  // v3.0: flags mean real sensor evidence now. Prediction/memory is reported in values,
-  // but it must not make the room look occupied when it is empty.
   if (tmos_presence_now) tp.flags |= 0x01;
   if (tmos_motion_now) tp.flags |= 0x02;
   if (tachyonFutureStress > 0.95f || kenshiBubbleState >= 3) tp.flags |= 0x04;
@@ -2217,7 +4125,7 @@ void sendTachyonProphecyPacket(bool force) {
   tp.future_stress = tachyonFutureStress;
   tp.swarm_pressure = tachyonSwarmPressure;
 
-  if (esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&tp, sizeof(tp)) == ESP_OK) {
+  if (janusEyeEspNowSend("TP", &tp, sizeof(tp), true)) {
     tachyonTxPackets++;
     tachyonLastTxMs = now;
   }
@@ -2316,6 +4224,7 @@ uint8_t eyeVisionSectorIntensity(uint8_t x, uint8_t y, uint8_t sector, float pow
   float v = power * 255.0f / (1.0f + d2 * 0.42f);
   return (uint8_t)constrain((int)v, 0, 255);
 }
+
 void sendEyeVisionFrame() {
 #if JANUS_EYE_VISION_ENABLE
   if (!eyeVisionEnabled) return;
@@ -2328,19 +4237,18 @@ void sendEyeVisionFrame() {
   ef.min_x10 = 0;
   ef.max_x10 = (int16_t)constrain((int)(max(tmos_presence, tmos_motion) * 10.0f), 0, 32767);
   ef.flags = 0x04; // synthetic aperture from real scalar sensor data
+  if (tmos_motion_now || (tachyonPredMotion1 > 38.0f && tmos_motion_memory > 0.45f)) ef.flags |= 0x01;
+  if (tmos_presence_now || (tachyonPredPresence1 > 46.0f && tmos_presence_memory > 0.45f)) ef.flags |= 0x02;
+  if (tmos_presence_now) ef.flags |= JANUS_EYE_FLAG_PRESENCE_NOW;
+  if (tmos_motion_now) ef.flags |= JANUS_EYE_FLAG_MOTION_NOW;
 
-  // v3.0: presence/motion flags are real-current only. Prediction/memory affects
-  // dim aperture shape but cannot lie that somebody is there.
-  if (tmos_motion_now) ef.flags |= 0x01;
-  if (tmos_presence_now) ef.flags |= 0x02;
-
-  float pPower = constrain(tmos_presence / 220.0f, 0.0f, 1.0f);
-  float mPower = constrain(tmos_motion / 150.0f, 0.0f, 1.0f);
-  float memoryPower = constrain(tmos_memory * 0.28f, 0.0f, 0.28f);
-  float predPower = constrain(max(tachyonPredPresence1 / 1200.0f, tachyonPredMotion1 / 700.0f) * 0.18f, 0.0f, 0.18f);
-  float base = constrain(0.025f + pPower * 0.58f + mPower * 0.34f + memoryPower + predPower +
-                         tachyonFutureStress * 0.025f + tmos_focus_lock * 0.10f - tmos_ghost_pressure * 0.22f,
-                         0.0f, 1.0f);
+  float pPower = constrain(max(tmos_presence, tachyonPredPresence1 * tmos_presence_memory) / 260.0f, 0.0f, 1.0f);
+  float mPower = constrain(max(tmos_motion, tachyonPredMotion1 * tmos_motion_memory) / 180.0f, 0.0f, 1.0f);
+  if (!tmos_presence_now && !tmos_motion_now && tmos_occupancy < 0.18f) {
+    pPower *= 0.18f;
+    mPower *= 0.18f;
+  }
+  float base = constrain(0.04f + pPower * 0.55f + mPower * 0.35f + tachyonFutureStress * 0.03f + tmos_occupancy * 0.05f, 0.0f, 1.0f);
   uint8_t curSector = kenshiSector & 7;
   uint8_t nextSector = kenshiPredSector & 7;
 
@@ -2349,24 +4257,20 @@ void sendEyeVisionFrame() {
       float cx = (float)x - 3.5f;
       float cy = (float)y - 3.5f;
       float r2 = cx * cx + cy * cy;
-      // Squint aperture: higher focus lock tightens the beam instead of lighting
-      // the whole grid. This gives "eagle focus" without fake camera pixels.
-      float apertureShape = 1.0f + r2 * (0.18f + tmos_focus_lock * 0.18f);
-      int aperture = (int)(base * 138.0f / apertureShape);
-      int rayNow = tmos_presence_now ? (eyeVisionSectorIntensity(x, y, curSector, mPower) / 2) : 0;
-      int rayNext = (int)(eyeVisionSectorIntensity(x, y, nextSector, constrain(tachyonFutureStress, 0.0f, 1.0f)) * 0.18f);
-      int pulse = tmos_presence_now ? (int)(6.0f + 4.0f * sinf((float)millis() * 0.003f + (float)(x + y))) : 0;
+      int aperture = (int)(base * 120.0f / (1.0f + r2 * 0.12f));
+      int rayNow = eyeVisionSectorIntensity(x, y, curSector, mPower) / 2;
+      int rayNext = eyeVisionSectorIntensity(x, y, nextSector, constrain(tachyonFutureStress, 0.0f, 1.0f)) / 3;
+      int pulse = (int)(18.0f + 12.0f * sinf((float)millis() * 0.004f + (float)(x + y)));
       ef.pixels[y * JANUS_EYE_VISION_W + x] = (uint8_t)constrain(aperture + rayNow + rayNext + pulse, 0, 255);
     }
   }
 
-  if (esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&ef, sizeof(ef)) == ESP_OK) {
+  if (janusEyeEspNowSend("E/F", &ef, sizeof(ef), true)) {
     eyeVisionFramesTx++;
     eyeVisionLastFrameMs = millis();
   }
 #endif
 }
-
 
 void eyeVisionTick() {
 #if JANUS_EYE_VISION_ENABLE
@@ -2380,16 +4284,155 @@ void eyeVisionTick() {
 }
 
 
+
+// ========================= JANUS RF FUSION / RUVIEW-LITE =========================
+// Stable Arduino layer: RSSI drift and ESP-NOW RX signal pressure.
+// CSI phase processing will be a later compile-time experimental layer.
+
+bool rfLiteValidRssi(int v) {
+  return v < -5 && v > -126;
+}
+
+float rfLiteFusionScore() {
+#if JANUS_RF_LITE_ENABLE
+  return constrain(rf_presence_score + rf_motion_energy * 0.070f + rf_packet_pressure * 0.35f, 0.0f, 2.8f);
+#else
+  return 0.0f;
+#endif
+}
+
+void rfLiteOnPacketRssi(int8_t rssi) {
+#if JANUS_RF_LITE_ENABLE
+  if (!rfLiteValidRssi((int)rssi)) return;
+  rf_rx_packets++;
+  rf_last_packet_ms = millis();
+  if (rf_last_packet_rssi != -127) {
+    rf_last_packet_drift = fabsf((float)rssi - (float)rf_last_packet_rssi);
+  }
+  rf_last_packet_rssi = rssi;
+  float packetKick = constrain(rf_last_packet_drift / 12.0f, 0.0f, 1.5f);
+  rf_packet_pressure = constrain(rf_packet_pressure * 0.82f + packetKick * 0.18f, 0.0f, 2.0f);
+#else
+  (void)rssi;
+#endif
+}
+
+void rfLiteTick(uint32_t now) {
+#if JANUS_RF_LITE_ENABLE
+  if (now - rf_last_sample_ms < JANUS_RF_LITE_SAMPLE_MS) return;
+  rf_last_sample_ms = now;
+
+  int rssiNow = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+  if (!rfLiteValidRssi(rssiNow)) {
+    rf_presence_score *= 0.94f;
+    rf_motion_energy *= 0.90f;
+    rf_entropy *= 0.92f;
+    rf_packet_pressure *= 0.96f;
+    rf_presence_now = false;
+    rf_motion_now = false;
+    return;
+  }
+
+  if (!rf_ready || rf_rssi_ema < -126.0f || rf_rssi_baseline < -126.0f) {
+    rf_rssi_ema = (float)rssiNow;
+    rf_rssi_baseline = (float)rssiNow;
+    rf_rssi_noise = 2.8f;
+    rf_abs_drift = 0.0f;
+    rf_motion_energy = 0.0f;
+    rf_presence_score = 0.0f;
+    rf_entropy = 0.0f;
+    rf_packet_pressure = 0.0f;
+    rf_ready = true;
+    rf_samples = 1;
+    return;
+  }
+
+  float prevEma = rf_rssi_ema;
+  rf_rssi_ema = rf_rssi_ema * 0.86f + (float)rssiNow * 0.14f;
+  float instantStep = fabsf((float)rssiNow - prevEma);
+  rf_abs_drift = fabsf(rf_rssi_ema - rf_rssi_baseline);
+
+  bool hot = (instantStep > JANUS_RF_LITE_MOTION_LEVEL_DB) ||
+             (rf_abs_drift > max(4.5f, rf_rssi_noise * 1.85f)) ||
+             (rf_packet_pressure > 0.65f);
+
+  float baseAlpha = hot ? JANUS_RF_LITE_BASELINE_ALPHA_HOT : JANUS_RF_LITE_BASELINE_ALPHA_QUIET;
+  rf_rssi_baseline = rf_rssi_baseline * (1.0f - baseAlpha) + rf_rssi_ema * baseAlpha;
+
+  if (!hot) {
+    rf_rssi_noise = rf_rssi_noise * (1.0f - JANUS_RF_LITE_NOISE_ALPHA) + instantStep * JANUS_RF_LITE_NOISE_ALPHA;
+  } else {
+    rf_rssi_noise = rf_rssi_noise * 0.996f + min(instantStep, rf_rssi_noise) * 0.004f;
+  }
+  rf_rssi_noise = constrain(rf_rssi_noise, 1.2f, 12.0f);
+
+  float motionNorm = constrain((instantStep + rf_last_packet_drift * 0.55f) / max(JANUS_RF_LITE_MOTION_LEVEL_DB, 0.5f), 0.0f, 5.0f);
+  float presenceNorm = constrain(rf_abs_drift / max(rf_rssi_noise * 2.2f + 1.0f, 1.0f), 0.0f, 4.0f);
+  float packetAge = (rf_last_packet_ms == 0) ? 99999.0f : (float)((now >= rf_last_packet_ms) ? (now - rf_last_packet_ms) : 0UL);
+  float packetFresh = constrain(1.0f - packetAge / (float)JANUS_RF_LITE_PACKET_TTL_MS, 0.0f, 1.0f);
+
+  rf_motion_energy = constrain(rf_motion_energy * 0.78f + motionNorm * 0.22f + rf_packet_pressure * 0.08f, 0.0f, 12.0f);
+  rf_presence_score = constrain(rf_presence_score * 0.88f + (presenceNorm + packetFresh * rf_packet_pressure * 0.35f) * 0.12f, 0.0f, 3.0f);
+  rf_entropy = constrain(rf_entropy * 0.86f + (motionNorm * 0.22f + presenceNorm * 0.30f + rf_packet_pressure * 0.24f) * 0.14f, 0.0f, 4.0f);
+
+  rf_presence_now = rf_presence_score > JANUS_RF_LITE_PRESENCE_LEVEL;
+  rf_motion_now = rf_motion_energy > 1.05f || motionNorm > 1.65f;
+  if (rf_entropy > JANUS_RF_LITE_ANOMALY_LEVEL && (rf_motion_now || rf_presence_now)) rf_anomaly_count++;
+
+  rf_packet_pressure *= 0.985f;
+  rf_last_packet_drift *= 0.92f;
+  rf_samples++;
+#else
+  (void)now;
+#endif
+}
+
+bool tmosWarmupActive(uint32_t now) {
+  return tmosWarmupUntilMs && now < tmosWarmupUntilMs;
+}
+
+void rfLiteDebugTick(uint32_t now, bool force) {
+#if JANUS_RF_LITE_ENABLE
+  if (!force && now - rf_last_debug_ms < JANUS_RF_LITE_DEBUG_MS) return;
+  rf_last_debug_ms = now;
+  uint32_t packetAge = rf_last_packet_ms ? ((now >= rf_last_packet_ms) ? (now - rf_last_packet_ms) : 0UL) : 999999UL;
+  uint32_t warmLeft = tmosWarmupActive(now) ? (tmosWarmupUntilMs - now) : 0;
+  Serial.printf("[EYE/RF] ready=%u rssi=%d ema=%.1f base=%.1f noise=%.1f drift=%.1f P=%.2f M=%.2f entropy=%.2f pkt=%lu age=%lums pr=%.2f last=%d anomaly=%lu warmup=%lus lane=%s/s%u stride=%lu arm=%u tail=%lu bestN=%08lX\n",
+                rf_ready ? 1 : 0,
+                (int)((WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127),
+                rf_rssi_ema,
+                rf_rssi_baseline,
+                rf_rssi_noise,
+                rf_abs_drift,
+                rf_presence_score,
+                rf_motion_energy,
+                rf_entropy,
+                (unsigned long)rf_rx_packets,
+                (unsigned long)packetAge,
+                rf_packet_pressure,
+                (int)rf_last_packet_rssi,
+                (unsigned long)rf_anomaly_count,
+                (unsigned long)(warmLeft / 1000UL),
+                colonyMinerLaneName(colonyJob.minerLane),
+                (unsigned)colonyJob.minerSector,
+                (unsigned long)colonyJob.minerStride,
+                (unsigned)colonyJob.minerStrideArm,
+                (unsigned long)colonyMinerTailHits,
+                (unsigned long)colonyMinerBestNonce);
+#else
+  (void)now; (void)force;
+#endif
+}
+
 // ========================= JANUS COLONY EYE HOOKS =========================
 float eyeLocalEntropy() {
   float agentEntropy = (float)(colonyAgentEntropySeed & 0xFFFF) / 65535.0f;
-  return constrain(tmos_presence * 0.0018f + tmos_motion * 0.0032f + tmos_occupancy * 0.65f +
-                   mic_rms * 20.0f + mag_norm * 0.010f + imu_shock * 0.20f + loss * 1.5f +
-                   agentEntropy * 0.75f + (float)colonyAgentLevel * 0.10f +
-                   tachyonFutureStress * 0.25f - tmos_ghost_pressure * 0.50f,
+  return constrain(tmos_presence * 0.002f + tmos_motion * 0.004f + mic_rms * 20.0f +
+                   mag_norm * 0.010f + imu_shock * 0.20f + loss * 1.5f +
+                   rf_entropy * 0.85f + rf_motion_energy * 0.06f + rf_presence_score * 0.35f +
+                   agentEntropy * 0.75f + (float)colonyAgentLevel * 0.10f + tachyonFutureStress * 0.45f,
                    0.0f, 9999.0f);
 }
-
 
 void onJanusHeartbeat(const JanusColonyPacket& pkt) {}
 void onJanusEntropy(const EntropyReport& er, const void* opt) {}
@@ -2417,7 +4460,7 @@ void sendNodeHeartbeat() {
   pkt.jobAgeMs = colonyJob.active ? (millis() - colonyJob.receivedAt) : 0xFFFFFFFFUL;
   pkt.rssi = colonyLastRssi;
   pkt.uptime = millis();
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&pkt, sizeof(pkt));
+  janusEyeEspNowSend("HB", &pkt, sizeof(pkt), true);
 }
 
 void sendNodeEntropy() {
@@ -2431,12 +4474,12 @@ void sendNodeEntropy() {
   er.magic[0] = 'E'; er.magic[1] = 'R';
   er.worker_id = colonyWorkerId;
   er.local_entropy = eyeLocalEntropy();
-  er.sensor_flags = 0x27; // mic + TMOS + IMU/mag + Kenshi bubble metadata available
+  er.sensor_flags = 0xE7; // mic + TMOS + IMU/mag + Kenshi + JANUS event/motion-base metadata
   er.values[0] = mic_rms;
   er.values[1] = tmos_presence;
   er.values[2] = mag_norm;
-  er.values[3] = loss;
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&er, sizeof(er));
+  er.values[3] = rf_ready ? rf_presence_score : (motionBasePresent ? (float)motionBaseServoAngle : loss);
+  janusEyeEspNowSend("E/R", &er, sizeof(er), true);
 
   EntropyReportV2 er2{};
   er2.magic[0] = 'E'; er2.magic[1] = '2';
@@ -2454,9 +4497,9 @@ void sendNodeEntropy() {
   er2.values[4] = imu_shock;
   er2.values[5] = activity;
   er2.values[6] = pred_activity;
-  er2.values[7] = colonyAgentScore;   // v2.5: Buzz Agent training feedback loop
+  er2.values[7] = rf_entropy;       // v2.12: RF fusion entropy / radio anomaly score
   er2.uptime_ms = millis();
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&er2, sizeof(er2));
+  janusEyeEspNowSend("E2", &er2, sizeof(er2), true);
 }
 
 // ========================= HEADLESS STATUS =========================
@@ -2475,23 +4518,43 @@ void printHeadlessStatus() {
                 diagLine.c_str(),
                 statusLine.c_str());
 
-  Serial.printf("[EYE] focus rawP=%d rawM=%d ema=%.1f/%.1f dP=%.1f dM=%.1f base=%.1f/%.1f noise=%.1f/%.1f gain=%.2f lock=%.2f occ=%.2f mem=%.2f ghost=%.2f now=%d/%d conf=%.2f\n",
+  Serial.printf("[EYE] focus rawP=%d rawM=%d dP=%.1f dM=%.1f base=%.1f/%.1f noise=%.1f/%.1f gain=%.2f conf=%.2f\n",
                 raw_presence, raw_motion,
-                tmos_raw_presence_ema, tmos_raw_motion_ema,
                 tmos_presence_delta, tmos_motion_delta,
                 tmos_presence_baseline, tmos_motion_baseline,
                 tmos_presence_noise, tmos_motion_noise,
-                tmos_focus_gain, tmos_focus_lock, tmos_occupancy, tmos_memory, tmos_ghost_pressure,
-                tmos_presence_now ? 1 : 0, tmos_motion_now ? 1 : 0, tmos_focus_confidence);
+                tmos_focus_gain, tmos_focus_confidence);
 
-  Serial.printf("[EYE] miner H=%lu best=%lu target=%u tickets=%lu jobs=%lu done=%lu exp=%lu\n",
+  Serial.printf("[EYE] v29I truth P/M=%u/%u occ=%.2f mem=%.2f/%.2f ghost=%.2f bad=%u validAgo=%lums warmup=%lus flags=0x%02X\n",
+                tmos_presence_now ? 1 : 0,
+                tmos_motion_now ? 1 : 0,
+                tmos_occupancy,
+                tmos_presence_memory,
+                tmos_motion_memory,
+                tmos_ghost_score,
+                (unsigned)tmos_bad_frames,
+                (unsigned long)(millis() - tmos_last_valid_ms),
+                (unsigned long)(tmosWarmupActive(millis()) ? (tmosWarmupUntilMs - millis()) / 1000UL : 0UL),
+                (unsigned)((tmos_presence_now ? JANUS_EYE_FLAG_PRESENCE_NOW : 0) |
+                           (tmos_motion_now ? JANUS_EYE_FLAG_MOTION_NOW : 0)));
+
+  rfLiteDebugTick(millis(), true);
+
+  Serial.printf("[EYE] miner H=%lu best=%lu target=%u tickets=%lu jobs=%lu done=%lu exp=%lu lane=%s/s%u stride=%lu arm=%u switches=%lu tail=%lu bestN=%08lX\n",
                 (unsigned long)colonyRemoteHashrate,
                 (unsigned long)colonyBestBits,
                 (unsigned)colonyTargetBits,
                 (unsigned long)colonyRemoteShares,
                 (unsigned long)colonyJobsSeen,
                 (unsigned long)colonyJobsDone,
-                (unsigned long)colonyJobsExpired);
+                (unsigned long)colonyJobsExpired,
+                colonyMinerLaneName(colonyJob.minerLane),
+                (unsigned)colonyJob.minerSector,
+                (unsigned long)colonyJob.minerStride,
+                (unsigned)colonyJob.minerStrideArm,
+                (unsigned long)colonyMinerLaneSwitches,
+                (unsigned long)colonyMinerTailHits,
+                (unsigned long)colonyMinerBestNonce);
 
   Serial.printf("[EYE] agent rewards=%lu aok=%lu lvl=%u hint=%u pts=%u batch=%u score=%.1f predH=%.1f err=%.3f entropy=%04lX\n",
                 (unsigned long)colonyAgentRewardsRx,
@@ -2527,6 +4590,54 @@ void printHeadlessStatus() {
                 eyeVisionEnabled ? 1 : 0,
                 (unsigned long)eyeVisionFramesTx,
                 (unsigned long)eyeVisionControlsRx);
+
+  Serial.printf("[EYE] blackboard ev=%lu pol=%lu mood=%s raw=%s radio=%u sensor=%u smoothDrop=%lu order=%s | motionBase present=%u power=%u armed=%u write=%u angle=%d target=%d mv=%d curRaw=%d i2cErr=%lu servoWr=%lu\n",
+                (unsigned long)janusEventSeq,
+                (unsigned long)janusPolicyRx,
+                janusMoodName(janusPolicyMood),
+                janusMoodName(janusPolicyRawLastMood),
+                (unsigned)janusPolicyRadioRate,
+                (unsigned)janusPolicySensorRate,
+                (unsigned long)janusPolicySmoothedDrops,
+                janusPolicyOrder,
+                motionBasePresent ? 1 : 0,
+                motionBasePowerPresent ? 1 : 0,
+                motionBaseArmed ? 1 : 0,
+                (unsigned)JANUS_MOTION_BASE_WRITE_ENABLE,
+                (int)motionBaseServoAngle,
+                (int)motionBaseTargetAngle,
+                (int)motionBaseBusMv,
+                (int)motionBaseCurrentRaw,
+                (unsigned long)motionBaseI2cErrors,
+                (unsigned long)motionBaseServoWrites);
+
+  Serial.printf("[EYE] semantic episodes=%u memTx=%lu needTx=%lu doneTx=%lu ss=%lu/%lu lastEpAgo=%lums ghost=%.2f ghostSince=%lums warmup=%lus motionBase=%u/%u bus=%dmV write=%u\n",
+                (unsigned)janusEyeEpisodeCount,
+                (unsigned long)janusEyeAiMemoryTx,
+                (unsigned long)janusEyeTaskNeedTx,
+                (unsigned long)janusEyeTaskDoneTx,
+                (unsigned long)janusEyeSwarmSenseTx,
+                (unsigned long)janusEyeSwarmSenseFail,
+                (unsigned long)(janusEyeLastEpisodeMs ? millis() - janusEyeLastEpisodeMs : 0),
+                tmos_ghost_score,
+                (unsigned long)(tmosGhostHighSinceMs ? millis() - tmosGhostHighSinceMs : 0UL),
+                (unsigned long)(tmosWarmupActive(millis()) ? (tmosWarmupUntilMs - millis()) / 1000UL : 0UL),
+                motionBasePresent ? 1 : 0,
+                motionBasePowerPresent ? 1 : 0,
+                (int)motionBaseBusMv,
+                (unsigned)JANUS_MOTION_BASE_WRITE_ENABLE);
+
+  Serial.printf("[EYE] radio txOk=%lu txFail=%lu lastErr=%d lastTag=%s peerCh=%u rebuilds=%lu K2tx=%lu TPtx=%lu EFtx=%lu pol=%lu\n",
+                (unsigned long)colonyTxOk,
+                (unsigned long)colonyTxFail,
+                (int)colonyLastTxErr,
+                colonyLastTxTag,
+                (unsigned)colonyPeerChannel,
+                (unsigned long)colonyPeerRebuilds,
+                (unsigned long)kenshiTxPackets,
+                (unsigned long)tachyonTxPackets,
+                (unsigned long)eyeVisionFramesTx,
+                (unsigned long)janusPolicyRx);
 }
 
 // ========================= MAIN =========================
@@ -2536,6 +4647,7 @@ void readSensors() {
   readTMOS();
   mic_rms = readMicRms();
   wifi_rssi = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+  rfLiteTick(millis());
   updateMiniGPT();
   updateTachyonProphecy();
   updateKenshiVirtualWorld();
@@ -2546,7 +4658,7 @@ void setup() {
   cfg.serial_baudrate = 115200;
   M5.begin(cfg);  // Used for IMU/buttons/power only. Blind EYE is headless: no display output.
   Serial.begin(115200);
-  Serial.println("JANUS Blind Eye v3.0 EAGLE FOCUS LOCK + TMOS/PIR SMOOTH + MEMORY / HEADLESS / no SELF mining");
+  Serial.println("JANUS Blind Eye v2.14D ROBOZOMBIE PASSIVE-S MODE S1/S2/S4 / baseless fallback / HEADLESS");
 
   LittleFS.begin(true);
   loadState();
@@ -2554,14 +4666,42 @@ void setup() {
   loadKenshiState();
   loadTachyonState();
 
-  Wire.begin(GROVE_SDA_PIN, GROVE_SCL_PIN, 100000);
+  janusSelectGroveBus(true);
+  Serial.printf("[I2C] WireMux ready: Grove/TMOS SDA=%u SCL=%u, MotionBase SDA=%u SCL=%u addr=0x%02X\n",
+                (unsigned)GROVE_SDA_PIN, (unsigned)GROVE_SCL_PIN,
+                (unsigned)JANUS_MOTION_BASE_SDA_PIN, (unsigned)JANUS_MOTION_BASE_SCL_PIN,
+                (unsigned)JANUS_MOTION_BASE_I2C_ADDR);
   initIMU();
+  initMotionBase();
+  janusSelectGroveBus(true);
   initTMOS();
   initMicI2S();
   initWiFi(true);
   initColonyNow();
 
+  janusEyeBootMs = millis();
+  tmosWarmupUntilMs = janusEyeBootMs + JANUS_TMOS_WARMUP_MS;
+  janusPolicyLastMoodChangeMs = janusEyeBootMs;
+  Serial.printf("[EYE/TMOS] warmup=%lus softSettle=%.3f/%.3f outScale=%.2f jump=%.0f ghost_task_gate=level%.2f hold%lus cooldown%lus\n",
+                (unsigned long)(JANUS_TMOS_WARMUP_MS / 1000UL),
+                JANUS_TMOS_WARMUP_SETTLE_ALPHA,
+                JANUS_TMOS_WARMUP_SOFT_ALPHA,
+                JANUS_TMOS_WARMUP_OUTPUT_SCALE,
+                JANUS_TMOS_BASELINE_JUMP_LEVEL,
+                JANUS_GHOST_TASKNEED_LEVEL,
+                (unsigned long)(JANUS_GHOST_TASKNEED_HOLD_MS / 1000UL),
+                (unsigned long)(JANUS_GHOST_TASKNEED_COOLDOWN_MS / 1000UL));
+
 #if JANUS_EYE_RECALIBRATE_ON_BOOT
+  // v2.9I: do not trust old saved TMOS baseline. Start empty-room truth each boot.
+  calibrated = false;
+  tmos_focus_ready = false;
+  tmos_presence_memory = 0.0f;
+  tmos_motion_memory = 0.0f;
+  tmos_occupancy = 0.0f;
+  tmos_ghost_score = 0.0f;
+  tmos_presence_now = false;
+  tmos_motion_now = false;
   if (tmos_ready) {
     calibrateTMOS();
   }
@@ -2571,14 +4711,29 @@ void setup() {
   }
 #endif
 
-  statusLine = M5.Imu.isEnabled() ? "imu ready + kenshi tachyon" : "imu disabled";
+  statusLine = M5.Imu.isEnabled() ? "imu ready + rf fusion + kenshi tachyon + blackboard" : "imu disabled";
+  janusEmitEyeEvent(JE_BOOT, 92, 35,
+                    (int16_t)(tmos_ready ? 1 : 0),
+                    (int16_t)(motionBasePresent ? 1 : 0),
+                    motionBaseBusMv,
+                    (int16_t)(JANUS_MOTION_BASE_WRITE_ENABLE ? 1 : 0),
+                    janusHash16("boot"), janusHash16("blind_eye"), 15000UL);
+  motionBaseSendStatusEvent(true);
+  motionBaseSendPowerPacket(true);
+  janusEyeEmitTaskDone(90, "eye_boot_ready",
+                       (int16_t)(tmos_ready ? 1 : 0),
+                       (int16_t)(motionBasePresent ? 1 : 0),
+                       motionBaseBusMv,
+                       (int16_t)(motionBasePowerPresent ? 1 : 0));
+  janusEyeSwarmSenseTick(millis(), true);
 }
 
 void loop() {
   M5.update();
+  handleRoboZombieSerial();
   unsigned long now = millis();
 
-  if (now - lastSensorAt >= SENSOR_INTERVAL_MS) {
+  if (now - lastSensorAt >= janusPolicySensorIntervalMs) {
     lastSensorAt = now;
     readSensors();
   }
@@ -2600,6 +4755,11 @@ void loop() {
   }
 
   colonyTick();
+  motionBaseTick();
+  motionBaseSendPowerPacket(false);
+  janusEventTick(false);
+  janusEyeSwarmSenseTick(now, false);
+  rfLiteDebugTick(now, false);
 
   if (WiFi.status() != WL_CONNECTED) {
     initWiFi(false);

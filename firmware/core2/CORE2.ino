@@ -1,7 +1,16 @@
-/*
-  JANUS_CORE2_GALAXY_STATION_v6_40_KENSHI_TACHYON_PROPHECY.ino
+﻿/*
+  JANUS_CORE2_GALAXY_STATION_v6_42C4H_RF_SONAR_CENTER_RADAR.ino
 
-  Core2 = главный домашний узел JANUS и галактическая станция роя:
+  Core2 = главный домашний узел JANUS, BLACKBOARD HOME CORTEX и галактическая станция роя:
+    - v6.42C4K: GALAXY MAP TRACE: Serial prints the active Elite map filter on boot and when cycling LOCAL/ROUTE/KNOWN/DENSE.
+    - v6.42C4J: RF SONAR 360 SWARM RADAR: Core2/user stays in center; Anchor is only one tether/reference; all fresh swarm nodes contribute 360-degree probable-presence sectors + zoom +/-.
+    - v6.42C4I: RF SONAR PROBABILITY RADAR: Core2/user stays in center; Anchor is a tether/reference; probable-presence echo arcs + zoom +/-; no flying crosshair/manual label clutter.
+    - v6.42C4H: RF SONAR CENTER RADAR: Core2/user stays in center; Anchor is a tether/reference; clean radar view without manual label buttons.
+    - v6.42C4F: RF DOME TinySlime Learner: learns EMPTY/HUMAN/MULTI/PET/NOISE from RF dome features, manual labels and SD memory.
+    - v6.42C4: RF DOME / HUMAN SONAR. Core2 emits R/P pulses, Anchor replies R/S; Core2 draws a 3D RF sleeve/cupola with probable human/pet movement and archives /janus/rf_dome.csv.
+    - v6.42C2: SGP30 AIRFIX: raw diagnostics, humidity compensation and safe baseline handling.
+    - v6.42C1: Arduino autoprototype compilefix for RxFrame/RemoteJobState; Anchor RF radar intake from RFAnchorAux E2/S/S; shows human-presence radar in HOME/MESH/RSSI and feeds Tachyon presence.
+    - v6.42C: Gladius G/M TailGEX memory intake; observe-only display, not share logic.
     - ESP-NOW collector для Blind Eye / ADV Beacon / Buzz / EchoMic / Swarm / StickS3
     - локальный SGP30 TVOC/eCO2 на Core2 PORT.A
     - touch UI: HOME -> device detail pages
@@ -49,6 +58,10 @@
         * AUDIO RX queue moved out of .bss into heap/PSRAM.
         * ULAW20 frame size corrected to 160 samples.
         * Snapshot queue kept deep enough without overflowing Core2 DRAM.
+    - v6.41D: AUDIO NODE STATUS FIX:
+        * AUDIO home card now uses EchoMic/TRON keepalive presence, not only live A/F frames.
+        * Core2 treats EchoMic, AudioMic and TRON mic telemetry as an AUDIO node heartbeat.
+        * AUDIO status shows NODE READY/IDLE instead of false AUDIO OFF while TRON is alive.
     - v6.40: KENSHI + TACHYON PROPHECY BUS:
         * Core2 now understands BlindEye/Swarm 'T','P' prophecy packets and 'K','2' virtual bubble packets.
         * Core2 answers with its own Core2Home prophecy so BlindEye TP rx is no longer zero once Core2 is flashed.
@@ -91,6 +104,7 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <mbedtls/sha256.h>
+#include <ctype.h>
 #include <math.h>
 #include "esp_heap_caps.h"
 
@@ -102,8 +116,8 @@
 
 #define DEVICE_ID               "core2_home_node"
 #define DEVICE_KIND             "core2_home_colony_sgp30_touch"
-#define WIFI_SSID "YOUR_WIFI"
-#define WIFI_PASSWORD "YOUR_PASSWORD"
+#define WIFI_SSID               "JANUS_WIFI_PLACEHOLDER"
+#define WIFI_PASSWORD           "JANUS_NET_PLACEHOLDER"
 
 #define JANUS_COLONY_ENABLE     1
 #define JANUS_BROADCAST_CHANNEL 0
@@ -112,7 +126,7 @@
 #define COLONY_ENTROPY_MS       2500UL
 #define CORE2_SWARMSENSE_MS     3000UL
 #define COLONY_PEER_FIX_MS      1500UL
-#define NODE_TIMEOUT_MS         15000UL
+#define NODE_TIMEOUT_MS         45000UL
 #define DRAW_INTERVAL_MS        120UL
 
 // v6.20B: universal ESP-NOW colony registry layered over the stable Core2 code, compile-safe signatures.
@@ -124,7 +138,36 @@
 #define CORE2_SD_ARCHIVE_ENABLE    1       // lightweight append-only Universe training log; if SD mount fails, firmware continues
 #define CORE2_SD_CS                4       // M5Stack Core2 TF-card CS
 #define CORE2_UNIVERSE_ARCHIVE_MS  60000UL
+#define CORE2_ANCHOR_ARCHIVE_MS    5000UL
+#define CORE2_RF_DOME_PING_MS      780UL
+#define CORE2_RF_DOME_ACTIVE_MS    280UL
+#define CORE2_RF_DOME_FRESH_MS     5500UL
+#define CORE2_RF_DOME_ARCHIVE_MS   1200UL
+#define CORE2_RF_TINYSLIME_ENABLE  1
+#define CORE2_RF_TINY_INPUTS       24
+#define CORE2_RF_TINY_HIDDEN       8
+#define CORE2_RF_TINY_OUTPUTS      8
+#define CORE2_RF_TINY_SELF_MS      3600UL
+#define CORE2_RF_TINY_SAVE_MS      60000UL
+#define CORE2_RF_TRAIN_ARCHIVE_MS  1500UL
+#define CORE2_RF_MODEL_PATH        "/janus/rf_model.bin"
+#define CORE2_RF_TRAIN_PATH        "/janus/rf_train.csv"
+#define CORE2_BH_CORPUS_PATH       "/janus/bh_corpus.csv"
+#define CORE2_BH_MODEL_PATH        "/janus/bh_model.bin"
+#define CORE2_BH_CORPUS_ARCHIVE_MS 7000UL
+#define CORE2_BH_MODEL_SAVE_MS     60000UL
+#define CORE2_BH_CORPUS_MAX_BYTES  (512UL * 1024UL)
+#define CORE2_BH_LANES             4
+#define CORE2_NAS_BRAIN_ENABLE     1
+#define CORE2_NAS_BRAIN_TX_MS      45000UL
+#define CORE2_AIR_ARCHIVE_MS       15000UL
 #define CORE2_MAX_COLONY_NODES    24
+#define JANUS_BLACKBOARD_ENABLE       1       // v6.41: distributed semantic blackboard / home cortex
+#define JANUS_BLACKBOARD_SLOTS        48
+#define JANUS_BLACKBOARD_POLICY_MS    7000UL
+#define JANUS_BLACKBOARD_LOG_MS       15000UL
+#define JANUS_BLACKBOARD_EVENT_TTL_MS 45000UL
+#define JANUS_NODEMAP_SLOTS           16
 #define CORE2_HAPTIC_ENABLE      0       // no constant vibration; touch response stays visual/UI
 #define CORE2_MINER_MAX_BATCH    64      // safe upper limit for Core2 worker batch
 #define CORE2_MINER_LOW_BATCH    12
@@ -141,6 +184,12 @@
 #define CORE2_RAMANUJAN_SERIAL_MS         9000UL
 #define SGP30_INTERVAL_MS       1000UL
 #define SGP30_BASELINE_MS       300000UL
+#define SGP30_LOG_MS            5000UL
+#define SGP30_RAW_MS            5000UL
+#define SGP30_HUMIDITY_MS       10000UL
+#define SGP30_REINIT_MS         180000UL
+#define SGP30_BASELINE_WARMUP_MS 900000UL  // do not trust/save a new baseline before ~15 min
+#define SGP30_STALE_WARN_COUNT  90         // 90 x 1 Hz equal readings => warn, do not reset blindly
 #define BUZZ_CURRENT_MS         3000UL
 #define WEATHER_INTERVAL_MS      600000UL
 #define HAPTIC_PULSE_MS          28UL
@@ -158,7 +207,9 @@
 #define JANUS_AUDIO_FRAME_MAX_BYTES    180
 #define JANUS_AUDIO_CONTROL_REPEAT_MS  450UL
 #define JANUS_AUDIO_IDLE_TIMEOUT_MS    9000UL
-#define JANUS_AUDIO_PLAY_VOLUME        216
+#define JANUS_AUDIO_NODE_TIMEOUT_MS    16000UL  // v6.41D: strict real EchoMic/TRON TTL; no fake/stale AUDIO ON
+#define JANUS_AUDIO_OUTPUT_ENABLE      0        // v6.41D: Core2 speaker audio is quarantined; telemetry/status only
+#define JANUS_AUDIO_PLAY_VOLUME        96
 #define JANUS_AUDIO_RX_GAIN_Q8         288     // v6.38: snapshot-buffer RX, TX sends buffered speech clips
 #define JANUS_AUDIO_RX_QUEUE_N         64      // v6.38B: 1.28 sec deep buffer, heap/PSRAM allocated
 #define JANUS_AUDIO_PLAY_CHANNEL       0
@@ -201,6 +252,9 @@ uint8_t JANUS_BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 static const char* JANUS_MUSIC_CURRENT_URL = "http://192.168.1.92:8095/api/music/current";
 static const char* JANUS_MUSIC_NEXT_URL    = "http://192.168.1.92:8095/api/music/next";
 static const char* JANUS_MUSIC_PREV_URL    = "http://192.168.1.92:8095/api/music/prev";
+static const char* JANUS_NAS_BRAIN_VOICE_URL = "http://192.168.1.92:5000/api/swarm/voice";
+static const char* JANUS_NAS_BRAIN_FACE_URL = "http://192.168.1.92:5000/api/face/reply";
+static const char* JANUS_NAS_BRAIN_MEMORY_URL = "http://192.168.1.92:5000/api/memory/add";
 
 // Open-Meteo weather for Zaporizhzhia. No API key.
 static const char* ZP_WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=47.85&longitude=35.12&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto";
@@ -282,6 +336,103 @@ struct __attribute__((packed)) SwarmSensePacket {
   uint16_t nonce_remaining_l16;
   uint16_t flags;          // bitfield: rf/clock/thermal/air/touch/miner/display/battery
 };
+
+// P/N Cortex: SHA-sealed silicon/body trace used by Yaks Gate and BlackStar.
+// It is observer-only: Core2 learns from heat/load/jitter/tail shape without changing pool math.
+struct __attribute__((packed)) JanusPnCortexPacket {
+  uint8_t magic[2];        // 'P','N'
+  uint8_t version;         // 1
+  uint8_t role;
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t job_sig;
+  uint32_t prev_hash;
+  uint32_t packet_hash;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint16_t target_bits;
+  uint16_t best_bits;
+  uint8_t lane;
+  uint8_t sector;
+  uint8_t flags;           // bit0 job, bit1 IR/pool, bit2 BlackStar, bit3 escape/horizon, bit4 brain/audio
+  int8_t rssi;
+  uint16_t thermal_x1000;
+  uint16_t load_x1000;
+  uint16_t jitter_us;
+  uint16_t entropy_x1000;
+  uint16_t tail_x1000;
+  uint16_t voltage_mv;
+  uint16_t ir_phase;
+  uint16_t reserved;
+};
+// v1.13/v6.42C4 Core2 <-> Anchor RF dome packets.
+// R/P is a small pulse from Core2. Anchor measures RSSI on reception.
+// R/S is Anchor's interpreted RF-sleeve snapshot. It is not exact CSI;
+// it is a low-cost ESP-NOW/RSSI human-sonar estimate for JANUS.
+struct __attribute__((packed)) RfDomePingPacket {
+  uint8_t magic[2];       // 'R','P'
+  uint8_t version;        // 1
+  uint8_t pingMode;       // 0 normal, 1 page-open active scan
+  char source[16];        // Core2Home
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t pulse;
+  uint8_t channel;
+  uint8_t reserved;
+};
+
+struct __attribute__((packed)) RfDomeSonarPacket {
+  uint8_t magic[2];       // 'R','S'
+  uint8_t version;        // 1
+  uint8_t flags;          // bit0 coreFresh, bit1 presence, bit2 motion, bit3 human?, bit4 pet?, bit5 learning
+  char anchorId[24];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  int8_t coreRssi;
+  int8_t ambientRssi;
+  int16_t coreEma_x10;
+  int16_t coreBase_x10;
+  int16_t coreDelta_x10;
+  uint16_t coreVar_x10;
+  uint16_t motion_x100;
+  uint16_t presence_x100;
+  uint16_t human_x100;
+  uint16_t pet_x100;
+  uint8_t zonePct;
+  uint16_t distanceCm;
+  uint8_t confidence;
+  uint16_t domeLengthCm;
+  uint32_t packetsSeen;
+  uint32_t crc;
+};
+
+// Explicit prototypes prevent Arduino .ino autoprototype from seeing custom RF Dome types too early.
+bool core2RfDomeFresh(uint32_t now = millis());
+uint32_t core2RfDomeCrc32(const void* data, size_t len);
+void appendCore2RfDomeArchive();
+void core2RememberRfDome(const RfDomeSonarPacket& rs, int8_t rxRssi);
+void handleRfDomeRaw(const uint8_t* data, uint16_t len, int8_t rxRssi);
+void sendCore2RfDomePing(bool force);
+void core2RfDomeUpdateMultiZone(float zonePct, float energy);
+uint8_t core2RfDomeEstimateOccupancy();
+const char* core2RfDomeOccupancyText();
+const char* core2RfDomeTargetLabel();
+
+// v6.42C4F RF TinySlime Learner: tiny MLP + slime trace, SD persistence, manual labels.
+void core2RfTinySlimeInit();
+void core2BhCorpusInitStorage();
+void core2BhCorpusObserveTelemetry(uint32_t now);
+void core2BhCorpusObserveMiner(uint8_t lane, uint16_t bits, bool shareCandidate);
+void core2BhCorpusSave(bool force = false);
+const char* core2BhLaneName(uint8_t lane);
+void core2RfTinySlimeObserve();
+void core2RfTinySlimeManualLabel(uint8_t label);
+void core2RfTinySlimeSaveIfNeeded(bool force);
+const char* core2RfTinyLabelName(uint8_t label);
+
 
 
 // v6.26: Core2 -> ATOMS3R ground orders. Keep this layout identical to ATOM GroundOps.
@@ -432,6 +583,27 @@ struct __attribute__((packed)) JanusEyeFramePacket {
   uint8_t pixels[JANUS_EYE_FRAME_PIXELS]; // 0..255 heat/intensity
 };
 
+// v6.42C4B: BlindEye power packet from Atomic Motion Base INA226.
+struct __attribute__((packed)) JanusEyePowerPacket {
+  uint8_t magic[2];        // 'E','B'
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint16_t bus_mv;
+  int16_t current_raw;
+  int16_t power_raw;
+  uint8_t battery_pct;
+  uint8_t source;
+  uint16_t servo_angle;
+  uint16_t target_angle;
+  uint32_t crc;
+};
+
+uint32_t core2EyePowerCrc32(const void* data, size_t len);
+void handleJanusEyePowerRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+
 
 struct __attribute__((packed)) JanusKenshiPacket {
   uint8_t magic[2];        // 'K','2'
@@ -517,6 +689,165 @@ struct __attribute__((packed)) ZimAgentMemoryPacket {
   char thought[32];
 };
 
+// v6.41: BeaconADV -> Core distributed AI packet.
+// This is used to recover Beacon's full ENV picture: temperature + humidity + pressure.
+struct __attribute__((packed)) JanusAiNodePacket {
+  uint8_t magic[2];        // 'A','I'
+  uint8_t version;         // 1
+  uint8_t flags;           // bit0=has SD, bit1=can archive, bit2=master-ish
+  char nodeId[24];
+  char role[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  float entropy;
+  float prediction_error;
+  float sync;
+  float fit;
+  float attention;
+  float values[6];         // Beacon: temp, humidity, pressure, entropy, onlineNodes, rssi
+};
+
+// v6.41: Atom Matrix / Pyramid optional hive telemetry.
+struct __attribute__((packed)) HiveMetricPacket {
+  uint8_t magic[2];        // 'H','M'
+  uint8_t version;         // 2
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t free_heap;
+  uint32_t min_free_heap;
+  uint16_t cpu_mhz;
+  uint16_t loop_jitter_us;
+  uint16_t loop_max_us;
+  int8_t rssi;
+  uint8_t bt_flags;
+  uint8_t volume;
+  uint8_t palette;
+  uint16_t touch_count;
+  uint16_t effective_batch;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint32_t shares;
+  uint32_t rejects;
+  uint16_t best_bits;
+  uint32_t job_age_ms;
+  uint32_t nonce_remaining;
+  uint8_t reward_level;
+  uint8_t ai_hint;
+  uint16_t target_batch;
+  int16_t prediction_error_x1000;
+  uint16_t entropy_x1000;
+  uint16_t random_tail;
+  uint16_t reserved;
+};
+
+// v6.41 Core2 = JANUS blackboard cortex.
+// New packets are small ESP-NOW friendly packets; old nodes safely ignore them.
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0,
+  JR_CORE    = 1,
+  JR_ZIM     = 2,
+  JR_BUZZ    = 3,
+  JR_BEACON  = 4,
+  JR_TRON    = 5,
+  JR_BLIND   = 6,
+  JR_AUDIO   = 7,
+  JR_PYRAMID = 8,
+  JR_SENSOR  = 9,
+  JR_RELAY   = 10,
+  JR_BLACKSTAR = 11
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE        = 0,
+  JE_BOOT        = 1,
+  JE_HEARTBEAT   = 2,
+  JE_ENV         = 3,
+  JE_MOTION      = 4,
+  JE_PRESENCE    = 5,
+  JE_SOUND       = 6,
+  JE_WIFI_WEAK   = 7,
+  JE_LOW_HEAP    = 8,
+  JE_HASH        = 9,
+  JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11,
+  JE_TASK_NEED   = 12,
+  JE_TASK_DONE   = 13,
+  JE_DANGER      = 14,
+  JE_SAFE        = 15,
+  JE_POLICY      = 16,
+  JE_AI_MEMORY   = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE    = 0,
+  JM_QUIET   = 1,
+  JM_ALERT   = 2,
+  JM_EXPLORE = 3,
+  JM_GUARD   = 4,
+  JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP     = 0x0001,
+  JC_HUM      = 0x0002,
+  JC_PRESS    = 0x0004,
+  JC_IMU      = 0x0008,
+  JC_MIC      = 0x0010,
+  JC_TMOS     = 0x0020,
+  JC_AIR      = 0x0040,
+  JC_HASH     = 0x0080,
+  JC_AUDIO    = 0x0100,
+  JC_VISION   = 0x0200,
+  JC_TOUCH    = 0x0400,
+  JC_RELAY    = 0x0800,
+  JC_MEMORY   = 0x1000,
+  JC_AI       = 0x2000,
+  JC_BATTERY  = 0x4000,
+  JC_RF       = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];        // 'J','E'
+  uint8_t version;         // 1
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;      // 0..100
+  uint8_t urgency;         // 0..100
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];        // 'J','P'
+  uint8_t version;         // 1
+  uint8_t swarmMood;
+  uint8_t radioRate;       // 0 low, 1 normal, 2 high
+  uint8_t buzzBudget;      // 0 hold, 1 lazy, 2 normal, 3 boost
+  uint8_t sensorRate;      // 0 low, 1 normal, 2 high
+  uint8_t confidence;      // 0..100
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
 
 struct __attribute__((packed)) JobPacket {
   uint8_t magic[2];        // 'J','B' Buzz -> workers
@@ -534,6 +865,44 @@ struct __attribute__((packed)) ShareResponse {
   uint32_t nonce;
   uint16_t worker_id;
 };
+
+// Gladius v1.12 -> Core/Buzz TailGEX memory. Core displays it only.
+struct __attribute__((packed)) GladiusMemoryPacket {
+  uint8_t magic[2];      // 'G','M'
+  uint8_t version;
+  uint8_t nodeRole;
+  uint16_t nodeId;
+  uint32_t uptimeMs;
+  uint32_t seq;
+  uint32_t jobId;
+  uint32_t totalHashes;
+  uint32_t shares;
+  uint32_t jobsSeen;
+  uint8_t bestZ;
+  uint8_t targetBits;
+  uint8_t activeLane;
+  uint8_t gexTopLane;
+  int16_t gexTailX100;
+  uint8_t gexConfidenceX100;
+  uint8_t gexWeightPct;
+  uint8_t gexEntropyFloorPct;
+  uint32_t memoryEpoch;
+  uint16_t flags;
+  uint32_t crc;
+};
+
+const char* core2GladiusLaneName(uint8_t lane) {
+  switch (lane) {
+    case 0: return "linear";
+    case 1: return "zim_reverse";
+    case 2: return "zim_bandit";
+    case 3: return "janus_center";
+    case 4: return "knight";
+    case 5: return "bitrev";
+    case 6: return "random";
+    default: return "unknown";
+  }
+}
 
 struct RemoteJobState {
   bool active = false;
@@ -553,6 +922,13 @@ struct RemoteJobState {
   uint32_t thetaStride = 1;
 };
 
+// Arduino IDE 2.x sometimes auto-generates prototypes before local struct types.
+// These explicit prototypes keep RemoteJobState signatures visible and stop bad guesses.
+void sendCoreShare(const RemoteJobState& job, uint32_t nonce);
+void coreConfigureThetaForJob(RemoteJobState& job);
+uint32_t coreThetaNonceForCursor(const RemoteJobState& job, uint32_t cursor);
+void core2BhCorpusApplyToJob(RemoteJobState& job);
+
 // ========================= RX QUEUE: callback короткий, без String/Serial/UI =========================
 
 #define RX_QUEUE_N 48
@@ -565,13 +941,17 @@ struct RxFrame {
   uint8_t data[RX_MAX_LEN];
 };
 
+// Arduino autoprototype guard: RxFrame must be known before popRxFrame signature.
+bool popRxFrame(RxFrame& out);
+void queueRxFrame(const uint8_t* data, int len, int8_t rssi, const uint8_t* mac = nullptr);
+
 volatile uint8_t rxHead = 0;
 volatile uint8_t rxTail = 0;
 volatile uint32_t rxDropped = 0;
 portMUX_TYPE rxMux = portMUX_INITIALIZER_UNLOCKED;
 RxFrame rxQueue[RX_QUEUE_N];
 
-void queueRxFrame(const uint8_t* data, int len, int8_t rssi, const uint8_t* mac = nullptr) {
+void queueRxFrame(const uint8_t* data, int len, int8_t rssi, const uint8_t* mac) {
   if (!data || len <= 0 || len > RX_MAX_LEN) return;
 
   portENTER_CRITICAL_ISR(&rxMux);
@@ -677,8 +1057,10 @@ RemoteNode beacon;
 RemoteNode buzz;
 RemoteNode audioNode;
 RemoteNode swarm;
+RemoteNode blackStar;
 RemoteNode stick;
 RemoteNode unknownNode;
+
 
 // v6.20: universal colony registry.
 // Core2 no longer needs a firmware edit when a new ESP-NOW device appears.
@@ -686,7 +1068,7 @@ RemoteNode unknownNode;
 struct UniversalNode {
   bool used = false;
   bool online = false;
-  uint8_t semanticSlot = 6;   // 0 eye, 1 beacon, 2 buzz, 3 audio, 4 swarm, 5 stick, 6 unknown/future
+  uint8_t semanticSlot = 6;   // 0 eye, 1 beacon, 2 buzz, 3 audio, 4 swarm, 5 stick, 6 unknown/future, 7 blackstar/BH
   uint32_t firstMs = 0;
   uint32_t lastMs = 0;
   uint32_t packets = 0;
@@ -734,7 +1116,7 @@ bool canvasReady = false;
 
 // ========================= AUDIO LIVE STATE =========================
 
-bool janusAudioLiveUserEnabled = true;     // user toggle on AUDIO page; page gate still controls actual stream
+bool janusAudioLiveUserEnabled = false;    // v6.41D: audio output quarantined; no automatic A/C ON or noisy speaker
 bool janusAudioLiveSentState = false;      // last AC state sent to ATOM/EchoBase
 bool janusAudioSeqSeen = false;
 bool janusAudioPlayActive = false;
@@ -856,11 +1238,342 @@ uint8_t core2ZimLastMood = 0;
 char core2ZimBrainLine[96] = "Zim memory awaiting first ZA packet";
 char core2ZimThought[40] = "-";
 
+// ========================= JANUS BLACKBOARD HOME CORTEX v6.41 =========================
+
+struct JanusBlackboardSlot {
+  bool used = false;
+  uint32_t eventHash = 0;
+  char nodeId[24] = "";
+  char kind[16] = "";
+  uint8_t eventType = JE_NONE;
+  uint8_t nodeRole = JR_UNKNOWN;
+  uint8_t confidence = 0;
+  uint8_t urgency = 0;
+  uint16_t topicHash = 0;
+  uint16_t objectHash = 0;
+  uint16_t capabilities = 0;
+  int16_t valueA_x10 = 0;
+  int16_t valueB_x10 = 0;
+  int16_t valueC_x10 = 0;
+  int16_t valueD_x10 = 0;
+  uint32_t firstMs = 0;
+  uint32_t lastMs = 0;
+  uint32_t ttlMs = JANUS_BLACKBOARD_EVENT_TTL_MS;
+  uint16_t hits = 0;
+  int8_t trust = 50;
+  int8_t rssi = -127;
+};
+
+struct JanusNodeSemanticSlot {
+  bool used = false;
+  char nodeId[24] = "";
+  char kind[16] = "";
+  uint8_t role = JR_UNKNOWN;
+  uint16_t capabilities = 0;
+  uint32_t lastMs = 0;
+  int8_t rssi = -127;
+  float tempC = NAN;
+  float humidity = NAN;
+  float pressureHpa = NAN;
+  float imu = 0.0f;
+  float presence = 0.0f;
+  float motion = 0.0f;
+  float sound = 0.0f;
+  float air = 0.0f;
+  float confidence = 0.0f;
+};
+
+JanusBlackboardSlot janusBlackboard[JANUS_BLACKBOARD_SLOTS];
+JanusNodeSemanticSlot janusNodeMap[JANUS_NODEMAP_SLOTS];
+
+uint32_t janusEventSeq = 0;
+uint32_t janusPolicySeq = 0;
+uint32_t janusBlackboardRx = 0;
+uint32_t janusBlackboardMerged = 0;
+uint32_t janusBlackboardExpired = 0;
+uint32_t janusBlackboardPolicyTx = 0;
+uint32_t janusBlackboardPolicyFail = 0;
+uint32_t janusLastPolicyMs = 0;
+uint32_t janusLastBlackboardLogMs = 0;
+
+uint8_t janusSwarmMood = JM_IDLE;
+uint8_t janusPrevSwarmMood = 255;
+float janusHomeTempC = NAN;
+float janusHomeHumidity = NAN;
+float janusHomePressureHpa = NAN;
+float janusHomeMotion = 0.0f;
+float janusHomePresence = 0.0f;
+float janusHomeSound = 0.0f;
+float janusHomeDanger = 0.0f;
+float janusHomeComfort = 0.5f;
+float janusHomeSensorConfidence = 0.0f;
+char janusBlackboardLine[96] = "BB waiting for swarm semantic events";
+char janusHomeLine[96] = "HOME model warming up";
+
+// v6.42C Anchor RF radar: RFAnchorAux exports RSSI/body-presence as E2 + S/S.
+uint32_t core2AnchorRadarRx = 0;
+uint32_t core2AnchorRadarLastMs = 0;
+char core2AnchorRadarNode[24] = "RFAnchorAux";
+int8_t core2AnchorRadarRssi = -127;
+float core2AnchorPresence = 0.0f;
+float core2AnchorMotion = 0.0f;
+float core2AnchorEntropy = 0.0f;
+float core2AnchorDrift = 0.0f;
+float core2AnchorNoise = 0.0f;
+float core2AnchorPacketPressure = 0.0f;
+uint8_t core2AnchorRadarConfidence = 0;
+uint16_t core2AnchorRadarFlags = 0;
+uint32_t core2AnchorRadarHashRate = 0;
+uint16_t core2AnchorRadarBestBits = 0;
+char core2AnchorRadarLine[96] = "ANCHOR RF RADAR WAIT";
+uint32_t core2AnchorRadarArchiveRows = 0;
+uint32_t core2LastAnchorRadarArchiveMs = 0;
+
+// v6.42C4A RF DOME state: Core2 renders the RF corridor/dome between Core2 and Anchor.
+// These globals must live before any RF DOME functions because Arduino .ino autoprototypes are fragile.
+uint32_t core2RfDomeLastMs = 0;
+uint32_t core2RfDomeLastPingMs = 0;
+uint32_t core2LastRfDomeArchiveMs = 0;
+uint32_t core2RfDomePingSeq = 0;
+uint32_t core2RfDomeTx = 0;
+uint32_t core2RfDomeTxFail = 0;
+uint32_t core2RfDomeRx = 0;
+uint32_t core2RfDomeArchiveRows = 0;
+uint32_t core2RfDomePacketsSeen = 0;
+char core2RfDomeAnchor[24] = "RFAnchorAux";
+char core2RfDomeLine[128] = "RF DOME WAIT: Anchor listens for Core2 R/P pulses";
+int8_t core2RfDomeCoreRssi = -127;
+int8_t core2RfDomeAmbientRssi = -127;
+float core2RfDomeEma = -127.0f;
+float core2RfDomeBase = -127.0f;
+float core2RfDomeDelta = 0.0f;
+float core2RfDomeVar = 0.0f;
+float core2RfDomePresence = 0.0f;
+float core2RfDomeMotion = 0.0f;
+float core2RfDomeHuman = 0.0f;
+float core2RfDomePet = 0.0f;
+uint8_t core2RfDomeZonePct = 50;
+uint16_t core2RfDomeDistanceCm = 130;
+uint16_t core2RfDomeLengthCm = 260;
+uint8_t core2RfDomeConfidence = 0;
+uint16_t core2RfDomeFlags = 0;
+uint8_t core2RfTrailHead = 0;
+float core2RfTrailZone[18] = {0};
+float core2RfTrailEnergy[18] = {0};
+
+// v6.42C4D: RF DOME is not a literal person counter. One RSSI corridor sees a
+// summed disturbance field, so Core2 renders 5 activity zones + an occupancy range.
+float core2RfZoneEnergy[5] = {0, 0, 0, 0, 0};
+uint8_t core2RfZoneActiveMask = 0;
+uint8_t core2RfZonePeak = 2;
+uint8_t core2RfDomeOccEstimate = 0;
+uint8_t core2RfDomeOccMin = 0;
+uint8_t core2RfDomeOccMax = 0;
+uint8_t core2RfDomeZoneEmaInit = 0;
+float core2RfDomeZoneEma = 50.0f;
+float core2RfDomePeakEnergy = 0.0f;
+float core2RfDomeTotalEnergy = 0.0f;
+uint32_t core2RfDomeMultiEvents = 0;
+bool core2RfDomeUnresolvedMulti = false;
+char core2RfOccupancyLine[96] = "RF OCC WAIT";
+
+// v6.42C4F TinySlime RF learner state.
+// This is intentionally tiny and ESP32-safe: 24 -> 8 -> 8 MLP, manual SGD, no Python/PyTorch/autograd runtime.
+enum Core2RfTinyLabel : uint8_t {
+  RF_LABEL_EMPTY = 0,
+  RF_LABEL_HUMAN_CORE = 1,
+  RF_LABEL_HUMAN_MID = 2,
+  RF_LABEL_HUMAN_ANCHOR = 3,
+  RF_LABEL_MULTI = 4,
+  RF_LABEL_PET = 5,
+  RF_LABEL_NOISE = 6,
+  RF_LABEL_DOOR = 7
+};
+
+bool core2RfTinyReady = false;
+bool core2RfTinyLoaded = false;
+bool core2RfTinyDirty = false;
+uint32_t core2RfTinyTrainCount = 0;
+uint32_t core2RfTinySelfTrainCount = 0;
+uint32_t core2RfTinyManualTrainCount = 0;
+uint32_t core2RfTinyArchiveRows = 0;
+uint32_t core2RfTinyLastSelfMs = 0;
+uint32_t core2RfTinyLastSaveMs = 0;
+uint32_t core2RfTinyLastArchiveMs = 0;
+uint8_t core2RfTinyPredLabel = RF_LABEL_EMPTY;
+uint8_t core2RfTinyHeurLabel = RF_LABEL_EMPTY;
+uint8_t core2RfTinyLastManualLabel = 255;
+float core2RfTinyPredConf = 0.0f;
+float core2RfTinyHeurConf = 0.0f;
+float core2RfTinyLastLoss = 0.0f;
+float core2RfTinyTrust = 0.50f;
+float core2RfTinyFeat[CORE2_RF_TINY_INPUTS] = {0};
+float core2RfTinyHidden[CORE2_RF_TINY_HIDDEN] = {0};
+float core2RfTinyProb[CORE2_RF_TINY_OUTPUTS] = {0};
+float core2RfTinyW1[CORE2_RF_TINY_HIDDEN][CORE2_RF_TINY_INPUTS];
+float core2RfTinyB1[CORE2_RF_TINY_HIDDEN];
+float core2RfTinyW2[CORE2_RF_TINY_OUTPUTS][CORE2_RF_TINY_HIDDEN];
+float core2RfTinyB2[CORE2_RF_TINY_OUTPUTS];
+float core2RfTinyTrace1[CORE2_RF_TINY_HIDDEN][CORE2_RF_TINY_INPUTS];
+float core2RfTinyTrace2[CORE2_RF_TINY_OUTPUTS][CORE2_RF_TINY_HIDDEN];
+char core2RfTinyLine[128] = "ML WAIT: RF TinySlime not trained";
+char core2RfTinyTrainLine[96] = "RF SONAR: TinySlime observe/self-train; manual labels hidden";
+
+// v6.42C4G: Core2 carried-pose estimator for RF DOME view.
+// This is NOT real SLAM. It is a small IMU cue so the screen reacts when Core2 is carried
+// around the room and the RF map is no longer visually anchored to a fake fixed Core2.
+bool core2ImuPoseReady = false;
+uint32_t core2ImuPoseLastMs = 0;
+float core2ImuAx = 0.0f, core2ImuAy = 0.0f, core2ImuAz = 1.0f;
+float core2ImuGx = 0.0f, core2ImuGy = 0.0f, core2ImuGz = 0.0f;
+float core2ImuMotion = 0.0f;
+float core2PoseX = 0.18f;       // normalized room/map coordinate, left side by default
+float core2PoseY = 0.50f;
+float core2PoseYaw = 0.0f;     // radians, visual orientation cue only
+float core2PoseDrift = 0.0f;
+uint32_t core2ImuPoseSamples = 0;
+char core2ImuPoseLine[96] = "CORE2 POSE: IMU waiting";
+
+// v6.42C4I: user-facing RF sonar zoom. Zoom changes only the radar projection,
+// not RF math or TinySlime learning. Core2 remains the center; Anchor remains tether.
+float core2RfSonarZoom = 1.00f;
+
+// v6.42C4J: local 360-degree swarm radar filters.
+// Each ESP-NOW node becomes a weak RF witness around Core2. Anchor is only one
+// reference tether; the radar also draws BlindEye/Buzz/Zim/Stick/Beacon sectors.
+bool core2RfSwarmSeeded[CORE2_MAX_COLONY_NODES] = {false};
+float core2RfSwarmRssiBase[CORE2_MAX_COLONY_NODES] = {0};
+float core2RfSwarmRssiVar[CORE2_MAX_COLONY_NODES] = {0};
+float core2RfSwarmEnergy[CORE2_MAX_COLONY_NODES] = {0};
+
+
+// v6.42C3 BlindEye Motion Base mirror. Core2 does not drive motors directly here;
+// it only visualizes readiness received from BlindEye/K2 and sends normal policy/EC controls.
+uint32_t core2EyeMotionBaseLastMs = 0;
+uint8_t core2EyeMotionBaseFlags = 0;
+uint8_t core2EyeMotionBaseReady = 0;
+uint8_t core2EyeMotionBasePower = 0;
+char core2EyeMotionBaseLine[96] = "MOTION BASE WAIT";
+
+// BlindEye battery mirror from E/B packet. Core2 shows this only as telemetry;
+// motors/servos remain controlled by BlindEye firmware and its power guard.
+uint32_t core2EyeBatteryLastMs = 0;
+uint32_t core2EyeBatterySeq = 0;
+char core2EyeBatteryNode[24] = "BlindEye";
+uint8_t core2EyeBatteryPct = 0;
+uint16_t core2EyeBatteryMv = 0;
+int16_t core2EyeBatteryCurrentRaw = 0;
+int16_t core2EyeBatteryPowerRaw = 0;
+uint8_t core2EyeBatteryFlags = 0;
+uint8_t core2EyeBatterySource = 0;
+int8_t core2EyeBatteryRssi = -127;
+char core2EyeBatteryLine[96] = "BATT: wait BlindEye E/B";
+
+// v6.42C Gladius GEX mirror.
+uint32_t core2GladiusGexRx = 0;
+uint32_t core2GladiusGexLastMs = 0;
+char core2GladiusGexLine[96] = "GLADIUS GEX WAIT";
+uint8_t core2GladiusActiveLane = 0;
+uint8_t core2GladiusTopLane = 0;
+int16_t core2GladiusTailX100 = 0;
+uint8_t core2GladiusConfidence = 0;
+uint8_t core2GladiusWeightPct = 0;
+uint8_t core2GladiusBestZ = 0;
+
+// BlackStar / ATOM_BH mirror. Core2 treats it as a science target:
+// observe the simulated Gargantua lensing while mining telemetry stays untouched.
+uint32_t core2BlackStarRx = 0;
+uint32_t core2BlackStarLastMs = 0;
+char core2BlackStarNode[24] = "ATOM_BH";
+char core2BlackStarLine[96] = "BLACKSTAR LAB WAIT";
+int8_t core2BlackStarRssi = -127;
+float core2BlackStarMic = 0.0f;
+float core2BlackStarPressure = 0.0f;
+float core2BlackStarTemp = 0.0f;
+float core2BlackStarSurprise = 0.0f;
+float core2BlackStarLoss = 0.0f;
+float core2BlackStarHash = 0.0f;
+float core2BlackStarBest = 0.0f;
+float core2BlackStarMood = 0.0f;
+float core2BlackStarStudy = 0.0f;
+float core2BlackStarLensing = 0.0f;
+uint32_t core2BlackStarLastLogMs = 0;
+
+struct Core2BhCorpusState {
+  uint32_t magic = 0x42484D31UL; // "BHM1"
+  uint16_t version = 1;
+  uint32_t samples = 0;
+  uint32_t minerSamples = 0;
+  uint32_t saves = 0;
+  uint32_t rotations = 0;
+  uint32_t lastArchiveMs = 0;
+  uint32_t lastSaveMs = 0;
+  uint32_t seed = 0xB14C57A2UL;
+  uint32_t offsetBias = 0;
+  uint32_t strideBias = 1;
+  uint8_t bestLane = 0;
+  uint8_t currentLane = 0;
+  uint16_t laneBest[CORE2_BH_LANES] = {0, 0, 0, 0};
+  float laneScore[CORE2_BH_LANES] = {0.0f, 0.0f, 0.0f, 0.0f};
+  float laneTrust[CORE2_BH_LANES] = {0.52f, 0.52f, 0.52f, 0.52f};
+  float lensAvg = 0.0f;
+  float studyAvg = 0.0f;
+  float lossAvg = 1.0f;
+  float hashAvg = 0.0f;
+  float tempAvg = 0.0f;
+  char line[96] = "BH corpus wait";
+};
+
+Core2BhCorpusState core2BhCorpus;
+
+struct Core2PnCortexState {
+  bool seen = false;
+  uint32_t lastMs = 0;
+  uint32_t rx = 0;
+  uint32_t seq = 0;
+  uint32_t jobSig = 0;
+  uint32_t prevHash = 0;
+  uint32_t packetHash = 0;
+  uint32_t hashRate = 0;
+  uint32_t totalHashes = 0;
+  uint16_t worker = 0;
+  uint16_t targetBits = 0;
+  uint16_t bestBits = 0;
+  uint16_t jitterUs = 0;
+  uint16_t voltageMv = 0;
+  uint16_t irPhase = 0;
+  uint8_t role = 0;
+  uint8_t lane = 0;
+  uint8_t sector = 0;
+  uint8_t flags = 0;
+  int8_t rssi = -127;
+  float heat = 0.0f;
+  float load = 0.0f;
+  float entropy = 0.0f;
+  float tail = 0.0f;
+  float murph = 0.0f;
+  float labyrinth = 0.0f;
+  float silicon = 0.0f;
+  char nodeId[24] = "PN";
+  char kind[16] = "cortex";
+  char line[96] = "P/N Cortex wait";
+};
+
+Core2PnCortexState core2PnCortex;
+Core2PnCortexState core2MurphCortex;
+Core2PnCortexState core2BlackStarCortex;
+uint32_t core2PnCortexRx = 0;
+uint32_t core2PnCortexLastLogMs = 0;
+uint32_t core2MurphCortexLastLogMs = 0;
+uint32_t core2BlackStarCortexLastLogMs = 0;
+
 uint16_t colonyWorkerId = 0;
 uint8_t colonyPeerChannel = 0;
 uint32_t colonySeq = 0;
 uint32_t controlSeq = 0;
 uint32_t colonyLastPeerFixMs = 0;
+uint32_t colonyPeerRebuilds = 0;
+uint32_t colonyPeerSendFails = 0;
 uint32_t colonyLastHeartbeatMs = 0;
 uint32_t colonyLastEntropyMs = 0;
 uint32_t core2LastSwarmSenseMs = 0;
@@ -869,6 +1582,10 @@ uint32_t core2SwarmSenseTx = 0;
 uint32_t core2SwarmSenseRx = 0;
 uint32_t core2SwarmSenseBad = 0;
 uint32_t core2SwarmSenseTxFail = 0;
+uint32_t core2LastNasBrainMs = 0;
+uint32_t core2NasBrainTx = 0;
+uint32_t core2NasBrainFail = 0;
+char core2NasBrainLine[96] = "NAS brain: waiting WiFi";
 int8_t meshScroll = 0;
 uint32_t core2LastLoopStartUs = 0;
 uint16_t core2LoopJitterUs = 0;
@@ -891,6 +1608,21 @@ uint32_t coreLastShareMs = 0;
 uint32_t coreLastJobMs = 0;
 uint16_t coreTargetBits = 0;
 char coreJobText[18] = "--------";
+
+bool core2BuzzUiFresh(uint32_t now = millis()) {
+  bool nodeFresh = (buzz.lastMs > 0 && now - buzz.lastMs < NODE_TIMEOUT_MS);
+  bool jobFresh = (coreLastJobMs > 0 && now - coreLastJobMs < 22000UL);
+  bool cachedJobFresh = (coreJob.receivedAt > 0 && now - coreJob.receivedAt < 22000UL);
+  bool fresh = nodeFresh || jobFresh || cachedJobFresh;
+  if (fresh) {
+    buzz.online = true;
+    if (!buzz.nodeId[0]) strlcpy(buzz.nodeId, "Buzz", sizeof(buzz.nodeId));
+    if (!buzz.role[0]) strlcpy(buzz.role, "PoolMaster", sizeof(buzz.role));
+  } else {
+    buzz.online = false;
+  }
+  return fresh;
+}
 float coreAiSkill = 0.50f;   // теперь это "neural confidence" JGPT Slime, оставлено для совместимости пакетов.
 
 struct CoreRamanujanThetaState {
@@ -1033,7 +1765,7 @@ float spaceConfidence = 0.0f;
 float spaceUserYaw = 0.0f;
 uint8_t spaceNodeMask = 0;
 
-#define JANUS_SPACE_NODE_SLOTS 7
+#define JANUS_SPACE_NODE_SLOTS 8
 float spaceNodeX[JANUS_SPACE_NODE_SLOTS];
 float spaceNodeY[JANUS_SPACE_NODE_SLOTS];
 float spaceNodeConf[JANUS_SPACE_NODE_SLOTS];
@@ -1056,6 +1788,29 @@ float airScore = 0.0f;
 uint32_t lastSgpAt = 0;
 uint32_t lastBaselineAt = 0;
 uint32_t sgpWarmupStart = 0;
+
+// v6.42C2 SGP30 AIRFIX diagnostics / calibration state
+uint32_t sgpReadOk = 0;
+uint32_t sgpReadFail = 0;
+uint32_t sgpSameCount = 0;
+uint32_t sgpLastLogMs = 0;
+uint32_t sgpLastRawMs = 0;
+uint32_t sgpLastHumidityMs = 0;
+uint32_t sgpLastRecoveryMs = 0;
+uint32_t sgpLastChangeMs = 0;
+uint32_t sgpHumidityApplied = 0;
+uint16_t sgpLastEco2 = 0;
+uint16_t sgpLastTvoc = 0;
+uint16_t sgpBaselineEco2Last = 0;
+uint16_t sgpBaselineTvocLast = 0;
+bool sgpBaselineLoaded = false;
+bool sgpAirStaleWarned = false;
+char sgpStatusLine[96] = "SGP30 boot";
+uint32_t sgpSaturationCount = 0;
+uint32_t sgpResetArmedMs = 0;
+bool sgpAutoBaselineResetDone = false;
+uint32_t core2AirArchiveRows = 0;
+uint32_t core2LastAirArchiveMs = 0;
 
 char buzzTrack[96] = "waiting for Buzz status";
 uint32_t buzzTrackLastMs = 0;
@@ -1089,6 +1844,7 @@ enum UiPage : uint8_t {
   PAGE_SPACE,
   PAGE_AUDIO,
   PAGE_MESH,
+  PAGE_ANCHOR,
   PAGE_RSSI,
   PAGE_SYSTEM,
   PAGE_WEATHER
@@ -1103,6 +1859,111 @@ float clipf(float v, float lo, float hi) {
   if (v < lo) return lo;
   if (v > hi) return hi;
   return v;
+}
+
+// v6.41D: STRICT AUDIO/TRON PRESENCE.
+// No fake placeholders:
+// - AUDIO card is ON only from real EchoMic/AudioMic or real A/F frames.
+// - SWARM/TRON card is ON only from real ATOM_SWARM_TRON / Swarm_* / GroundOps packets.
+// - Stick role="Swarm" and generic JC_AUDIO/J/E no longer keep TRON/AUDIO alive.
+uint32_t core2AudioNodeLastRealMs = 0;
+bool core2BlackStarFresh(uint32_t now);
+bool core2PnCortexFresh(uint32_t now);
+bool core2MurphFresh(uint32_t now);
+bool core2BlackStarCortexFresh(uint32_t now);
+const char* core2PnLaneName(uint8_t lane, const char* kind = nullptr);
+
+bool core2LooksLikeAudioMirror(const char* id, const char* role = nullptr) {
+  String sid = String(id ? id : "");
+  String srole = String(role ? role : "");
+  // Exact microphone/audio mirror names only. Do NOT match generic "Mic" or "Audio".
+  return sid.indexOf("EchoMic") >= 0 ||
+         sid.indexOf("AudioMic") >= 0 ||
+         sid.indexOf("EchoMicLive") >= 0 ||
+         srole.indexOf("EchoMic") >= 0 ||
+         srole.indexOf("AudioMic") >= 0;
+}
+
+bool core2LooksLikeBlackStarNode(const char* id, const char* role = nullptr) {
+  String sid = String(id ? id : "");
+  String srole = String(role ? role : "");
+  sid.toLowerCase();
+  srole.toLowerCase();
+  bool explicitTron = sid.indexOf("atom_swarm_tron") >= 0 || sid.indexOf("tron") >= 0 ||
+                      srole.indexOf("tron") >= 0;
+  bool groundOpsBh = !explicitTron &&
+                     (sid.startsWith("swarm_") || sid.indexOf("groundops") >= 0 || srole.indexOf("groundops") >= 0);
+  return sid.indexOf("atom_bh") >= 0 ||
+         sid.indexOf("bh_gpt") >= 0 ||
+         sid.indexOf("blackhole") >= 0 ||
+         sid.indexOf("blackstar") >= 0 ||
+         sid.indexOf("gargantua") >= 0 ||
+         srole.indexOf("blackstar") >= 0 ||
+         srole.indexOf("blackhole") >= 0 ||
+         srole.indexOf("gargantua") >= 0 ||
+         groundOpsBh;
+}
+
+bool core2LooksLikeBlackStarMicNode(const char* id, const char* role = nullptr) {
+  String srole = String(role ? role : "");
+  srole.toLowerCase();
+  return core2LooksLikeBlackStarNode(id, role) &&
+         (srole.indexOf("mic") >= 0 ||
+          srole.indexOf("audio") >= 0 ||
+          srole.indexOf("sound") >= 0 ||
+          srole.indexOf("tron_audio") >= 0);
+}
+
+bool core2LooksLikeTronMicNode(const char* id, const char* role = nullptr) {
+  if (core2LooksLikeBlackStarNode(id, role)) return false;
+  String sid = String(id ? id : "");
+  String srole = String(role ? role : "");
+  // Strict TRON/GroundOps only. Do NOT match generic "ATOM", "TD", or role="Swarm";
+  // those created false positives with Stick/Pyramid.
+  return sid.indexOf("ATOM_SWARM_TRON") >= 0 ||
+         sid.startsWith("Swarm_") ||
+         sid.indexOf("GroundOps") >= 0 ||
+         sid.indexOf("TRON") >= 0 ||
+         sid.indexOf("Tron") >= 0 ||
+         srole.indexOf("GroundOps") >= 0 ||
+         srole.indexOf("TRON") >= 0 ||
+         srole.indexOf("Tron") >= 0;
+}
+
+bool core2IsRealAudioPresenceSource(const char* id, const char* role = nullptr) {
+  return core2LooksLikeAudioMirror(id, role) ||
+         core2LooksLikeTronMicNode(id, role) ||
+         core2LooksLikeBlackStarMicNode(id, role);
+}
+
+bool core2AudioNodePresenceFresh(uint32_t now = millis()) {
+  // Real A/F frames are valid live audio evidence.
+  if (janusAudioLastFrameMs && now - janusAudioLastFrameMs < JANUS_AUDIO_IDLE_TIMEOUT_MS) return true;
+  // EchoMic/TRON keepalive is valid node-presence evidence only if it came through strict touch.
+  if (core2AudioNodeLastRealMs && now - core2AudioNodeLastRealMs < JANUS_AUDIO_NODE_TIMEOUT_MS) return true;
+  return false;
+}
+
+bool core2AudioUiFresh(uint32_t now = millis()) {
+  return core2AudioNodePresenceFresh(now) || core2BlackStarFresh(now);
+}
+
+void core2TouchAudioNodeMirror(const char* id, const char* role, int8_t rssi,
+                               float micValue, float entropyValue, float fitValue,
+                               float framesValue, float failValue, float qValue, float gapsValue) {
+  if (!core2IsRealAudioPresenceSource(id, role)) return;
+  core2AudioNodeLastRealMs = millis();
+  audioNode.touch((id && id[0]) ? id : "EchoMic");
+  strlcpy(audioNode.role, (role && role[0]) ? role : "AudioMic", sizeof(audioNode.role));
+  audioNode.rssi = rssi;
+  if (micValue >= 0.0f) audioNode.v0 = micValue;
+  if (framesValue >= 0.0f) audioNode.v3 = framesValue;
+  if (failValue >= 0.0f) audioNode.v5 = failValue;
+  if (qValue >= 0.0f) audioNode.v6 = qValue;
+  if (gapsValue >= 0.0f) audioNode.v7 = gapsValue;
+  if (entropyValue >= 0.0f) audioNode.entropy = clipf(audioNode.entropy * 0.82f + entropyValue * 0.18f, 0.0f, 10.0f);
+  if (fitValue >= 0.0f) audioNode.fit = clipf(audioNode.fit * 0.80f + fitValue * 0.20f, 0.0f, 1.5f);
+  if (audioNode.sync <= 0.0f) audioNode.sync = 0.55f;
 }
 
 String compactU(uint32_t v) {
@@ -1125,6 +1986,10 @@ String compactU(uint32_t v) {
 #define JANUS_CREW_N            8
 #define JANUS_WORKSHOP_N        5
 #define JANUS_MODULE_N          9
+#define CORE2_ELITE_SYSTEMS     256
+#define CORE2_ELITE_GALAXIES    8
+#define CORE2_COSMOS_CACHE_MAX  32
+#define CORE2_KNOWN_COSMOS_FILE "/janus/cosmos/known.csv"
 
 // Forward declarations used by the in-game miner tab.
 // The real implementations live below with the ESP-NOW/home telemetry helpers.
@@ -1133,14 +1998,21 @@ float homeSync();
 // Arduino/ESP32 C++ needs this before the JanusGalaxyStationSim class because
 // several inline member methods call it before the real implementation below.
 bool coreWorkerEnabled();
+bool core2BlackStarFresh(uint32_t now);
+float nodeSignalRaw(bool online, uint32_t lastMs, int8_t rssi);
+void core2RememberBlackStar(const char* id, int8_t rxRssi,
+                            float mic, float pressure, float temp,
+                            float surprise, float loss, float hashRate,
+                            float bestBits, float mood, float fit);
 
 class JanusGalaxyStationSim {
 public:
   enum Good : uint8_t { ORE = 0, FOOD = 1, DATA = 2, ENERGY = 3 };
-  enum View : uint8_t { VIEW_STATION = 0, VIEW_GALAXY = 1, VIEW_OPS = 2, VIEW_FLEET = 3, VIEW_MINER = 4, VIEW_CODEX = 5, VIEW_MODULES = 6 };
+  enum View : uint8_t { VIEW_STATION = 0, VIEW_GALAXY = 1, VIEW_OPS = 2, VIEW_FLEET = 3, VIEW_MINER = 4, VIEW_CODEX = 5, VIEW_MODULES = 6, VIEW_GARGANTUA = 7, VIEW_COUNT = 8 };
   enum CrewJob : uint8_t { JOB_IDLE = 0, JOB_MINE, JOB_HAUL, JOB_BUILD, JOB_REPAIR, JOB_RESEARCH, JOB_SECURITY, JOB_TRADE, JOB_REST };
   enum CrewRole : uint8_t { ROLE_MANAGER = 0, ROLE_MINER, ROLE_ENGINEER, ROLE_SCIENTIST, ROLE_GUARD, ROLE_TRADER, ROLE_MEDIC, ROLE_CHRONICLER };
   enum StationModuleKind : uint8_t { MOD_BAR = 0, MOD_DOCKS, MOD_BAZAAR, MOD_SHIPYARD, MOD_RESEARCH, MOD_BUSINESS, MOD_HOTEL, MOD_MEDBAY, MOD_SHOPS };
+  enum EliteMapMode : uint8_t { ELITE_MAP_LOCAL = 0, ELITE_MAP_ROUTE = 1, ELITE_MAP_KNOWN = 2, ELITE_MAP_DENSE = 3, ELITE_MAP_COUNT = 4 };
 
   struct Planet {
     char name[14];
@@ -1246,6 +2118,45 @@ public:
     float glow;
   };
 
+  enum CosmosType : uint8_t {
+    COSMOS_STAR = 0,
+    COSMOS_PULSAR = 1,
+    COSMOS_BLACK_HOLE = 2,
+    COSMOS_NEBULA = 3,
+    COSMOS_GALAXY = 4,
+    COSMOS_LAB = 5
+  };
+
+  struct EliteSeed6 {
+    uint16_t w0;
+    uint16_t w1;
+    uint16_t w2;
+  };
+
+  struct EliteSystem {
+    char name[16];
+    uint8_t x;
+    uint8_t y;
+    uint8_t economy;
+    uint8_t government;
+    uint8_t techLevel;
+    uint8_t danger;
+    uint8_t population;
+    uint16_t radius;
+    uint32_t signature;
+  };
+
+  struct CosmosLandmark {
+    char name[18];
+    uint8_t galaxy;
+    uint8_t x;
+    uint8_t y;
+    uint8_t type;
+    uint8_t danger;
+    uint8_t science;
+    uint16_t influence;
+  };
+
   Planet p[JANUS_GALAXY_NODES];
   SaveState s{};
   Ship ships[9];
@@ -1312,6 +2223,16 @@ public:
   uint32_t lastPerfModeMs = 0;
   uint32_t lastQuestCheckMs = 0;
 
+  // v6.43: Janus-Demiurge goal layer.
+  // This is a game/meta-control layer only: it changes nonce traversal bias, never SHA/target math.
+  uint8_t demiurgeMode = 0;           // 0 EXPLORE, 1 EXPLOIT, 2 SURVIVE, 3 CHAOS, 4 HUNT
+  float demiurgeModeStrength = 0.20f;
+  float pnpBelief = 0.50f;
+  float pnpDiscovery = 0.0f;
+  float pnpHunger = 0.0f;
+  float pnpMinerUtility = 0.0f;
+  char demiurgeLine[128] = "DEMIURGE: Genesis goal P=NP/SHA256 waiting";
+
 
   // v6.23 Unified Janus Universe layer.
   // This is intentionally runtime/lightweight and compile-safe: no new external protocol required yet.
@@ -1360,6 +2281,26 @@ public:
   float galaxyMapPitch = 0.0f;
   float galaxyMapZoom = 1.0f;
   uint32_t diplomacyEpoch = 0;
+
+  // v6.44: shared Elite-1984-style lattice.
+  // Core2 now observes the same deterministic 8x256 galaxy that ADV_Elite pilots.
+  EliteSystem eliteSystems[CORE2_ELITE_SYSTEMS];
+  CosmosLandmark cosmosCache[CORE2_COSMOS_CACHE_MAX];
+  uint8_t eliteGalaxyIndex = 0;
+  uint8_t eliteCurrentSystem = 7;   // Lave slot, same start as ADV.
+  uint8_t eliteTargetSystem = 7;
+  uint8_t eliteCursorSystem = 7;
+  uint8_t elitePilotGalaxy = 0;
+  uint8_t elitePilotSystem = 7;
+  uint8_t cosmosCacheCount = 0;
+  uint32_t eliteSeedSignature = 0;
+  uint32_t knownCosmosCount = 0;
+  uint32_t knownCosmosBrightCount = 0;
+  uint32_t knownCosmosLastScanMs = 0;
+  uint32_t elitePilotLinkLastMs = 0;
+  uint8_t eliteMapMode = ELITE_MAP_LOCAL;
+  bool knownCosmosMissingLogged = false;
+  char elitePilotLine[128] = "Elite PilotLink: waiting ADV";
 
   static uint16_t grgb(uint8_t r, uint8_t g, uint8_t b) {
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
@@ -1492,12 +2433,55 @@ public:
     return (uint8_t)((nodeIdx * 3 + 1) % UNIVERSE_SECTORS);
   }
 
+  uint8_t blackHoleSector() {
+    return nodeSectorSlot(4);
+  }
+
   const char* universePlanetName(uint8_t sector) {
     static const char* names[16] = {
       "AURORA", "DUNE", "OCEAN", "EMBER", "ICE", "TOXIC", "FOREST", "VOID",
-      "CRYSTAL", "STORM", "ASH", "NEBULA", "GARDEN", "RUST", "VIOLET", "JANUS"
+      "CRYSTAL", "STORM", "ASH", "NEBULA", "GARDEN", "GARGANTUA", "VIOLET", "JANUS"
     };
     return names[sector & 15];
+  }
+
+  const char* sectorActivityName(uint8_t sector) {
+    sector &= 15;
+    if (sector == blackHoleSector()) return "BH_RESEARCH";
+    if (universeThreat[sector] > 0.82f) return "WARZONE";
+    if (universeOwner[sector] == 2) return "PIRATE_NEST";
+    if (universeOwner[sector] == 3) return "THG_FRONT";
+    if (universeStationLevel[sector] == 0) return "FRONTIER";
+    if (universeSupply[sector] < 0.35f) return "RELIEF_RUN";
+    if (universeProspect[sector] > 0.75f) return "PROSPECT";
+    return "TRADE_ROUTE";
+  }
+
+  const char* demiurgeModeName(uint8_t mode) const {
+    switch (mode % 5) {
+      case 1: return "EXPLOIT";
+      case 2: return "SURVIVE";
+      case 3: return "CHAOS";
+      case 4: return "HUNT";
+      default: return "EXPLORE";
+    }
+  }
+
+  uint8_t demiurgeModeCode() const {
+    return demiurgeMode % 5;
+  }
+
+  uint32_t demiurgeNonceSalt() const {
+    uint32_t a = (uint32_t)(clipf(pnpDiscovery, 0.0f, 1.5f) * 16777216.0f);
+    uint32_t b = (uint32_t)(clipf(pnpBelief, 0.0f, 1.5f) * 1048576.0f);
+    uint32_t c = (uint32_t)(clipf(pnpMinerUtility, 0.0f, 1.5f) * 65536.0f);
+    return 0x504E5032UL ^ (a << 1) ^ (b << 7) ^ (c << 13) ^ ((uint32_t)demiurgeModeCode() << 29) ^ s.ticks;
+  }
+
+  float demiurgeMinerBias() const {
+    return clipf(0.55f + pnpDiscovery * 0.22f + pnpBelief * 0.18f +
+                 demiurgeModeStrength * 0.22f + pnpMinerUtility * 0.18f -
+                 pnpHunger * 0.10f, 0.45f, 1.45f);
   }
 
   uint16_t universePlanetHi(uint8_t sector) {
@@ -1528,6 +2512,7 @@ public:
   uint16_t universePlanetShade(uint8_t sector) {
     if ((sector & 15) == 7) return grgb(10, 8, 28);
     if ((sector & 15) == 11) return grgb(26, 12, 42);
+    if ((sector & 15) == 13) return grgb(16, 6, 2);
     return dim(universePlanetHi(sector), 0.22f);
   }
 
@@ -1540,7 +2525,13 @@ public:
       float repairNeed = universeThreat[i] * 0.44f + (1.0f - clipf(universeSupply[i], 0.0f, 1.0f)) * 0.20f;
       float buildNeed = (i == universeBuildTarget) ? 0.32f : 0.0f;
       float frontier = universeProspect[i] * 0.18f + universeInfluence[i] * 0.12f;
+      float bhFocus = 0.0f;
+      if (i == blackHoleSector()) {
+        bhFocus = core2BlackStarFresh(millis()) ? (0.48f + core2BlackStarStudy * 0.22f + core2BlackStarLensing * 0.12f) : 0.10f;
+        if (s.viewMode == VIEW_GARGANTUA) bhFocus += 0.35f;
+      }
       float score = owned + station + repairNeed + buildNeed + frontier;
+      score += bhFocus;
       if (i == universeServiceSector) score += 0.05f;
       if (score > bestScore) { bestScore = score; best = i; }
     }
@@ -1548,6 +2539,9 @@ public:
   }
 
   void updateUniversePilotPosition(float dt) {
+    if (elitePilotLinkLastMs && millis() - elitePilotLinkLastMs < 26000UL) {
+      return;
+    }
     bool pilotOnline = stick.refresh();
     float move = pilotOnline ? clipf(fabsf(stick.v0) / 260.0f + fabsf(stick.v1) / 260.0f + fabsf(stick.v2) / 360.0f + stick.fit * 0.14f, 0.0f, 1.4f) : 0.0f;
     universePartyPower = universePartyPower * 0.94f + (pilotOnline ? clipf(move + signalFromRssi(stick.rssi) * 0.35f, 0.0f, 1.5f) : 0.0f) * 0.06f;
@@ -1614,6 +2608,16 @@ public:
     universeFaction[0] = 0;
     universeStationLevel[0] = 1;
     universeInfluence[0] = 0.65f;
+    {
+      uint8_t bh = blackHoleSector();
+      universeOwner[bh] = 1;
+      universeFaction[bh] = 0;
+      if (universeStationLevel[bh] < 1) universeStationLevel[bh] = 1;
+      universeInfluence[bh] = max(universeInfluence[bh], 0.34f);
+      universeSupply[bh] = max(universeSupply[bh], 0.36f);
+      universeProspect[bh] = max(universeProspect[bh], 0.92f);
+      universeThreat[bh] = clipf(max(universeThreat[bh], 0.28f), 0.02f, 1.5f);
+    }
     universeBuildTarget = 0;
     universeSelectedSector = 0;
     universeServiceSector = 0;
@@ -1643,11 +2647,17 @@ public:
     universePilotSector = prefs.getUChar("univPilot", nodeSectorSlot(5)) % UNIVERSE_SECTORS;
     universePilotDistance = prefs.getULong("univPDist", 0);
     universeServiceProgress = prefs.getFloat("univSvcProg", 0.0f);
-    galaxyClusterIndex = prefs.getUChar("galClus", 0) % 6;
+    galaxyClusterIndex = prefs.getUChar("galClus", 0) % CORE2_ELITE_GALAXIES;
     galaxySelectedStar = prefs.getUChar("galStar", 0) % 24;
     galaxyMapOrbit = prefs.getFloat("galYaw", 0.0f);
     galaxyMapPitch = prefs.getFloat("galPitch", 0.0f);
     galaxyMapZoom = prefs.getFloat("galZoom", 1.0f);
+    demiurgeMode = prefs.getUChar("pnpMode", 0) % 5;
+    demiurgeModeStrength = prefs.getFloat("pnpStr", 0.20f);
+    pnpBelief = prefs.getFloat("pnpBelief", 0.50f);
+    pnpDiscovery = prefs.getFloat("pnpDisc", 0.0f);
+    pnpHunger = prefs.getFloat("pnpHunger", 0.0f);
+    pnpMinerUtility = prefs.getFloat("pnpMine", 0.0f);
     snprintf(universeLine, sizeof(universeLine), "Universe: shared RTS DB loaded, target S%02u", universeBuildTarget);
     snprintf(universeStationLine, sizeof(universeStationLine), "Service: restored S%02u %s", universeServiceSector, universePlanetName(universeServiceSector));
     snprintf(universePilotLine, sizeof(universePilotLine), "Pilot: restored S%02u %.1fkly", universePilotSector, (float)universePilotDistance / 1000.0f);
@@ -1675,7 +2685,14 @@ public:
     prefs.putFloat("galYaw", galaxyMapOrbit);
     prefs.putFloat("galPitch", galaxyMapPitch);
     prefs.putFloat("galZoom", galaxyMapZoom);
+    prefs.putUChar("pnpMode", demiurgeMode);
+    prefs.putFloat("pnpStr", demiurgeModeStrength);
+    prefs.putFloat("pnpBelief", pnpBelief);
+    prefs.putFloat("pnpDisc", pnpDiscovery);
+    prefs.putFloat("pnpHunger", pnpHunger);
+    prefs.putFloat("pnpMine", pnpMinerUtility);
     lastUniverseSaveMs = millis();
+    elitePersistGalaxy(force);
   }
 
   float nodeStationPower(uint8_t nodeIdx) {
@@ -1687,6 +2704,7 @@ public:
     float roleBoost = 0.0f;
     if (nodeIdx == 2) roleBoost += 0.30f; // Buzz forge/master
     if (nodeIdx == 3) roleBoost += 0.18f; // Echo/Pyramid audio moon
+    if (nodeIdx == 4 && core2BlackStarFresh(millis())) roleBoost += core2BlackStarStudy * 0.24f;
     if (nodeIdx == 5) roleBoost += 0.24f; // Stick pilot
     return clipf(sig * 0.52f + mining * 0.22f + entropy * 0.12f + roleBoost, 0.0f, 1.5f);
   }
@@ -1707,6 +2725,7 @@ public:
 
   void updateUnifiedUniverse(float dt, bool foreground) {
     universeEpoch++;
+    knownCosmosScanSd(false);
     float janusSum = 0.0f;
     float thgSum = 0.0f;
     float supplySum = 0.0f;
@@ -1894,6 +2913,7 @@ public:
     if (s.viewMode == VIEW_MINER) return "МАЙНЕР";
     if (s.viewMode == VIEW_CODEX) return "КОДЕКС";
     if (s.viewMode == VIEW_MODULES) return "МОДУЛИ";
+    if (s.viewMode == VIEW_GARGANTUA) return "GARG LAB";
     return "СТАНЦИЯ";
   }
 
@@ -2104,6 +3124,7 @@ public:
           p[i].relation = s.planetRelation[i];
         }
         seedShips();
+        eliteBootGalaxy();
         snprintf(janusLine, sizeof(janusLine), "Янус: память станции восстановлена, уровень %u", s.stationLevel);
         snprintf(newsLine, sizeof(newsLine), "ГАЛАКТИЧЕСКАЯ СВОДКА: архив станции загружен, торговые коридоры просыпаются");
         return;
@@ -2112,12 +3133,13 @@ public:
     resetSave();
     buildCrewFromSave();
     seedShips();
+    eliteBootGalaxy();
     save(true);
   }
 
   void initPlanets() {
-    const char* names[JANUS_GALAXY_NODES] = {"Sol-Eye", "Orion-Bcn", "Buzz Forge", "Echo Moon", "Swarm Ark", "Stick Runner", "Zim Earth"};
-    const char* roles[JANUS_GALAXY_NODES] = {"EYE", "BCN", "BUZ", "MIC", "SW", "STK", "ZIM"};
+    const char* names[JANUS_GALAXY_NODES] = {"Sol-Eye", "Orion-Bcn", "Buzz Forge", "Echo Moon", "Gargantua Lab", "Stick Runner", "Zim Earth"};
+    const char* roles[JANUS_GALAXY_NODES] = {"EYE", "BCN", "BUZ", "MIC", "BH", "STK", "ZIM"};
     for (int i = 0; i < JANUS_GALAXY_NODES; i++) {
       strlcpy(p[i].name, names[i], sizeof(p[i].name));
       strlcpy(p[i].role, roles[i], sizeof(p[i].role));
@@ -2141,7 +3163,7 @@ public:
     p[1].production[FOOD] += 0.36f;   p[1].demand[DATA] += 0.22f;
     p[2].production[ENERGY] += 0.54f; p[2].production[ORE] += 0.28f;
     p[3].production[DATA] += 0.34f;   p[3].demand[ENERGY] += 0.25f;
-    p[4].production[FOOD] += 0.22f;   p[4].production[DATA] += 0.22f;
+    p[4].production[DATA] += 0.46f;   p[4].production[ENERGY] += 0.18f; p[4].demand[ENERGY] += 0.28f;
     p[5].production[ENERGY] += 0.18f; p[5].demand[ORE] += 0.22f;
     p[6].production[ORE] += 0.25f;    p[6].risk += 0.18f;
   }
@@ -2181,12 +3203,12 @@ public:
     s.moduleLevel[MOD_MEDBAY] = 1;
     recomputeStationQuality();
     snprintf(janusLine, sizeof(janusLine), "Янус: беру станцию под управление");
-    snprintf(missionLine, sizeof(missionLine), "Цель: связать Core2 RTS и Stick Pilot в одну вселенную");
+    snprintf(missionLine, sizeof(missionLine), "Goal: study Gargantua/BH behavior and bind Core2 RTS + Stick Pilot");
     snprintf(colonyLine, sizeof(colonyLine), "Экипаж: восемь жителей станции ждут первых приказов Януса");
   }
 
   void clampSave() {
-    if (s.viewMode > VIEW_MODULES) s.viewMode = VIEW_STATION;
+    if (s.viewMode >= VIEW_COUNT) s.viewMode = VIEW_STATION;
     if (s.selected >= JANUS_GALAXY_NODES) s.selected = 0;
     if (s.selectedShip >= 9) s.selectedShip = 0;
     if (s.stationLevel < 1) s.stationLevel = 1;
@@ -2250,7 +3272,7 @@ public:
       case 1: return &beacon;
       case 2: return &buzz;
       case 3: return &audioNode;
-      case 4: return &swarm;
+      case 4: return core2BlackStarFresh(millis()) ? &blackStar : &swarm;
       case 5: return &stick;
       default: return &unknownNode;
     }
@@ -2263,7 +3285,7 @@ public:
 
   const char* guardianName(uint8_t i) {
     static const char* names[JANUS_GALAXY_NODES] = {
-      "Око-предиктор", "Нав-маяк", "Кузня-порядок", "Эхо-слух", "Ковчег-рой", "Пилот-вестник", "Тёмный сторож"
+      "Око-предиктор", "Нав-маяк", "Кузня-порядок", "Эхо-слух", "Gargantua Lab", "Пилот-вестник", "Тёмный сторож"
     };
     return names[i % JANUS_GALAXY_NODES];
   }
@@ -2274,7 +3296,7 @@ public:
       case 1: return grgb(95, 255, 150);   // Beacon: routes
       case 2: return grgb(255, 190, 80);   // Buzz: production
       case 3: return grgb(205, 130, 255);  // Echo: anomalies
-      case 4: return grgb(120, 160, 255);  // Swarm: cohesion
+      case 4: return grgb(255, 168, 76);   // BlackStar: lensing study
       case 5: return grgb(255, 245, 120);  // Stick: action/pilot
       default:return grgb(175, 185, 205);
     }
@@ -2326,11 +3348,17 @@ public:
       else if (i == 1) guardianBias += sig * 0.30f;                // Beacon stabilizes routes
       else if (i == 2) guardianBias += p[i].stock[ENERGY] * 0.001f;// Buzz powers order
       else if (i == 3) guardianBias += spaceSound * 0.18f;         // EchoMic maps anomalies
-      else if (i == 4) guardianBias += galaxyConfidence * 0.25f;   // swarm consensus
+      else if (i == 4) guardianBias += core2BlackStarFresh(millis()) ? (core2BlackStarStudy * 0.42f + core2BlackStarLensing * 0.12f) : galaxyConfidence * 0.25f;
       else if (i == 5) guardianBias += spaceMotion * 0.20f;        // Stick is active pilot input
 
       float anti = on ? clipf((0.20f + sig * 0.54f + sensor * 0.22f + p[i].relation * 0.06f) * guardianBias - fabsf(n->loss) * 0.18f, 0.0f, 1.35f) : swarmAntiEntropy[i] * 0.94f;
       float learn = on ? clipf(sensor * 0.38f + sig * 0.22f + anti * 0.30f + entropyPulse * 0.10f, 0.0f, 1.30f) : swarmLearning[i] * 0.92f;
+      if (i == 4 && core2BlackStarFresh(millis())) {
+        anti = clipf(anti + core2BlackStarStudy * 0.18f - core2BlackStarLensing * 0.04f, 0.0f, 1.45f);
+        learn = clipf(learn + core2BlackStarStudy * 0.20f + core2BlackStarLensing * 0.08f, 0.0f, 1.45f);
+        entropyPulse = clipf(entropyPulse + core2BlackStarLensing * 0.22f, 0.0f, 1.8f);
+        p[i].stock[DATA] = clipf(p[i].stock[DATA] + core2BlackStarStudy * 0.018f, 0.0f, 9999.0f);
+      }
 
       swarmAntiEntropy[i] = swarmAntiEntropy[i] * 0.82f + anti * 0.18f;
       swarmLearning[i] = swarmLearning[i] * 0.86f + learn * 0.14f;
@@ -2341,7 +3369,9 @@ public:
       if (on) online += 1.0f;
 
       // Entropy Wardens directly affect sector risk and relations.
-      p[i].risk = clipf(p[i].risk * 0.992f + (on ? (n->loss * 0.06f + sectorHeat * 0.035f - swarmAntiEntropy[i] * 0.0065f) : 0.002f), 0.02f, 1.0f);
+      float riskPush = on ? (n->loss * 0.06f + sectorHeat * 0.035f - swarmAntiEntropy[i] * 0.0065f) : 0.002f;
+      if (i == 4 && core2BlackStarFresh(millis())) riskPush += core2BlackStarLensing * 0.012f - core2BlackStarStudy * 0.006f;
+      p[i].risk = clipf(p[i].risk * 0.992f + riskPush, 0.02f, 1.0f);
       float rivalDrag = ((s.allianceMask != 0) && !(s.allianceMask & (1 << i)) && !allianceCompatible(i)) ? 0.00055f : 0.0f;
       p[i].relation = clipf(p[i].relation * 0.9994f + (on ? 0.00045f + swarmAntiEntropy[i] * 0.00025f - rivalDrag : -0.00025f), -1.0f, 1.0f);
 
@@ -2358,7 +3388,23 @@ public:
     s.adminSkill = clipf(s.adminSkill + swarmLearningTotal * 0.00009f, 0.0f, 5.0f);
     s.stationOrder = clipf(s.stationOrder + (swarmShield - swarmEntropyTotal * 0.35f) * 0.00032f, 0.0f, 1.5f);
 
-    snprintf(swarmLine, sizeof(swarmLine), "Рой: %s держит порядок %.0f%%, обучение %.0f%%", guardianName(bestGuardian), swarmShield * 100.0f, swarmLearningTotal * 100.0f);
+    if (core2BlackStarFresh(millis())) {
+      uint8_t bhSec = nodeSectorSlot(4);
+      universeSelectedSector = bhSec;
+      if ((s.ticks & 3UL) == 0UL) universeServiceSector = bhSec;
+      universeOwner[bhSec] = 1;
+      universeFaction[bhSec] = 0;
+      if (universeStationLevel[bhSec] == 0) universeStationLevel[bhSec] = 1;
+      universeProspect[bhSec] = clipf(max(universeProspect[bhSec], core2BlackStarStudy * 0.72f + core2BlackStarLensing * 0.18f), 0.0f, 1.5f);
+      universeSupply[bhSec] = clipf(universeSupply[bhSec] + core2BlackStarStudy * 0.0020f, 0.0f, 1.5f);
+      universeThreat[bhSec] = clipf(universeThreat[bhSec] * 0.998f + core2BlackStarLensing * 0.0016f - core2BlackStarStudy * 0.0007f, 0.02f, 1.5f);
+      universeBuild[bhSec] = clipf(universeBuild[bhSec] + core2BlackStarStudy * 0.00035f, 0.0f, 1.0f);
+      snprintf(universeStationLine, sizeof(universeStationLine), "Gargantua Lab S%02u: lens %.0f%% corpus %lu", bhSec, core2BlackStarLensing * 100.0f, (unsigned long)core2BhCorpus.samples);
+      snprintf(swarmLine, sizeof(swarmLine), "BlackStar: lens %.0f%% study %.0f%%, Janus learning %.0f%%", core2BlackStarLensing * 100.0f, core2BlackStarStudy * 100.0f, swarmLearningTotal * 100.0f);
+      snprintf(missionLine, sizeof(missionLine), "Science goal: observe Gargantua lens, temp %.1fC, best %.0f bits", core2BlackStarTemp, core2BlackStarBest);
+    } else {
+      snprintf(swarmLine, sizeof(swarmLine), "Рой: %s держит порядок %.0f%%, обучение %.0f%%", guardianName(bestGuardian), swarmShield * 100.0f, swarmLearningTotal * 100.0f);
+    }
 
     spaceConfidence = galaxyConfidence;
     spaceRisk = clipf(sectorHeat + averageRisk() * 0.7f + swarmEntropyTotal * 0.16f - swarmShield * 0.24f, 0.0f, 1.2f);
@@ -2367,6 +3413,41 @@ public:
     spaceAir = clipf(airScore / 5.0f, 0.0f, 1.5f);
     spaceSound = audioNode.refresh() ? clipf(audioNode.v0 / 1400.0f, 0.0f, 1.5f) : spaceSound * 0.96f;
     spaceMotion = clipf(stick.refresh() ? fabsf(stick.v0) / 260.0f + fabsf(stick.v1) / 260.0f : spaceMotion * 0.96f, 0.0f, 1.5f);
+  }
+
+  void updateDemiurgeGoal(float dt, bool foreground) {
+    uint32_t now = millis();
+    bool bhFresh = core2BlackStarFresh(now);
+    float bestFit = coreTargetBits ? clipf((float)coreBestBits / (float)coreTargetBits, 0.0f, 1.6f) : clipf((float)coreBestBits / 32.0f, 0.0f, 1.6f);
+    float science = clipf((bhFresh ? core2BlackStarStudy : 0.0f) * 0.34f +
+                          (bhFresh ? core2BlackStarLensing : 0.0f) * 0.18f +
+                          swarmLearningTotal * 0.22f + galaxyConfidence * 0.18f +
+                          bestFit * 0.08f, 0.0f, 1.5f);
+    float danger = clipf(universeThargoidPressure * 0.38f + averageRisk() * 0.34f +
+                         swarmEntropyTotal * 0.20f + (bhFresh ? core2BlackStarLoss * 0.05f : 0.0f), 0.0f, 1.6f);
+
+    pnpDiscovery = clipf(pnpDiscovery * (1.0f - 0.0030f * dt) + science * (0.0025f + (foreground ? 0.0010f : 0.0f)) * dt, 0.0f, 1.5f);
+    pnpBelief = clipf(pnpBelief * (1.0f - 0.0012f * dt) + (science + bestFit * 0.24f) * 0.0015f * dt, 0.05f, 1.5f);
+    pnpHunger = clipf(pnpHunger * (1.0f - 0.0010f * dt) + (danger + (1.0f - bestFit) * 0.20f) * 0.0018f * dt, 0.0f, 1.5f);
+    pnpMinerUtility = clipf(pnpMinerUtility * 0.996f + (bestFit * 0.40f + coreTheta.resonance * 0.22f + core2BhCorpus.laneTrust[core2BhCorpus.bestLane] * 0.22f + science * 0.16f) * 0.004f, 0.0f, 1.5f);
+
+    uint8_t nextMode = 0;
+    if (danger > 0.86f || coreJobExpired > coreSharesSent + 12UL) nextMode = 2;       // SURVIVE
+    else if (bhFresh && (core2BlackStarLensing > 0.78f || pnpHunger > 0.74f)) nextMode = 4; // HUNT
+    else if (pnpDiscovery > 0.62f && pnpMinerUtility > 0.52f) nextMode = 1;          // EXPLOIT
+    else if (spaceNovelty > 0.58f || (core2BhCorpus.samples & 63UL) == 17UL) nextMode = 3; // CHAOS
+    else nextMode = 0;                                                               // EXPLORE
+
+    uint8_t oldMode = demiurgeModeCode();
+    demiurgeMode = nextMode;
+    demiurgeModeStrength = clipf(demiurgeModeStrength * 0.94f + (science + pnpMinerUtility) * 0.03f + (nextMode == oldMode ? 0.02f : 0.0f), 0.05f, 1.0f);
+    snprintf(demiurgeLine, sizeof(demiurgeLine),
+             "DEMIURGE %s P=NP %.0f%% SHA %.0f%% hunger %.0f%% lane %s",
+             demiurgeModeName(demiurgeMode), pnpBelief * 100.0f, pnpDiscovery * 100.0f,
+             pnpHunger * 100.0f, core2BhLaneName(core2BhCorpus.bestLane));
+    if (oldMode != nextMode && foreground) {
+      snprintf(newsLine, sizeof(newsLine), "DEMIURGE: mode %s, Gargantua data guides SHA256 nonce order only", demiurgeModeName(nextMode));
+    }
   }
 
   float averageRisk() {
@@ -2389,6 +3470,7 @@ public:
 
     syncFromSwarm();
     updateUnifiedUniverse(dt, foreground);
+    updateDemiurgeGoal(dt, foreground);
     simulateEconomy(dt);
     simulateColony(dt, foreground);
     updateShips(dt);
@@ -2777,6 +3859,10 @@ public:
     uint8_t a = (uint8_t)(rnd01() * JANUS_GALAXY_NODES) % JANUS_GALAXY_NODES;
     uint8_t b = (uint8_t)(rnd01() * JANUS_GALAXY_NODES) % JANUS_GALAXY_NODES;
     uint8_t g = (uint8_t)(rnd01() * 4.0f) & 3;
+    if (core2BlackStarFresh(millis()) && rnd01() < 0.38f) {
+      snprintf(newsLine, sizeof(newsLine), "GALNET SCIENCE: Gargantua Lab lens %.0f%% study %.0f%%, miners keep the horizon mapped", core2BlackStarLensing * 100.0f, core2BlackStarStudy * 100.0f);
+      return;
+    }
     uint8_t mode = (uint8_t)(rnd01() * 16.0f) % 16;
     if (mode == 0) snprintf(newsLine, sizeof(newsLine), "ГАЛАКТИЧЕСКАЯ ГАЗЕТА: %s объявляет дефицит товара '%s', пилоты ворчат, но летят", p[a].name, goodName(g));
     else if (mode == 1) snprintf(newsLine, sizeof(newsLine), "СВОДКА: докеры Core2 Station поставили рекорд разгрузки. Янус сделал вид, что так и планировал");
@@ -2796,13 +3882,13 @@ public:
   }
 
   void nextView() {
-    s.viewMode = (s.viewMode + 1) % 7;
+    s.viewMode = (s.viewMode + 1) % VIEW_COUNT;
     snprintf(focusLine, sizeof(focusLine), "Экран: %s", viewName());
     if (!speakerMuted) M5.Speaker.tone(1175, 22);
   }
 
   void prevView() {
-    s.viewMode = (s.viewMode + 6) % 7;
+    s.viewMode = (s.viewMode + VIEW_COUNT - 1) % VIEW_COUNT;
     snprintf(focusLine, sizeof(focusLine), "Экран: %s", viewName());
     if (!speakerMuted) M5.Speaker.tone(988, 22);
   }
@@ -2819,7 +3905,8 @@ public:
     else if (s.viewMode == VIEW_FLEET) touchFleet(x, y);
     else if (s.viewMode == VIEW_MINER) touchMiner(x, y);
     else if (s.viewMode == VIEW_CODEX) touchCodex(x, y);
-    else touchModules(x, y);
+    else if (s.viewMode == VIEW_MODULES) touchModules(x, y);
+    else if (s.viewMode == VIEW_GARGANTUA) touchGargantuaLab(x, y);
   }
 
   void touchStation(int x, int y) {
@@ -2858,9 +3945,394 @@ public:
     }
   }
 
+  int eliteClampi(int v, int lo, int hi) const {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+  }
+
+  uint32_t eliteMix32(uint32_t h, uint32_t v) const {
+    h ^= v + 0x9E3779B9UL + (h << 6) + (h >> 2);
+    h ^= h >> 16;
+    h *= 0x7FEB352DUL;
+    h ^= h >> 15;
+    h *= 0x846CA68BUL;
+    h ^= h >> 16;
+    return h;
+  }
+
+  EliteSeed6 eliteBaseSeed() const {
+    // Bytes: 4A 5A 48 02 53 B7, packed as three little-endian 16-bit words.
+    return {0x5A4A, 0x0248, 0xB753};
+  }
+
+  uint64_t eliteSeedTo48(const EliteSeed6 &e) const {
+    return ((uint64_t)e.w0) | ((uint64_t)e.w1 << 16) | ((uint64_t)e.w2 << 32);
+  }
+
+  EliteSeed6 eliteSeedFrom48(uint64_t v) const {
+    EliteSeed6 e{};
+    e.w0 = (uint16_t)(v & 0xFFFFULL);
+    e.w1 = (uint16_t)((v >> 16) & 0xFFFFULL);
+    e.w2 = (uint16_t)((v >> 32) & 0xFFFFULL);
+    return e;
+  }
+
+  EliteSeed6 eliteGalaxySeed(uint8_t galaxyIndex) const {
+    uint64_t v = eliteSeedTo48(eliteBaseSeed()) & 0x0000FFFFFFFFFFFFULL;
+    for (uint8_t i = 0; i < (galaxyIndex & 7); ++i) {
+      v = ((v << 1) | (v >> 47)) & 0x0000FFFFFFFFFFFFULL;
+    }
+    return eliteSeedFrom48(v);
+  }
+
+  void eliteTwist(EliteSeed6 &e) const {
+    uint16_t t = (uint16_t)(e.w0 + e.w1 + e.w2);
+    e.w0 = e.w1;
+    e.w1 = e.w2;
+    e.w2 = t;
+  }
+
+  uint8_t eliteLo(uint16_t w) const { return (uint8_t)(w & 0xFF); }
+  uint8_t eliteHi(uint16_t w) const { return (uint8_t)(w >> 8); }
+
+  const char* eliteNamePair(uint8_t idx) const {
+    static const char* pairs[32] = {
+      "", "AN", "XE", "GE", "ZA", "CE", "BI", "SO",
+      "US", "ES", "AR", "MA", "IN", "DI", "RE", "A",
+      "ER", "AT", "EN", "BE", "RA", "LA", "VE", "TI",
+      "ED", "OR", "QU", "AN", "TE", "IS", "RI", "ON"
+    };
+    return pairs[idx & 31];
+  }
+
+  void eliteMakeName(const EliteSeed6 &seed, char *out, size_t outLen) {
+    if (!out || outLen == 0) return;
+    out[0] = 0;
+    EliteSeed6 e = seed;
+    uint8_t pairs = (eliteLo(seed.w0) & 0x40) ? 4 : 3;
+    for (uint8_t i = 0; i < pairs; ++i) {
+      uint8_t token = eliteHi(e.w2) & 31;
+      const char *p = eliteNamePair(token);
+      if (p[0]) strlcat(out, p, outLen);
+      eliteTwist(e);
+    }
+    if (!out[0]) strlcpy(out, "RA", outLen);
+    for (char *p = out; *p; ++p) *p = (char)tolower((unsigned char)*p);
+    out[0] = (char)toupper((unsigned char)out[0]);
+  }
+
+  uint32_t eliteSystemSignature(const EliteSeed6 &seed, uint8_t galaxyIndex, uint8_t sysIndex) const {
+    uint32_t h = 0xE117E198UL;
+    h = eliteMix32(h, seed.w0);
+    h = eliteMix32(h, seed.w1);
+    h = eliteMix32(h, seed.w2);
+    h = eliteMix32(h, ((uint32_t)galaxyIndex << 8) | sysIndex);
+    return h;
+  }
+
+  void eliteFillSystem(uint8_t galaxyIndex, uint8_t sysIndex, EliteSeed6 seed, EliteSystem &sys) {
+    eliteMakeName(seed, sys.name, sizeof(sys.name));
+    sys.x = eliteHi(seed.w1);
+    sys.y = eliteHi(seed.w0);
+    sys.economy = (eliteHi(seed.w0) >> 1) & 7;
+    sys.government = (eliteHi(seed.w1) >> 3) & 7;
+    sys.techLevel = 1 + ((sys.economy ^ 7) & 7) + (sys.government >> 1) + ((eliteLo(seed.w2) >> 6) & 3);
+    if (sys.techLevel > 15) sys.techLevel = 15;
+    sys.danger = (uint8_t)eliteClampi((7 - sys.government) + (sys.economy < 3 ? 1 : 0), 0, 9);
+    sys.population = (uint8_t)eliteClampi((sys.techLevel * 3) + sys.economy + sys.government + 1, 1, 99);
+    sys.radius = (uint16_t)(256 + (((uint16_t)eliteLo(seed.w2) << 1) | (eliteHi(seed.w2) & 1)));
+    sys.signature = eliteSystemSignature(seed, galaxyIndex, sysIndex);
+  }
+
+  void eliteGenerateGalaxy(uint8_t galaxyIndex) {
+    eliteGalaxyIndex = galaxyIndex & 7;
+    galaxyClusterIndex = eliteGalaxyIndex;
+    EliteSeed6 e = eliteGalaxySeed(eliteGalaxyIndex);
+    eliteSeedSignature = (uint32_t)eliteSeedTo48(e) ^ (uint32_t)(eliteSeedTo48(e) >> 24);
+    for (uint16_t i = 0; i < CORE2_ELITE_SYSTEMS; ++i) {
+      eliteFillSystem(eliteGalaxyIndex, (uint8_t)i, e, eliteSystems[i]);
+      eliteTwist(e); eliteTwist(e); eliteTwist(e); eliteTwist(e);
+    }
+    if (eliteCurrentSystem >= CORE2_ELITE_SYSTEMS) eliteCurrentSystem = 7;
+    if (eliteTargetSystem >= CORE2_ELITE_SYSTEMS) eliteTargetSystem = eliteCurrentSystem;
+    if (eliteCursorSystem >= CORE2_ELITE_SYSTEMS) eliteCursorSystem = eliteCurrentSystem;
+  }
+
+  uint16_t eliteDistanceSystems(uint8_t a, uint8_t b) const {
+    const EliteSystem &sa = eliteSystems[a];
+    const EliteSystem &sb = eliteSystems[b];
+    int dx = (int)sa.x - (int)sb.x;
+    int dy = (int)sa.y - (int)sb.y;
+    return (uint16_t)sqrtf((float)(dx * dx + dy * dy));
+  }
+
+  uint16_t eliteJumpRangeNow() const {
+    uint16_t range = 42;
+    range += (uint16_t)min(30, (int)s.stationLevel * 2);
+    if (core2BlackStarFresh(millis())) range += (uint16_t)eliteClampi((int)(core2BlackStarStudy * 12.0f), 0, 12);
+    if (s.gateInstalled) range += 8 + s.gateLevel * 3;
+    if (coreWorkerEnabled()) range += (uint16_t)min(8UL, coreBestBits > 22 ? coreBestBits - 22 : 0);
+    return range;
+  }
+
+  bool eliteTargetReachable(uint8_t sys) const {
+    return eliteDistanceSystems(eliteCurrentSystem, sys) <= eliteJumpRangeNow();
+  }
+
+  uint8_t eliteNearestInterestingSystem(uint8_t from, uint32_t seed) const {
+    uint8_t best = from;
+    int bestScore = -32768;
+    for (uint16_t i = 0; i < CORE2_ELITE_SYSTEMS; ++i) {
+      if (i == from) continue;
+      uint16_t d = eliteDistanceSystems(from, (uint8_t)i);
+      if (d > eliteJumpRangeNow()) continue;
+      const EliteSystem &es = eliteSystems[i];
+      int score = (int)es.techLevel * 11 - (int)es.danger * 9 - (int)d;
+      score += (int)(eliteMix32(seed, es.signature) & 31UL);
+      if (score > bestScore) { bestScore = score; best = (uint8_t)i; }
+    }
+    return best;
+  }
+
+  const EliteSystem& eliteCurrent() const { return eliteSystems[eliteCurrentSystem]; }
+  const EliteSystem& eliteTarget() const { return eliteSystems[eliteTargetSystem]; }
+  const EliteSystem& eliteCursor() const { return eliteSystems[eliteCursorSystem]; }
+
+  const char* eliteEconomyName(uint8_t e) const {
+    static const char* names[8] = {"richInd", "avgInd", "poorInd", "mainInd", "mainAg", "richAg", "avgAg", "poorAg"};
+    return names[e & 7];
+  }
+
+  const char* eliteGovernmentName(uint8_t g) const {
+    static const char* names[8] = {"Anarchy", "Feudal", "MultiGov", "Dict", "Commie", "Confed", "Demo", "Corp"};
+    return names[g & 7];
+  }
+
+  const char* eliteMapModeName() const {
+    switch (eliteMapMode % ELITE_MAP_COUNT) {
+      case ELITE_MAP_ROUTE: return "ROUTE";
+      case ELITE_MAP_KNOWN: return "KNOWN";
+      case ELITE_MAP_DENSE: return "DENSE";
+      default: return "LOCAL";
+    }
+  }
+
+  float elitePointSegmentDistance(uint8_t sys) const {
+    const EliteSystem &a = eliteSystems[eliteCurrentSystem];
+    const EliteSystem &b = eliteSystems[eliteTargetSystem];
+    const EliteSystem &pnt = eliteSystems[sys];
+    float ax = (float)a.x, ay = (float)a.y;
+    float bx = (float)b.x, by = (float)b.y;
+    float px = (float)pnt.x, py = (float)pnt.y;
+    float vx = bx - ax, vy = by - ay;
+    float len2 = vx * vx + vy * vy;
+    if (len2 < 1.0f) return hypotf(px - ax, py - ay);
+    float t = clipf(((px - ax) * vx + (py - ay) * vy) / len2, 0.0f, 1.0f);
+    float cx = ax + vx * t, cy = ay + vy * t;
+    return hypotf(px - cx, py - cy);
+  }
+
+  bool eliteNearKnownLandmark(uint8_t sys, uint8_t maxDist) const {
+    const EliteSystem &es = eliteSystems[sys];
+    for (uint8_t i = 0; i < cosmosCacheCount; i++) {
+      const CosmosLandmark &lm = cosmosCache[i];
+      if ((lm.galaxy & 7) != eliteGalaxyIndex) continue;
+      int dx = (int)es.x - (int)lm.x;
+      int dy = (int)es.y - (int)lm.y;
+      if ((dx * dx + dy * dy) <= (int)maxDist * (int)maxDist) return true;
+    }
+    return false;
+  }
+
+  bool eliteSystemVisible(uint8_t sys) const {
+    if (sys == eliteCurrentSystem || sys == eliteTargetSystem || sys == eliteCursorSystem || sys == elitePilotSystem) return true;
+    const EliteSystem &es = eliteSystems[sys];
+    uint16_t dCur = eliteDistanceSystems(eliteCurrentSystem, sys);
+    uint16_t dTgt = eliteDistanceSystems(eliteTargetSystem, sys);
+    switch (eliteMapMode % ELITE_MAP_COUNT) {
+      case ELITE_MAP_ROUTE:
+        return dCur <= eliteJumpRangeNow() + 10 || dTgt <= eliteJumpRangeNow() + 8 || elitePointSegmentDistance(sys) <= 9.5f;
+      case ELITE_MAP_KNOWN:
+        return eliteNearKnownLandmark(sys, 10) || es.techLevel >= 13 || es.danger >= 8;
+      case ELITE_MAP_DENSE:
+        return true;
+      default:
+        return dCur <= eliteJumpRangeNow() + 18 || dTgt <= 16 || eliteSectorFromSystem(sys, 0) == universeSelectedSector;
+    }
+  }
+
+  const char* cosmosTypeName(uint8_t type) const {
+    switch (type) {
+      case COSMOS_PULSAR: return "PULSAR";
+      case COSMOS_BLACK_HOLE: return "BH";
+      case COSMOS_NEBULA: return "NEB";
+      case COSMOS_GALAXY: return "GALAXY";
+      case COSMOS_LAB: return "LAB";
+      default: return "STAR";
+    }
+  }
+
+  void knownCosmosFallback() {
+    static const CosmosLandmark builtins[] = {
+      {"SOL",0,132,96,COSMOS_STAR,1,70,900},
+      {"SIRIUS",0,126,87,COSMOS_STAR,1,74,830},
+      {"VEGA",0,58,45,COSMOS_STAR,1,78,760},
+      {"BETELGEUSE",0,34,69,COSMOS_STAR,3,70,700},
+      {"RIGEL",0,28,101,COSMOS_STAR,3,72,690},
+      {"POLARIS",0,72,18,COSMOS_STAR,1,80,640},
+      {"CRAB-PSR",0,88,74,COSMOS_PULSAR,5,95,980},
+      {"VELA-PSR",0,154,188,COSMOS_PULSAR,6,93,960},
+      {"SGR-A",0,202,130,COSMOS_BLACK_HOLE,9,100,1200},
+      {"GARGANTUA",0,214,119,COSMOS_LAB,8,100,1300},
+      {"CYGNUS-X1",0,70,52,COSMOS_BLACK_HOLE,8,96,1040},
+      {"M31",0,12,24,COSMOS_GALAXY,4,90,860},
+      {"ORION-NEB",0,38,112,COSMOS_NEBULA,2,88,780},
+      {"LMC",0,184,224,COSMOS_GALAXY,4,82,820},
+      {"SMC",0,198,232,COSMOS_GALAXY,4,82,810},
+      {"J0437-4715",0,176,210,COSMOS_PULSAR,5,96,940},
+      {"M87",0,224,44,COSMOS_BLACK_HOLE,9,100,1100},
+      {"WOLF359",0,124,92,COSMOS_STAR,2,68,620}
+    };
+    cosmosCacheCount = (uint8_t)min((size_t)CORE2_COSMOS_CACHE_MAX, sizeof(builtins) / sizeof(builtins[0]));
+    memcpy(cosmosCache, builtins, sizeof(CosmosLandmark) * cosmosCacheCount);
+    knownCosmosCount = cosmosCacheCount;
+    knownCosmosBrightCount = cosmosCacheCount;
+  }
+
+  void knownCosmosScanSd(bool force) {
+    uint32_t now = millis();
+    if (!force && knownCosmosLastScanMs && now - knownCosmosLastScanMs < 60000UL) return;
+    knownCosmosLastScanMs = now;
+    knownCosmosCount = 0;
+    knownCosmosBrightCount = 0;
+    cosmosCacheCount = 0;
+
+    File f = SD.open(CORE2_KNOWN_COSMOS_FILE, FILE_READ);
+    if (!f) {
+      knownCosmosFallback();
+      if (!knownCosmosMissingLogged) {
+        knownCosmosMissingLogged = true;
+        Serial.printf("[CORE2/COSMOS] no %s, fallback landmarks=%u\n", CORE2_KNOWN_COSMOS_FILE, (unsigned)cosmosCacheCount);
+      }
+      return;
+    }
+    knownCosmosMissingLogged = false;
+
+    char line[128];
+    uint16_t pos = 0;
+    while (f.available()) {
+      char c = (char)f.read();
+      if (c == '\r') continue;
+      if (c != '\n' && pos < sizeof(line) - 1) {
+        line[pos++] = c;
+        continue;
+      }
+      line[pos] = 0;
+      pos = 0;
+      if (!line[0] || line[0] == '#') continue;
+
+      char *fields[8] = {};
+      uint8_t n = 0;
+      char *ctx = nullptr;
+      for (char *p = strtok_r(line, ",", &ctx); p && n < 8; p = strtok_r(nullptr, ",", &ctx)) fields[n++] = p;
+      if (n < 4) continue;
+      knownCosmosCount++;
+      int type = atoi(fields[1]);
+      int x = atoi(fields[2]);
+      int y = atoi(fields[3]);
+      int science = (n > 4) ? atoi(fields[4]) : 60;
+      int danger = (n > 5) ? atoi(fields[5]) : (type == COSMOS_BLACK_HOLE ? 8 : 2);
+      int influence = (n > 6) ? atoi(fields[6]) : (science * 10);
+      bool important = (type == COSMOS_PULSAR || type == COSMOS_BLACK_HOLE || type == COSMOS_LAB || science >= 80 || influence >= 800);
+      if (important) knownCosmosBrightCount++;
+      if (important && cosmosCacheCount < CORE2_COSMOS_CACHE_MAX) {
+        CosmosLandmark &lm = cosmosCache[cosmosCacheCount++];
+        memset(&lm, 0, sizeof(lm));
+        strlcpy(lm.name, fields[0], sizeof(lm.name));
+        lm.galaxy = eliteGalaxyIndex;
+        lm.type = (uint8_t)eliteClampi(type, 0, 255);
+        lm.x = (uint8_t)eliteClampi(x, 0, 255);
+        lm.y = (uint8_t)eliteClampi(y, 0, 255);
+        lm.science = (uint8_t)eliteClampi(science, 0, 100);
+        lm.danger = (uint8_t)eliteClampi(danger, 0, 9);
+        lm.influence = (uint16_t)eliteClampi(influence, 0, 65535);
+      }
+    }
+    f.close();
+    if (cosmosCacheCount == 0) knownCosmosFallback();
+    Serial.printf("[CORE2/COSMOS] known=%lu bright=%lu cache=%u file=%s\n",
+                  (unsigned long)knownCosmosCount, (unsigned long)knownCosmosBrightCount,
+                  (unsigned)cosmosCacheCount, CORE2_KNOWN_COSMOS_FILE);
+  }
+
+  uint8_t eliteSectorFromSystem(uint8_t sys, uint8_t localSector = 0) const {
+    const EliteSystem &es = eliteSystems[sys];
+    return (uint8_t)(((es.x >> 4) + (es.y >> 5) + (localSector & 3)) % UNIVERSE_SECTORS);
+  }
+
+  void eliteSetPilotFromLink(uint8_t g, uint8_t sys, uint8_t sector, const char* node, int8_t rssi, uint8_t mode, uint8_t objective, uint16_t dist) {
+    g &= 7;
+    if (g != eliteGalaxyIndex) eliteGenerateGalaxy(g);
+    elitePilotGalaxy = g;
+    elitePilotSystem = sys;
+    eliteCurrentSystem = sys;
+    eliteCursorSystem = sys;
+    if (eliteTargetSystem == eliteCurrentSystem || eliteDistanceSystems(eliteCurrentSystem, eliteTargetSystem) > 210) {
+      eliteTargetSystem = eliteNearestInterestingSystem(eliteCurrentSystem, eliteSeedSignature ^ sys ^ ((uint32_t)sector << 8));
+    }
+    galaxySelectedStar = eliteCurrentSystem;
+    universePilotSector = eliteSectorFromSystem(sys, sector);
+    universeSelectedSector = universePilotSector;
+    universePilotDistance = dist;
+    universePilotX = ((float)eliteSystems[sys].x - 128.0f) * 0.04f;
+    universePilotY = ((float)eliteSystems[sys].y - 128.0f) * 0.04f;
+    universePilotZ = ((float)((sector & 7) - 3)) * 0.22f;
+    elitePilotLinkLastMs = millis();
+    snprintf(elitePilotLine, sizeof(elitePilotLine), "ADV %s G%u/%03u %s S%02u obj%u mode%u rssi%d",
+             (node && node[0]) ? node : "Elite", (unsigned)g + 1U, (unsigned)sys,
+             eliteSystems[sys].name, (unsigned)universePilotSector, (unsigned)objective, (unsigned)mode, (int)rssi);
+    snprintf(universePilotLine, sizeof(universePilotLine), "PilotLink: G%u/%03u %s %.1fkly",
+             (unsigned)g + 1U, (unsigned)sys, eliteSystems[sys].name, (float)dist / 1000.0f);
+  }
+
+  void eliteBootGalaxy() {
+    eliteGalaxyIndex = prefs.getUChar("eliteG", galaxyClusterIndex) & 7;
+    eliteCurrentSystem = prefs.getUChar("eliteCur", 7);
+    eliteTargetSystem = prefs.getUChar("eliteTgt", eliteCurrentSystem);
+    eliteCursorSystem = prefs.getUChar("eliteCsr", eliteTargetSystem);
+    eliteMapMode = prefs.getUChar("eliteMap", ELITE_MAP_LOCAL) % ELITE_MAP_COUNT;
+    eliteGenerateGalaxy(eliteGalaxyIndex);
+    knownCosmosScanSd(true);
+    if (eliteTargetSystem == eliteCurrentSystem) eliteTargetSystem = eliteNearestInterestingSystem(eliteCurrentSystem, eliteSeedSignature);
+    galaxySelectedStar = eliteCurrentSystem;
+    snprintf(universeLine, sizeof(universeLine), "Elite lattice: G%u %u systems, %s, known %lu bright %lu",
+             (unsigned)eliteGalaxyIndex + 1U, (unsigned)CORE2_ELITE_SYSTEMS,
+             eliteMapModeName(),
+             (unsigned long)knownCosmosCount, (unsigned long)knownCosmosBrightCount);
+    Serial.printf("[CORE2/GALAXY] Elite lattice G%u map=%s sys=%u/%s target=%u/%s known=%lu bright=%lu\n",
+                  (unsigned)eliteGalaxyIndex + 1U, eliteMapModeName(),
+                  (unsigned)eliteCurrentSystem, eliteCurrent().name,
+                  (unsigned)eliteTargetSystem, eliteTarget().name,
+                  (unsigned long)knownCosmosCount, (unsigned long)knownCosmosBrightCount);
+    Serial.println("[CORE2/GALAXY] map filter active: tap lower center cycles LOCAL/ROUTE/KNOWN/DENSE");
+  }
+
+  void elitePersistGalaxy(bool force=false) {
+    static uint32_t lastEliteSaveMs = 0;
+    if (!force && millis() - lastEliteSaveMs < 30000UL) return;
+    lastEliteSaveMs = millis();
+    prefs.putUChar("eliteG", eliteGalaxyIndex);
+    prefs.putUChar("eliteCur", eliteCurrentSystem);
+    prefs.putUChar("eliteTgt", eliteTargetSystem);
+    prefs.putUChar("eliteCsr", eliteCursorSystem);
+    prefs.putUChar("eliteMap", eliteMapMode % ELITE_MAP_COUNT);
+  }
+
   const char* galaxyClusterName(uint8_t g) {
-    static const char* names[6] = {"SOL ANCHOR", "JANUS ARK", "ECHO VEIL", "BUZZ FORGE", "THARGOID RIFT", "OUTER DARK"};
-    return names[g % 6];
+    static char out[16];
+    snprintf(out, sizeof(out), "ELITE G%u", (unsigned)((g & 7) + 1U));
+    return out;
   }
 
   const char* milkySystemName(uint8_t i) {
@@ -2881,39 +4353,36 @@ public:
   }
 
   const char* selectedGalaxySystemName() {
-    if (galaxyClusterIndex == 0 && galaxySelectedStar < 18) return milkySystemName(galaxySelectedStar);
-    return janusSystemName(galaxyClusterIndex, galaxySelectedStar);
+    return eliteCursor().name;
   }
 
-  uint8_t galaxyStarCount() const { return (galaxyClusterIndex == 0) ? 18 : 22; }
+  uint16_t galaxyStarCount() const { return CORE2_ELITE_SYSTEMS; }
 
   uint8_t galaxyStarSector(uint8_t i) {
-    if (galaxyClusterIndex == 0) return (i * 5 + 3) & 15;
-    return (i * 7 + galaxyClusterIndex * 3 + 1) & 15;
+    return eliteSectorFromSystem(i, 0);
   }
 
   uint16_t galaxyStarColor(uint8_t i) {
-    if (galaxyClusterIndex == 0) {
-      if (i == 0) return pxGold();
-      if (i == 3 || i == 6 || i == 7) return grgb(180, 210, 255);
-      if (i == 10 || i == 16) return grgb(255, 132, 86);
-      return grgb(210, 230, 255);
-    }
-    uint8_t f = universeFaction[galaxyStarSector(i)];
-    return factionColor(f);
+    const EliteSystem &es = eliteSystems[i];
+    if (i == eliteCurrentSystem) return pxGreen();
+    if (i == eliteTargetSystem) return pxGold();
+    if (es.danger >= 7) return pxRed();
+    if (es.techLevel >= 11) return pxCyan();
+    uint8_t f = universeFaction[eliteSectorFromSystem(i, 0)];
+    return dim(factionColor(f), 0.82f);
   }
 
   void galaxySystemScreen(uint8_t i, int cx, int cy, int& sx, int& sy) {
-    uint32_t seed = 0x9E3779B9UL ^ ((uint32_t)galaxyClusterIndex * 0xA511E9B3UL) ^ ((uint32_t)i * 0x45D9F3BUL);
-    seed ^= (seed >> 16); seed *= 2246822519UL; seed ^= (seed >> 13);
-    float u = (float)(seed & 0x3FF) / 1023.0f;
-    float v = (float)((seed >> 10) & 0x3FF) / 1023.0f;
-    float spiral = (float)i * 0.83f + (float)galaxyClusterIndex * 0.71f;
-    float rad = (14.0f + v * 78.0f + (float)(i % 4) * 4.0f) * clipf(galaxyMapZoom, 0.60f, 1.52f);
-    float a = u * JANUS_TWO_PI + galaxyMapOrbit + sinf(spiral) * 0.42f;
-    float ell = 0.50f + 0.18f * cosf(galaxyMapPitch);
-    sx = cx + (int)(cosf(a) * rad);
-    sy = cy + (int)(sinf(a) * rad * ell + sinf(galaxyMapPitch) * rad * 0.22f);
+    const EliteSystem &es = eliteSystems[i];
+    float yaw = galaxyMapOrbit * 0.18f;
+    float zoom = clipf(galaxyMapZoom, 0.62f, 1.60f);
+    float dx = ((float)es.x - 128.0f) * zoom;
+    float dy = ((float)es.y - 128.0f) * zoom;
+    float rx = dx * cosf(yaw) - dy * sinf(yaw);
+    float ry = dx * sinf(yaw) + dy * cosf(yaw);
+    float ell = 0.58f + 0.16f * cosf(galaxyMapPitch);
+    sx = cx + (int)(rx * 1.02f);
+    sy = cy + (int)(ry * ell + sinf(galaxyMapPitch) * 12.0f);
   }
 
   void nudgeGalaxyCamera(float yaw, float pitch, float zoom) {
@@ -2927,8 +4396,29 @@ public:
 
   void touchGalaxy(int x, int y) {
     if (y > 154 && y < 190) {
-      if (x < 72) { galaxyClusterIndex = (galaxyClusterIndex + 5) % 6; galaxySelectedStar = 0; snprintf(focusLine, sizeof(focusLine), "Galaxy: %s", galaxyClusterName(galaxyClusterIndex)); return; }
-      if (x > 248) { galaxyClusterIndex = (galaxyClusterIndex + 1) % 6; galaxySelectedStar = 0; snprintf(focusLine, sizeof(focusLine), "Galaxy: %s", galaxyClusterName(galaxyClusterIndex)); return; }
+      if (x < 72) {
+        eliteGenerateGalaxy((eliteGalaxyIndex + 7) & 7);
+        knownCosmosScanSd(true);
+        eliteCursorSystem = eliteCurrentSystem;
+        eliteTargetSystem = eliteNearestInterestingSystem(eliteCurrentSystem, eliteSeedSignature);
+        snprintf(focusLine, sizeof(focusLine), "Galaxy: %s", galaxyClusterName(eliteGalaxyIndex));
+        elitePersistGalaxy(true);
+        return;
+      }
+      if (x > 248) {
+        eliteGenerateGalaxy((eliteGalaxyIndex + 1) & 7);
+        knownCosmosScanSd(true);
+        eliteCursorSystem = eliteCurrentSystem;
+        eliteTargetSystem = eliteNearestInterestingSystem(eliteCurrentSystem, eliteSeedSignature);
+        snprintf(focusLine, sizeof(focusLine), "Galaxy: %s", galaxyClusterName(eliteGalaxyIndex));
+        elitePersistGalaxy(true);
+        return;
+      }
+      eliteMapMode = (eliteMapMode + 1) % ELITE_MAP_COUNT;
+      snprintf(focusLine, sizeof(focusLine), "Galaxy map mode: %s", eliteMapModeName());
+      Serial.printf("[CORE2/GALAXY] map mode=%s\n", eliteMapModeName());
+      elitePersistGalaxy(true);
+      return;
     }
     if (y > 44 && y < 154) {
       if (x < 58) { nudgeGalaxyCamera(-0.22f, 0.0f, 0.0f); return; }
@@ -2948,10 +4438,14 @@ public:
     }
     if (hit >= 0 && best < 18.0f) {
       galaxySelectedStar = (uint8_t)hit;
-      universeSelectedSector = galaxyStarSector(galaxySelectedStar);
-      s.selected = galaxySelectedStar % JANUS_GALAXY_NODES;
-      snprintf(focusLine, sizeof(focusLine), "Galaxy: %s / S%02u", selectedGalaxySystemName(), universeSelectedSector);
+      eliteCursorSystem = (uint8_t)hit;
+      universeSelectedSector = eliteSectorFromSystem(eliteCursorSystem, 0);
+      if (eliteTargetReachable(eliteCursorSystem)) eliteTargetSystem = eliteCursorSystem;
+      s.selected = universeSelectedSector % JANUS_GALAXY_NODES;
+      snprintf(focusLine, sizeof(focusLine), "Galaxy: G%u/%03u %s / S%02u", (unsigned)eliteGalaxyIndex + 1U, (unsigned)eliteCursorSystem, selectedGalaxySystemName(), universeSelectedSector);
       snprintf(janusLine, sizeof(janusLine), "Янус: выбираю систему %s, faction %s", selectedGalaxySystemName(), factionName(universeFaction[universeSelectedSector]));
+      snprintf(janusLine, sizeof(janusLine), "Janus: Elite system %s TL%u D%u %s %s", selectedGalaxySystemName(), (unsigned)eliteCursor().techLevel, (unsigned)eliteCursor().danger, eliteEconomyName(eliteCursor().economy), eliteGovernmentName(eliteCursor().government));
+      elitePersistGalaxy(true);
       proceduralNews(true);
     }
   }
@@ -3842,8 +5336,8 @@ public:
     int cy = my + 63;
     uint16_t bg = pxPanel();
     drawPanelFrame(mx, my, mw, mh, bg, pxFrame());
-    drawText(mx + 8, my + 6, pxAmber(), bg, "JANUS CLUSTER / MILKY DB");
-    drawTextf(mx + 180, my + 6, pxCyan(), bg, "%s", galaxyClusterName(galaxyClusterIndex));
+    drawText(mx + 8, my + 6, pxAmber(), bg, "ELITE SEED GALAXY / KNOWN SKY");
+    drawTextf(mx + 176, my + 6, pxCyan(), bg, "%s %s", galaxyClusterName(eliteGalaxyIndex), eliteMapModeName());
 
     // Deterministic Elite-like procedural projection: stable seed, no external assets.
     for (int i = 0; i < 96; i++) {
@@ -3859,43 +5353,84 @@ public:
       canvas.drawEllipse(cx, cy, (int)(r * galaxyMapZoom), max(8, er), grgb(22, 26, 42));
     }
 
-    if (galaxyClusterIndex == 0) {
-      pixCross(cx, cy, pxGold());
-      drawText(cx + 8, cy - 4, pxGold(), bg, "SOL");
-    } else {
-      drawPixelGlow(cx, cy, factionColor(galaxyClusterIndex % 7), 9, (millis()/140)&31);
-      pixCross(cx, cy, pxCyan());
-      drawText(cx + 8, cy - 4, pxCyan(), bg, "JANUS HUB");
+    drawPixelGlow(cx, cy, factionColor(eliteGalaxyIndex % 7), 7, (millis()/140)&31);
+    pixCross(cx, cy, pxCyan());
+    drawText(cx + 8, cy - 4, pxCyan(), bg, "CORE2 CMD");
+
+    bool bhSeen = core2BlackStarFresh(millis());
+    if (bhSeen || galaxyClusterIndex >= 4) {
+      int bx = mx + mw - 48;
+      int by = my + 38;
+      float lens = bhSeen ? clipf(core2BlackStarLensing, 0.0f, 1.0f) : (0.32f + 0.10f * sinf(routePhase * 4.0f));
+      uint16_t ring = grgb(255, 150, 70);
+      canvas.drawEllipse(bx, by, 18 + (int)(lens * 6.0f), 7 + (int)(lens * 3.0f), dim(ring, 0.70f));
+      canvas.drawEllipse(bx, by + 1, 26 + (int)(lens * 8.0f), 10 + (int)(lens * 4.0f), dim(pxCyan(), 0.26f + lens * 0.24f));
+      canvas.fillCircle(bx, by, 7, grgb(0, 1, 5));
+      canvas.drawCircle(bx, by, 8, dim(ring, 0.92f));
+      drawText(bx - 31, by + 15, bhSeen ? pxAmber() : dim(pxAmber(), 0.58f), bg, "GARGANTUA");
+      drawTextf(bx - 29, by + 25, dim(pxCyan(), 0.86f), bg, "study %02d", (int)(clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f));
     }
 
-    uint8_t count = galaxyStarCount();
-    for (uint8_t i = 0; i < count; i++) {
+    uint16_t count = galaxyStarCount();
+    int curX, curY, tgtX, tgtY, pilX, pilY;
+    galaxySystemScreen(eliteCurrentSystem, cx, cy, curX, curY);
+    galaxySystemScreen(eliteTargetSystem, cx, cy, tgtX, tgtY);
+    galaxySystemScreen(elitePilotSystem, cx, cy, pilX, pilY);
+    canvas.drawLine(curX, curY, tgtX, tgtY, eliteTargetReachable(eliteTargetSystem) ? dim(pxGreen(), 0.56f) : dim(pxRed(), 0.45f));
+    canvas.drawCircle(curX, curY, (int)clipf((float)eliteJumpRangeNow() * 0.36f * clipf(galaxyMapZoom, 0.62f, 1.60f), 5.0f, 34.0f), dim(pxGreen(), 0.18f));
+    if (elitePilotLinkLastMs && millis() - elitePilotLinkLastMs < 26000UL) {
+      canvas.drawCircle(pilX, pilY, 6, pxCyan());
+      canvas.drawPixel(pilX, pilY, pxGold());
+    }
+
+    for (uint8_t i = 0; i < cosmosCacheCount; i++) {
+      const CosmosLandmark &lm = cosmosCache[i];
+      if ((lm.galaxy & 7) != eliteGalaxyIndex) continue;
+      float zoom = clipf(galaxyMapZoom, 0.62f, 1.60f);
+      int lx = cx + (int)(((float)lm.x - 128.0f) * zoom * 1.02f);
+      int ly = cy + (int)(((float)lm.y - 128.0f) * zoom * (0.58f + 0.16f * cosf(galaxyMapPitch)) + sinf(galaxyMapPitch) * 12.0f);
+      uint16_t lc = pxGold();
+      if (lm.type == COSMOS_BLACK_HOLE || lm.type == COSMOS_LAB) lc = pxViolet();
+      else if (lm.type == COSMOS_PULSAR) lc = pxCyan();
+      else if (lm.type == COSMOS_NEBULA) lc = grgb(255, 136, 78);
+      else if (lm.type == COSMOS_GALAXY) lc = grgb(110, 150, 255);
+      canvas.drawLine(lx - 3, ly, lx + 3, ly, lc);
+      canvas.drawLine(lx, ly - 3, lx, ly + 3, lc);
+      if (lm.type == COSMOS_LAB) canvas.drawCircle(lx, ly, 5, dim(lc, 0.72f));
+    }
+
+    uint16_t visibleSystems = 0;
+    for (uint16_t i = 0; i < count; i++) {
+      if (!eliteSystemVisible((uint8_t)i)) continue;
+      visibleSystems++;
       int sx, sy; galaxySystemScreen(i, cx, cy, sx, sy);
       if (sx < mx + 4 || sx > mx + mw - 4 || sy < my + 18 || sy > my + mh - 8) continue;
       uint8_t sec = galaxyStarSector(i);
       uint16_t col = galaxyStarColor(i);
-      bool sel = (i == galaxySelectedStar);
-      int rr = 2 + ((i + galaxyClusterIndex) % 3);
+      bool sel = (i == eliteCursorSystem);
+      int rr = (i == eliteCurrentSystem || i == eliteTargetSystem) ? 3 : 1 + ((i + eliteGalaxyIndex) & 1);
       if (sec == universeBuildTarget) canvas.drawCircle(sx, sy, rr + 5, pxGold());
       if (sec == universePilotSector) canvas.drawCircle(sx, sy, rr + 7, pxCyan());
       if (universeThreat[sec] > 0.70f) canvas.drawCircle(sx, sy, rr + 4, pxRed());
       if (sel) drawPixelGlow(sx, sy, pxGold(), 8, i);
-      drawDitherDisc(sx, sy, rr, col, dim(col, 0.55f), bg, i + galaxyClusterIndex * 17);
-      if (sel || i < 6 || (galaxyClusterIndex == 0 && i < 12)) {
-        const char* nm = (galaxyClusterIndex == 0) ? milkySystemName(i) : janusSystemName(galaxyClusterIndex, i);
-        drawText(sx + 5, sy - 2, sel ? pxGold() : dim(col, 0.90f), bg, nm);
+      uint16_t shade = (eliteMapMode == ELITE_MAP_DENSE && !(i == eliteCurrentSystem || i == eliteTargetSystem || sel)) ? dim(col, 0.50f) : col;
+      drawDitherDisc(sx, sy, rr, shade, dim(shade, 0.55f), bg, i + galaxyClusterIndex * 17);
+      if (sel || i == eliteCurrentSystem || i == eliteTargetSystem || (eliteMapMode != ELITE_MAP_DENSE && i == elitePilotSystem)) {
+        drawText(sx + 5, sy - 2, sel ? pxGold() : dim(col, 0.90f), bg, eliteSystems[i].name);
       }
     }
 
-    uint8_t sec = galaxyStarSector(galaxySelectedStar);
+    galaxySelectedStar = eliteCursorSystem;
+    uint8_t sec = galaxyStarSector(eliteCursorSystem);
     drawPanelFrame(12, 154, 176, 55, bg, pxFrame());
-    drawTextf(18, 160, pxAmber(), bg, "SELECT %s", selectedGalaxySystemName());
+    drawTextf(18, 160, pxAmber(), bg, "G%u/%03u %s", (unsigned)eliteGalaxyIndex + 1U, (unsigned)eliteCursorSystem, selectedGalaxySystemName());
     drawTextf(18, 171, grgb(204,220,228), bg, "S%02u %s own:%s", sec, universePlanetName(sec), universeOwnerName(universeOwner[sec]));
-    drawTextf(18, 182, factionColor(universeFaction[sec]), bg, "faction %s  rel %.0f%%", factionName(universeFaction[sec]), clipf((p[s.selected % JANUS_GALAXY_NODES].relation + 1.0f) * 50.0f, 0.0f, 100.0f));
-    drawTextf(18, 193, pxCyan(), bg, "yaw %.0f zoom %.0f  star %u/%u", galaxyMapOrbit * 57.3f, galaxyMapZoom * 100.0f, galaxySelectedStar + 1, count);
+    drawTextf(18, 182, factionColor(universeFaction[sec]), bg, "TL%u D%u %s", (unsigned)eliteCursor().techLevel, (unsigned)eliteCursor().danger, factionName(universeFaction[sec]));
+    drawTextf(18, 193, eliteTargetReachable(eliteCursorSystem) ? pxGreen() : pxRed(), bg, "%s d%u/r%u show%u", sectorActivityName(sec), (unsigned)eliteDistanceSystems(eliteCurrentSystem, eliteCursorSystem), (unsigned)eliteJumpRangeNow(), (unsigned)visibleSystems);
 
     drawUniverseSectorMiniMap(192, 154, 118, 55, bg);
-    drawText(16, 210, pxCyan(), pxBg(), "left/right: galaxy  edges: rotate  center: select");
+    drawTextf(198, 210, dim(pxAmber(), 0.90f), pxBg(), "hidden %u K%lu", (unsigned)(count - visibleSystems), (unsigned long)knownCosmosCount);
+    drawClippedText(16, 210, pxCyan(), pxBg(), elitePilotLine, 28);
     drawNavButtons();
     drawNewsTicker();
   }
@@ -3906,7 +5441,17 @@ public:
     int rr = 4 + (int)clipf(p[i].signal * 5.0f + p[i].wealth * 0.8f, 0.0f, 7.0f);
     if (!perfMode && (int)s.selected == i) drawPixelGlow(px, py, pxGold(), rr+7, i);
     if (p[i].risk > 0.55f) canvas.drawCircle(px, py, rr + 5, pxRed());
-    drawDitherDisc(px, py, rr, col, dim(col,0.65f), grgb(8,10,16), i);
+    if (i == 4) {
+      float lens = core2BlackStarFresh(millis()) ? clipf(core2BlackStarLensing, 0.0f, 1.0f) : clipf(p[i].pulse, 0.0f, 1.0f);
+      uint16_t ring = grgb(255, 150, 70);
+      canvas.drawEllipse(px, py, rr + 7 + (int)(lens * 4.0f), max(3, rr / 2 + 2), dim(ring, 0.68f));
+      canvas.drawEllipse(px, py + 1, rr + 11 + (int)(lens * 5.0f), max(4, rr / 2 + 4), dim(pxCyan(), 0.24f + lens * 0.28f));
+      canvas.fillCircle(px, py, rr, grgb(0, 1, 5));
+      canvas.drawCircle(px, py, rr + 1, dim(ring, 0.88f));
+      if (!perfMode && core2BlackStarFresh(millis())) drawPixelGlow(px, py, ring, rr + 9, i + (millis() / 180));
+    } else {
+      drawDitherDisc(px, py, rr, col, dim(col,0.65f), grgb(8,10,16), i);
+    }
     drawText(px - 12, py + rr + 5, p[i].online ? grgb(210,226,238) : grgb(110,118,138), pxBg(), p[i].role);
   }
 
@@ -3931,7 +5476,8 @@ public:
     drawBar(18, 151, 118, clipf((float)pirateKills / 16.0f,0,1), pxRed());
     drawTextf(18, 164, grgb(220,232,245), bg, "tech %s", techName(techUnlocked));
     drawBar(18, 175, 118, techProgress, pxCyan());
-    drawTextf(18, 187, grgb(190,210,226), bg, "risk %02d morale %02d", (int)(clipf(spaceRisk,0,1)*100.0f), (int)(s.morale*100.0f));
+    if (core2BlackStarFresh(millis())) drawTextf(18, 187, grgb(255,190,120), bg, "BH lens %02d study %02d", (int)(clipf(core2BlackStarLensing,0,1)*100.0f), (int)(clipf(core2BlackStarStudy,0,1)*100.0f));
+    else drawTextf(18, 187, grgb(190,210,226), bg, "risk %02d morale %02d", (int)(clipf(spaceRisk,0,1)*100.0f), (int)(s.morale*100.0f));
 
     drawPanelFrame(160, 46, 150, 150, bg, pxFrame());
     drawText(168, 52, pxAmber(), bg, "STATION INFRA");
@@ -4004,7 +5550,6 @@ public:
     drawNewsTicker();
   }
 
-
   void drawMinerView(bool minerActive) {
     drawCinematicBackground();
     drawTopHud(minerActive);
@@ -4023,6 +5568,7 @@ public:
     }
     float bestProgress = coreTargetBits ? clipf((float)coreBestBits / (float)coreTargetBits, 0.0f, 1.0f) : clipf((float)coreBestBits / 64.0f, 0.0f, 1.0f);
     float buzzBest = coreTargetBits ? clipf((float)buzz.bestBits / (float)coreTargetBits, 0.0f, 1.0f) : clipf((float)buzz.bestBits / 64.0f, 0.0f, 1.0f);
+    bool buzzLink = core2BuzzUiFresh(now);
 
     drawPanelFrame(10, 46, 145, 150, bg, pxFrame());
     drawText(18, 52, pxAmber(), bg, "CORE2 MINER");
@@ -4041,15 +5587,15 @@ public:
 
     drawPanelFrame(165, 46, 145, 150, bg, pxFrame());
     drawText(173, 52, pxAmber(), bg, "BUZZ / SWARM POOL");
-    drawTextf(173, 66, grgb(220,232,245), bg, "buzz %s", buzz.online ? "ONLINE" : "OFFLINE");
+    drawTextf(173, 66, grgb(220,232,245), bg, "buzz %s", buzzLink ? "ONLINE" : "OFFLINE");
     drawTextf(173, 78, grgb(200,216,230), bg, "hash %s H/s", compactU(buzz.hashRate).c_str());
     drawMiniBar(173, 90, 118, clipf((float)buzz.hashRate / 5000.0f, 0.0f, 1.0f), pxCyan());
     drawTextf(173, 102, grgb(200,216,230), bg, "shares %lu rej %lu", (unsigned long)buzz.shares, (unsigned long)buzz.rejects);
     drawTextf(173, 114, grgb(200,216,230), bg, "best %lu diff %.2f", (unsigned long)buzz.bestBits, buzz.diff);
     drawMiniBar(173, 126, 118, buzzBest, pxGold());
     drawTextf(173, 138, grgb(200,216,230), bg, "job %s", coreJobText);
-    drawTextf(173, 150, grgb(200,216,230), bg, "range %lu", (unsigned long)coreJob.rangeSize);
-    drawTextf(173, 162, grgb(200,216,230), bg, "last share %lus", (unsigned long)(shareAge/1000UL));
+    drawClippedText(173, 150, pxAmber(), bg, core2BhCorpus.line, 21);
+    drawTextf(173, 162, grgb(200,216,230), bg, "range %lu", (unsigned long)coreJob.rangeSize);
     drawMiniBar(173, 174, 118, clipf(homeSync(),0,1), pxGreen());
     drawTextf(173, 184, grgb(170,196,218), bg, "sync %.2f entropy %.2f", homeSync(), homeEntropy());
 
@@ -4066,6 +5612,126 @@ public:
 
     drawNavButtons();
     drawNewsTicker();
+  }
+
+  void drawGargantuaLens(int cx, int cy, int radius, uint16_t bg) {
+    bool fresh = core2BlackStarFresh(millis());
+    float lens = fresh ? clipf(core2BlackStarLensing, 0.0f, 1.0f) : 0.34f;
+    float study = fresh ? clipf(core2BlackStarStudy, 0.0f, 1.0f) : 0.18f;
+    uint16_t amber = grgb(255, 156, 72);
+    uint16_t blue = grgb(76, 210, 255);
+    for (int i = 0; i < 4; i++) {
+      int rx = radius + 18 + i * 10 + (int)(lens * 10.0f);
+      int ry = 6 + i * 3 + (int)(study * 4.0f);
+      uint16_t c = (i & 1) ? dim(blue, 0.24f + lens * 0.24f) : dim(amber, 0.34f + study * 0.24f);
+      canvas.drawEllipse(cx, cy + (i & 1), rx, ry, c);
+    }
+    for (int i = 0; i < (perfMode ? 34 : 58); i++) {
+      uint32_t h = 0x9E3779B9UL ^ (uint32_t)(i * 2654435761UL) ^ (millis() / 70UL);
+      float a = ((float)((h >> 8) & 1023) / 1024.0f) * JANUS_TWO_PI;
+      int rr = radius + 18 + (int)((h & 31) * (0.95f + lens * 0.55f));
+      int x = cx + (int)(cosf(a) * rr);
+      int y = cy + (int)(sinf(a) * rr * (0.18f + study * 0.05f));
+      canvas.drawPixel(x, y, ((h & 3) == 0) ? pxGold() : dim(blue, 0.70f));
+    }
+    canvas.fillCircle(cx, cy, radius + 3, grgb(0, 1, 5));
+    canvas.drawCircle(cx, cy, radius + 4, dim(amber, 0.90f));
+    canvas.drawCircle(cx, cy, radius + 7, dim(blue, 0.35f + lens * 0.20f));
+    canvas.drawFastHLine(cx - radius - 24, cy, radius * 2 + 48, dim(amber, 0.26f));
+    drawPixelGlow(cx, cy, dim(amber, 0.75f), radius + 12, (millis() / 180UL) & 31);
+    drawTextf(cx - 39, cy + radius + 17, pxAmber(), bg, "S%02u GARGANTUA", blackHoleSector());
+  }
+
+  void drawGargantuaLabView(bool minerActive) {
+    drawCinematicBackground();
+    drawTopHud(minerActive);
+    drawMindFeed();
+    uint16_t bg = pxPanel();
+    uint8_t bh = blackHoleSector();
+    uint32_t now = millis();
+    bool fresh = core2BlackStarFresh(now);
+    bool murphFresh = core2MurphFresh(now);
+    bool bhPnFresh = core2BlackStarCortexFresh(now);
+    bool pnFresh = murphFresh || bhPnFresh || core2PnCortexFresh(now);
+    char bhSig[9];
+    char yaksSig[9];
+    uint32_t bhHash = bhPnFresh ? (core2BlackStarCortex.packetHash ^ core2BlackStarCortex.prevHash ^ core2BlackStarCortex.jobSig) : 0;
+    uint32_t yaksHash = murphFresh ? (core2MurphCortex.packetHash ^ core2MurphCortex.prevHash ^ core2MurphCortex.jobSig) : 0;
+    for (uint8_t i = 0; i < 8; ++i) {
+      bhSig[i] = ((bhHash >> i) & 1UL) ? '|' : '.';
+      yaksSig[i] = ((yaksHash >> i) & 1UL) ? '|' : '.';
+    }
+    bhSig[8] = 0;
+    yaksSig[8] = 0;
+
+    drawPanelFrame(10, 44, 148, 160, bg, pxFrame());
+    drawText(18, 50, pxAmber(), bg, "GARGANTUA LAB");
+    drawGargantuaLens(84, 104, 15, bg);
+    drawTextf(18, 168, fresh ? pxCyan() : grgb(140,150,160), bg, "%s RSSI %d", fresh ? core2BlackStarNode : "BH WAIT", (int)core2BlackStarRssi);
+    drawTextf(18, 180, grgb(206,222,232), bg, "T %.1fC H %s", core2BlackStarTemp, compactU((uint32_t)max(0.0f, core2BlackStarHash)).c_str());
+    drawTextf(18, 192, pxGold(), bg, "best %.0f corpus %lu", core2BlackStarBest, (unsigned long)core2BhCorpus.samples);
+
+    drawPanelFrame(166, 44, 144, 160, bg, pxFrame());
+    drawText(174, 50, pxAmber(), bg, "P=NP / SHA256");
+    drawTextf(174, 64, grgb(212,226,238), bg, "mode %s", demiurgeModeName(demiurgeMode));
+    drawMiniBar(174, 76, 118, pnpBelief, pxCyan());
+    drawTextf(174, 84, grgb(190,210,226), bg, "belief %02d dis %02d", (int)(clipf(pnpBelief, 0.0f, 1.0f) * 100.0f), (int)(clipf(pnpDiscovery, 0.0f, 1.0f) * 100.0f));
+    drawMiniBar(174, 96, 118, fresh ? core2BlackStarLensing : 0.0f, grgb(255, 156, 72));
+    drawTextf(174, 104, grgb(190,210,226), bg, "lens %02d study %02d", (int)(clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f), (int)(clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f));
+    drawMiniBar(174, 116, 118, bhPnFresh ? core2BlackStarCortex.silicon : 0.0f, bhPnFresh ? pxAmber() : grgb(92,96,112));
+    drawTextf(174, 124, bhPnFresh ? pxGold() : grgb(140,150,160), bg,
+              "BH %s B%u/%u", bhPnFresh ? core2PnLaneName(core2BlackStarCortex.lane, core2BlackStarCortex.kind) : "WAIT",
+              (unsigned)(bhPnFresh ? core2BlackStarCortex.bestBits : 0),
+              (unsigned)(bhPnFresh ? core2BlackStarCortex.targetBits : 0));
+    drawTextf(174, 136, bhPnFresh ? pxAmber() : grgb(122,126,142), bg,
+              "M%02d Z%02d %s",
+              (int)(clipf(bhPnFresh ? core2BlackStarCortex.murph : 0.0f, 0.0f, 1.0f) * 99.0f),
+              (int)(clipf(bhPnFresh ? core2BlackStarCortex.labyrinth : 0.0f, 0.0f, 1.0f) * 99.0f),
+              bhPnFresh ? bhSig : "........");
+    drawMiniBar(174, 148, 118, murphFresh ? core2MurphCortex.silicon : 0.0f, murphFresh ? pxViolet() : grgb(92,96,112));
+    drawTextf(174, 156, murphFresh ? pxCyan() : grgb(140,150,160), bg,
+              "YAKS %s B%u/%u", murphFresh ? core2PnLaneName(core2MurphCortex.lane, core2MurphCortex.kind) : "WAIT",
+              (unsigned)(murphFresh ? core2MurphCortex.bestBits : 0),
+              (unsigned)(murphFresh ? core2MurphCortex.targetBits : 0));
+    drawTextf(174, 168, murphFresh ? pxViolet() : grgb(122,126,142), bg,
+              "M%02d Z%02d %s",
+              (int)(clipf(murphFresh ? core2MurphCortex.murph : 0.0f, 0.0f, 1.0f) * 99.0f),
+              (int)(clipf(murphFresh ? core2MurphCortex.labyrinth : 0.0f, 0.0f, 1.0f) * 99.0f),
+              murphFresh ? yaksSig : "........");
+    drawTextf(174, 186, pnFresh ? pxGreen() : grgb(130,142,150), bg, "H %s/%s",
+              bhPnFresh ? compactU(core2BlackStarCortex.hashRate).c_str() : "-",
+              murphFresh ? compactU(core2MurphCortex.hashRate).c_str() : "-");
+    drawTextf(238, 196, pxAmber(), bg, "S%02u", bh);
+
+    drawPanelFrame(18, 207, 284, 10, bg, dim(pxFrame(), 0.80f));
+    drawTextf(24, 210, grgb(170,196,220), bg, "NAS tx%lu fail%lu  %s", (unsigned long)core2NasBrainTx, (unsigned long)core2NasBrainFail, pnFresh ? "PN linked" : "PN wait");
+    drawNavButtons();
+  }
+
+  void touchGargantuaLab(int x, int y) {
+    uint8_t bh = blackHoleSector();
+    universeSelectedSector = bh;
+    universeServiceSector = bh;
+    universeBuildTarget = bh;
+    universeOwner[bh] = 1;
+    universeFaction[bh] = 0;
+    if (universeStationLevel[bh] == 0) universeStationLevel[bh] = 1;
+    if (x < 112) {
+      demiurgeMode = 0;
+      pnpDiscovery = clipf(pnpDiscovery + 0.012f, 0.0f, 1.5f);
+      snprintf(focusLine, sizeof(focusLine), "Gargantua Lab: visual study focus");
+    } else if (x > 218) {
+      demiurgeMode = 4;
+      pnpHunger = clipf(pnpHunger + 0.015f, 0.0f, 1.5f);
+      snprintf(focusLine, sizeof(focusLine), "Gargantua Lab: horizon hunt bias");
+    } else {
+      demiurgeMode = 1;
+      pnpMinerUtility = clipf(pnpMinerUtility + 0.020f, 0.0f, 1.5f);
+      snprintf(focusLine, sizeof(focusLine), "Gargantua Lab: miner bias audit");
+    }
+    core2LastNasBrainMs = 0;
+    snprintf(core2NasBrainLine, sizeof(core2NasBrainLine), "NAS brain: report queued");
+    if (!speakerMuted) M5.Speaker.tone(740, 35);
   }
 
 
@@ -4195,6 +5861,7 @@ public:
     else if (s.viewMode == VIEW_MINER) drawMinerView(minerActive);
     else if (s.viewMode == VIEW_CODEX) drawCodexView(minerActive);
     else if (s.viewMode == VIEW_MODULES) drawModulesView(minerActive);
+    else if (s.viewMode == VIEW_GARGANTUA) drawGargantuaLabView(minerActive);
     else drawStationView(minerActive);
   }
 
@@ -4209,6 +5876,394 @@ bool core2SdArchiveOk = false;
 uint32_t core2SdArchiveRows = 0;
 uint32_t core2LastUniverseArchiveMs = 0;
 
+const char* core2BhLaneName(uint8_t lane) {
+  switch (lane & 3) {
+    case 1: return "ORBIT";
+    case 2: return "LENS";
+    case 3: return "HORIZON";
+    default: return "LINEAR";
+  }
+}
+
+bool core2PnCortexFresh(uint32_t now) {
+  return core2PnCortex.seen && core2PnCortex.lastMs && (now - core2PnCortex.lastMs < 22000UL);
+}
+
+bool core2MurphFresh(uint32_t now) {
+  return core2MurphCortex.seen && core2MurphCortex.lastMs && (now - core2MurphCortex.lastMs < 22000UL);
+}
+
+bool core2BlackStarCortexFresh(uint32_t now) {
+  return core2BlackStarCortex.seen && core2BlackStarCortex.lastMs && (now - core2BlackStarCortex.lastMs < 22000UL);
+}
+
+bool core2PnLooksLikeYaks(const char* id, const char* kind, uint8_t role) {
+  String sid = String(id ? id : "");
+  String sk = String(kind ? kind : "");
+  sid.toLowerCase();
+  sk.toLowerCase();
+  return role == 12 || sid.indexOf("yaks") >= 0 || sk.indexOf("yaks") >= 0 || sk.indexOf("gate") >= 0;
+}
+
+bool core2PnLooksLikeAdvSky(const char* id, const char* kind, uint8_t role) {
+  String sid = String(id ? id : "");
+  String sk = String(kind ? kind : "");
+  sid.toLowerCase();
+  sk.toLowerCase();
+  return role == 9 || sk.indexOf("adv_sky_anchor") >= 0 ||
+         sk.indexOf("sky_anchor") >= 0 ||
+         sid.indexOf("cardputerelite") >= 0 ||
+         (sid.indexOf("cardputer") >= 0 && sk.indexOf("adv") >= 0);
+}
+
+const char* core2PnLaneName(uint8_t lane, const char* kind) {
+  String sk = String(kind ? kind : "");
+  sk.toLowerCase();
+  if (sk.indexOf("yaks") >= 0 || sk.indexOf("gate") >= 0) {
+    switch (lane & 3) {
+      case 1: return "MAN";
+      case 2: return "SKAY";
+      case 3: return "BLACK";
+      default: return "IDLE";
+    }
+  }
+  if (sk.indexOf("adv_sky_anchor") >= 0 || sk.indexOf("sky_anchor") >= 0) {
+    switch (lane & 3) {
+      case 3: return "SKY_LOCK";
+      case 2: return "GNSS";
+      case 1: return "LORA";
+      default: return "LOCAL";
+    }
+  }
+  return core2BhLaneName(lane);
+}
+
+void core2CopyPnPacket(void* statePtr, const void* packetPtr, int8_t rxRssi) {
+  if (!statePtr || !packetPtr) return;
+  Core2PnCortexState& s = *(Core2PnCortexState*)statePtr;
+  const JanusPnCortexPacket& pn = *(const JanusPnCortexPacket*)packetPtr;
+  uint32_t now = millis();
+  s.seen = true;
+  s.lastMs = now;
+  s.rx++;
+  s.seq = pn.seq;
+  s.jobSig = pn.job_sig;
+  s.prevHash = pn.prev_hash;
+  s.packetHash = pn.packet_hash;
+  s.hashRate = pn.hash_rate;
+  s.totalHashes = pn.total_hashes;
+  s.worker = pn.worker_id;
+  s.targetBits = pn.target_bits;
+  s.bestBits = pn.best_bits;
+  s.jitterUs = pn.jitter_us;
+  s.voltageMv = pn.voltage_mv;
+  s.irPhase = pn.ir_phase;
+  s.role = pn.role;
+  s.lane = pn.lane;
+  s.sector = pn.sector;
+  s.flags = pn.flags;
+  s.rssi = rxRssi ? rxRssi : pn.rssi;
+  strlcpy(s.nodeId, pn.nodeId[0] ? pn.nodeId : "PN", sizeof(s.nodeId));
+  strlcpy(s.kind, pn.kind[0] ? pn.kind : "cortex", sizeof(s.kind));
+
+  float heat = clipf((float)pn.thermal_x1000 / 1000.0f, 0.0f, 4.0f);
+  float load = clipf((float)pn.load_x1000 / 1000.0f, 0.0f, 4.0f);
+  float entropy = clipf((float)pn.entropy_x1000 / 1000.0f, 0.0f, 6.0f);
+  float tail = clipf((float)pn.tail_x1000 / 1000.0f, 0.0f, 6.0f);
+  float jitter = clipf((float)pn.jitter_us / 2600.0f, 0.0f, 1.8f);
+  float best = clipf((float)pn.best_bits / 34.0f, 0.0f, 1.5f);
+  float hashSpark = (float)((pn.packet_hash ^ pn.prev_hash ^ pn.job_sig) & 0xFFUL) / 255.0f;
+
+  s.heat = s.heat * 0.72f + heat * 0.28f;
+  s.load = s.load * 0.72f + load * 0.28f;
+  s.entropy = s.entropy * 0.74f + entropy * 0.26f;
+  s.tail = s.tail * 0.72f + tail * 0.28f;
+  float escape = (pn.flags & 0x08) ? 0.20f : 0.0f;
+  float brain = (pn.flags & 0x10) ? 0.12f : 0.0f;
+  float ir = (pn.flags & 0x02) ? 0.10f : 0.0f;
+  s.murph = clipf(s.murph * 0.76f + (entropy * 0.22f + tail * 0.24f + best * 0.22f + escape + brain) * 0.24f, 0.0f, 1.5f);
+  s.labyrinth = clipf(s.labyrinth * 0.76f + (load * 0.22f + heat * 0.18f + jitter * 0.18f + hashSpark * 0.18f + best * 0.20f) * 0.24f, 0.0f, 1.5f);
+  s.silicon = clipf(s.silicon * 0.78f + (heat * 0.30f + load * 0.30f + entropy * 0.12f + tail * 0.16f + ir) * 0.22f, 0.0f, 1.5f);
+
+  snprintf(s.line, sizeof(s.line), "PN %s %s H%s B%u M%02d L%02d",
+           s.nodeId, core2PnLaneName(s.lane, s.kind),
+           compactU(s.hashRate).c_str(), (unsigned)s.bestBits,
+           (int)(clipf(s.murph, 0.0f, 1.0f) * 99.0f),
+           (int)(clipf(s.labyrinth, 0.0f, 1.0f) * 99.0f));
+}
+
+uint32_t core2BhMix32(uint32_t x) {
+  x ^= x >> 16;
+  x *= 0x7feb352dUL;
+  x ^= x >> 15;
+  x *= 0x846ca68bUL;
+  x ^= x >> 16;
+  return x;
+}
+
+uint32_t core2BhGcd32(uint32_t a, uint32_t b) {
+  while (b) {
+    uint32_t t = a % b;
+    a = b;
+    b = t;
+  }
+  return a ? a : 1;
+}
+
+uint32_t core2BhBitReverse32(uint32_t v) {
+  v = ((v >> 1) & 0x55555555UL) | ((v & 0x55555555UL) << 1);
+  v = ((v >> 2) & 0x33333333UL) | ((v & 0x33333333UL) << 2);
+  v = ((v >> 4) & 0x0F0F0F0FUL) | ((v & 0x0F0F0F0FUL) << 4);
+  v = ((v >> 8) & 0x00FF00FFUL) | ((v & 0x00FF00FFUL) << 8);
+  return (v >> 16) | (v << 16);
+}
+
+uint32_t core2BhCoprimeStride(uint32_t seed, uint32_t rangeSize) {
+  if (rangeSize < 2) return 1;
+  uint32_t stride = (core2BhMix32(seed) % rangeSize) | 1UL;
+  if (stride == 0) stride = 1;
+  uint8_t guard = 0;
+  while (core2BhGcd32(stride, rangeSize) != 1 && guard++ < 48) {
+    stride += 2;
+    if (stride >= rangeSize) stride = 1;
+  }
+  return stride ? stride : 1;
+}
+
+void core2BhCorpusRefreshLine() {
+  snprintf(core2BhCorpus.line, sizeof(core2BhCorpus.line),
+           "BH %s C%02d L%02d S%lu B%u",
+           core2BhLaneName(core2BhCorpus.bestLane),
+           (int)(clipf(core2BhCorpus.laneTrust[core2BhCorpus.bestLane], 0.0f, 1.0f) * 99.0f),
+           (int)(clipf(core2BhCorpus.lensAvg, 0.0f, 1.0f) * 99.0f),
+           (unsigned long)core2BhCorpus.samples,
+           (unsigned)core2BhCorpus.laneBest[core2BhCorpus.bestLane]);
+}
+
+uint8_t core2BhChooseLane(uint32_t seed) {
+  if (core2BhCorpus.samples < 4) return (uint8_t)(seed & 3UL);
+  if ((core2BhMix32(seed ^ core2BhCorpus.samples) & 31UL) == 0UL) {
+    return (uint8_t)((core2BhCorpus.bestLane + 1U + ((seed >> 11) & 1U)) & 3U);
+  }
+
+  float bestScore = -100000.0f;
+  uint8_t bestLane = 0;
+  for (uint8_t i = 0; i < CORE2_BH_LANES; ++i) {
+    float visualBias = 0.0f;
+    if (i == 0) visualBias += (1.0f - core2BhCorpus.lossAvg) * 0.10f;
+    if (i == 1) visualBias += core2BhCorpus.studyAvg * 0.12f;
+    if (i == 2) visualBias += core2BhCorpus.lensAvg * 0.18f;
+    if (i == 3) visualBias += core2BhCorpus.lossAvg * 0.06f + core2BhCorpus.lensAvg * 0.08f;
+    float s = core2BhCorpus.laneScore[i] +
+              core2BhCorpus.laneTrust[i] * 0.80f +
+              (float)core2BhCorpus.laneBest[i] * 0.016f +
+              visualBias;
+    if (s > bestScore) {
+      bestScore = s;
+      bestLane = i;
+    }
+  }
+  return bestLane;
+}
+
+void core2BhCorpusEnsureHeader() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk) return;
+  File f = SD.open(CORE2_BH_CORPUS_PATH, FILE_APPEND);
+  if (!f) return;
+  if (f.size() == 0) {
+    f.println("ms,node,rssi,lens,study,surprise,loss,temp,hash,best,mic,pressure,lane,laneBest,targetBits,coreBest,coreH,job");
+  }
+  f.close();
+#endif
+}
+
+void core2BhCorpusLoad() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk || !SD.exists(CORE2_BH_MODEL_PATH)) {
+    core2BhCorpusRefreshLine();
+    return;
+  }
+  File f = SD.open(CORE2_BH_MODEL_PATH, FILE_READ);
+  if (!f) return;
+  Core2BhCorpusState loaded;
+  int n = f.read((uint8_t*)&loaded, sizeof(loaded));
+  f.close();
+  if (n == (int)sizeof(loaded) && loaded.magic == 0x42484D31UL && loaded.version == 1) {
+    uint32_t lastArchive = core2BhCorpus.lastArchiveMs;
+    uint32_t lastSave = core2BhCorpus.lastSaveMs;
+    core2BhCorpus = loaded;
+    core2BhCorpus.lastArchiveMs = lastArchive;
+    core2BhCorpus.lastSaveMs = lastSave;
+    core2BhCorpusRefreshLine();
+    Serial.printf("[CORE2/BH/SD] model loaded samples=%lu lane=%s saves=%lu\n",
+                  (unsigned long)core2BhCorpus.samples,
+                  core2BhLaneName(core2BhCorpus.bestLane),
+                  (unsigned long)core2BhCorpus.saves);
+  }
+#endif
+}
+
+void core2BhCorpusSave(bool force) {
+#if CORE2_SD_ARCHIVE_ENABLE
+  uint32_t now = millis();
+  if (!core2SdArchiveOk || core2BhCorpus.samples == 0) return;
+  if (!force && now - core2BhCorpus.lastSaveMs < CORE2_BH_MODEL_SAVE_MS) return;
+  core2BhCorpus.lastSaveMs = now;
+  core2BhCorpus.saves++;
+  core2BhCorpusRefreshLine();
+  SD.remove(CORE2_BH_MODEL_PATH);
+  File f = SD.open(CORE2_BH_MODEL_PATH, FILE_WRITE);
+  if (!f) { core2SdArchiveOk = false; Serial.println("[CORE2/BH/SD] model save failed"); return; }
+  f.write((const uint8_t*)&core2BhCorpus, sizeof(core2BhCorpus));
+  f.close();
+  if (force || (core2BhCorpus.saves % 4UL) == 1UL) {
+    Serial.printf("[CORE2/BH/SD] model saved samples=%lu lane=%s bias=%08lX/%lu\n",
+                  (unsigned long)core2BhCorpus.samples,
+                  core2BhLaneName(core2BhCorpus.bestLane),
+                  (unsigned long)core2BhCorpus.offsetBias,
+                  (unsigned long)core2BhCorpus.strideBias);
+  }
+#endif
+}
+
+void core2BhCorpusInitStorage() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk) return;
+  core2BhCorpusEnsureHeader();
+  core2BhCorpusLoad();
+  Serial.printf("[CORE2/BH/SD] corpus ready %s model %s\n", CORE2_BH_CORPUS_PATH, CORE2_BH_MODEL_PATH);
+#endif
+}
+
+void core2BhCorpusArchive(uint32_t now) {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk || now - core2BhCorpus.lastArchiveMs < CORE2_BH_CORPUS_ARCHIVE_MS) return;
+  core2BhCorpus.lastArchiveMs = now;
+  File old = SD.open(CORE2_BH_CORPUS_PATH, FILE_READ);
+  if (old) {
+    size_t sz = old.size();
+    old.close();
+    if (sz > CORE2_BH_CORPUS_MAX_BYTES) {
+      SD.remove(CORE2_BH_CORPUS_PATH);
+      core2BhCorpus.rotations++;
+      core2BhCorpusEnsureHeader();
+      Serial.printf("[CORE2/BH/SD] corpus rotated bytes=%lu rotations=%lu\n",
+                    (unsigned long)sz, (unsigned long)core2BhCorpus.rotations);
+    }
+  }
+  File f = SD.open(CORE2_BH_CORPUS_PATH, FILE_APPEND);
+  if (!f) { core2SdArchiveOk = false; Serial.println("[CORE2/BH/SD] corpus open failed"); return; }
+  if (f.size() == 0) {
+    f.println("ms,node,rssi,lens,study,surprise,loss,temp,hash,best,mic,pressure,lane,laneBest,targetBits,coreBest,coreH,job");
+  }
+  String row;
+  row.reserve(240);
+  row += String(now); row += ',';
+  row += String(core2BlackStarNode); row += ',';
+  row += String((int)core2BlackStarRssi); row += ',';
+  row += String(core2BlackStarLensing, 4); row += ',';
+  row += String(core2BlackStarStudy, 4); row += ',';
+  row += String(core2BlackStarSurprise, 4); row += ',';
+  row += String(core2BlackStarLoss, 4); row += ',';
+  row += String(core2BlackStarTemp, 2); row += ',';
+  row += String((uint32_t)max(0.0f, core2BlackStarHash)); row += ',';
+  row += String((uint32_t)max(0.0f, core2BlackStarBest)); row += ',';
+  row += String(core2BlackStarMic, 2); row += ',';
+  row += String(core2BlackStarPressure, 2); row += ',';
+  row += String(core2BhLaneName(core2BhCorpus.bestLane)); row += ',';
+  row += String((unsigned)core2BhCorpus.laneBest[core2BhCorpus.bestLane]); row += ',';
+  row += String((unsigned)coreTargetBits); row += ',';
+  row += String(coreBestBits); row += ',';
+  row += String(coreRemoteHashrate); row += ',';
+  row += String(coreJobText);
+  f.println(row);
+  f.close();
+#endif
+}
+
+void core2BhCorpusObserveTelemetry(uint32_t now) {
+  float lens = clipf(core2BlackStarLensing, 0.0f, 1.5f);
+  float study = clipf(core2BlackStarStudy, 0.0f, 1.5f);
+  float loss = clipf(core2BlackStarLoss, 0.0f, 4.0f);
+  float surprise = clipf(core2BlackStarSurprise, 0.0f, 8.0f);
+  core2BhCorpus.samples++;
+  core2BhCorpus.seed = core2BhMix32(core2BhCorpus.seed ^ core2BlackStarRx ^
+                                    (uint32_t)(lens * 100000.0f) ^
+                                    ((uint32_t)(study * 65535.0f) << 1) ^
+                                    ((uint32_t)max(0.0f, core2BlackStarBest) << 17));
+  core2BhCorpus.lensAvg = core2BhCorpus.lensAvg * 0.94f + lens * 0.06f;
+  core2BhCorpus.studyAvg = core2BhCorpus.studyAvg * 0.94f + study * 0.06f;
+  core2BhCorpus.lossAvg = core2BhCorpus.lossAvg * 0.95f + clipf(loss / 4.0f, 0.0f, 1.0f) * 0.05f;
+  if (core2BlackStarHash > 0.0f) core2BhCorpus.hashAvg = core2BhCorpus.hashAvg * 0.94f + core2BlackStarHash * 0.06f;
+  if (core2BlackStarTemp > -40.0f && core2BlackStarTemp < 120.0f) core2BhCorpus.tempAvg = core2BhCorpus.tempAvg * 0.96f + core2BlackStarTemp * 0.04f;
+
+  float q = clipf(study * 0.24f + lens * 0.18f + surprise * 0.025f + clipf(core2BlackStarBest / 34.0f, 0.0f, 1.0f) * 0.22f, 0.0f, 1.6f);
+  core2BhCorpus.laneScore[0] = core2BhCorpus.laneScore[0] * 0.998f + (1.0f - core2BhCorpus.lossAvg) * 0.002f;
+  core2BhCorpus.laneScore[1] = core2BhCorpus.laneScore[1] * 0.997f + study * 0.003f;
+  core2BhCorpus.laneScore[2] = core2BhCorpus.laneScore[2] * 0.997f + lens * 0.004f;
+  core2BhCorpus.laneScore[3] = core2BhCorpus.laneScore[3] * 0.997f + (lens * 0.002f + surprise * 0.001f);
+  for (uint8_t i = 0; i < CORE2_BH_LANES; ++i) {
+    core2BhCorpus.laneTrust[i] = clipf(core2BhCorpus.laneTrust[i] * 0.997f + q * 0.003f, 0.05f, 1.35f);
+  }
+
+  core2BhCorpus.bestLane = core2BhChooseLane(core2BhCorpus.seed);
+  core2BhCorpus.offsetBias = core2BhMix32(core2BhCorpus.seed ^ (uint32_t)(lens * 16777216.0f) ^ ((uint32_t)core2BhCorpus.bestLane << 28));
+  core2BhCorpus.strideBias = core2BhCoprimeStride(core2BhCorpus.seed ^ core2BhCorpus.offsetBias ^ 0x6A09E667UL, 262144UL);
+  core2BhCorpusRefreshLine();
+  core2BhCorpusArchive(now);
+  core2BhCorpusSave(false);
+}
+
+void core2BhCorpusObserveMiner(uint8_t lane, uint16_t bits, bool shareCandidate) {
+  lane &= 3;
+  core2BhCorpus.minerSamples++;
+  if (bits > core2BhCorpus.laneBest[lane]) core2BhCorpus.laneBest[lane] = bits;
+  float q = clipf((float)bits / 32.0f, 0.0f, 1.5f) + (shareCandidate ? 0.40f : 0.0f);
+  core2BhCorpus.laneScore[lane] = core2BhCorpus.laneScore[lane] * 0.994f + q * 0.006f;
+  core2BhCorpus.laneTrust[lane] = clipf(core2BhCorpus.laneTrust[lane] * 0.990f + q * 0.010f, 0.05f, 1.50f);
+  if (shareCandidate || bits >= coreTargetBits || (core2BhCorpus.minerSamples & 127UL) == 0UL) {
+    core2BhCorpus.bestLane = core2BhChooseLane(core2BhCorpus.seed ^ core2BhCorpus.minerSamples ^ ((uint32_t)bits << 12));
+    core2BhCorpusRefreshLine();
+    core2BhCorpusSave(shareCandidate);
+  }
+}
+
+void core2BhCorpusApplyToJob(RemoteJobState& job) {
+  if (job.rangeSize < 2 || core2BhCorpus.samples < 4) return;
+  uint32_t seed = core2BhMix32(job.startNonce ^ job.rangeSize ^ job.extranonce2 ^
+                              core2BhCorpus.seed ^ core2BhCorpus.offsetBias ^ coreTheta.seed);
+  uint32_t demiurgeSalt = galaxy.demiurgeNonceSalt();
+  seed = core2BhMix32(seed ^ demiurgeSalt);
+  uint8_t lane = core2BhChooseLane(seed);
+  uint8_t dmode = galaxy.demiurgeModeCode();
+  if (dmode == 2) lane = 0;                                      // SURVIVE: baseline, low surprise.
+  else if (dmode == 4) lane = 3;                                 // HUNT: horizon/tail observer.
+  else if (dmode == 1 && core2BhCorpus.samples >= 12) lane = core2BhCorpus.bestLane;
+  else if (dmode == 3) lane = (uint8_t)((lane + 1U + ((seed >> 9) & 1U)) & 3U);
+  core2BhCorpus.currentLane = lane;
+  float dbias = galaxy.demiurgeMinerBias();
+  uint32_t offset = (seed ^ core2BhMix32(demiurgeSalt ^ (uint32_t)(dbias * 65536.0f))) % job.rangeSize;
+  uint32_t stride = core2BhCoprimeStride(seed ^ core2BhCorpus.strideBias ^ ((uint32_t)lane * 0x9E3779B9UL) ^ (uint32_t)(dbias * 104729.0f), job.rangeSize);
+  if (lane == 1) {
+    offset = ((seed >> 8) ^ demiurgeSalt) % job.rangeSize;
+  } else if (lane == 2) {
+    offset = core2BhMix32(core2BhCorpus.offsetBias ^ seed ^ demiurgeSalt) % job.rangeSize;
+  } else if (lane == 3) {
+    offset = core2BhBitReverse32(seed ^ core2BhCorpus.offsetBias ^ demiurgeSalt) % job.rangeSize;
+    stride = core2BhCoprimeStride(core2BhBitReverse32(seed ^ demiurgeSalt) ^ core2BhCorpus.strideBias, job.rangeSize);
+  }
+  job.thetaOffset = (job.thetaOffset + offset) % job.rangeSize;
+  job.thetaStride = core2BhCoprimeStride(job.thetaStride ^ stride ^ 1UL, job.rangeSize);
+  Serial.printf("[CORE2/BH/MINER] job=%s lane=%s mode=%s off=%lu stride=%lu corpus=%lu\n",
+                coreJobText,
+                core2BhLaneName(lane),
+                galaxy.demiurgeModeName(dmode),
+                (unsigned long)job.thetaOffset,
+                (unsigned long)job.thetaStride,
+                (unsigned long)core2BhCorpus.samples);
+}
+
 void initCore2SdArchive() {
 #if CORE2_SD_ARCHIVE_ENABLE
   // SD is optional. If it fails, Core2 still runs as a live station + ESP-NOW node.
@@ -4222,7 +6277,28 @@ void initCore2SdArchive() {
       }
       f.close();
     }
-    Serial.println("[SD] Janus Universe archive ready /janus/core2_universe.csv");
+    File af = SD.open("/janus/anchor_radar.csv", FILE_APPEND);
+    if (af) {
+      if (af.size() == 0) af.println("ms,node,rssi,presence,motion,entropy,drift,noise,pressure,confidence,flags,hash,best");
+      af.close();
+    }
+    File airf = SD.open("/janus/air_sgp30.csv", FILE_APPEND);
+    if (airf) {
+      if (airf.size() == 0) airf.println("ms,eco2,tvoc,rawH2,rawEtOH,score,trend,same,ok,fail,baseline,ah,saturated");
+      airf.close();
+    }
+    File domef = SD.open("/janus/rf_dome.csv", FILE_APPEND);
+    if (domef) {
+      if (domef.size() == 0) domef.println("ms,anchor,core_rssi,ambient_rssi,ema,base,delta,var,presence,motion,human,pet,zone_pct,distance_cm,confidence,flags,packets,occ_min,occ_max,occ_est,zone_mask,e0,e1,e2,e3,e4");
+      domef.close();
+    }
+    File trainf = SD.open(CORE2_RF_TRAIN_PATH, FILE_APPEND);
+    if (trainf) {
+      if (trainf.size() == 0) trainf.println("ms,source,label,pred,conf,heur,heur_conf,loss,trust,zone,distance,occ_min,occ_max,total_energy,peak_energy,rssi,delta,var,presence,motion,human,pet,e0,e1,e2,e3,e4");
+      trainf.close();
+    }
+    core2BhCorpusInitStorage();
+    Serial.println("[SD] Janus Universe archive ready /janus/core2_universe.csv + anchor_radar.csv + air_sgp30.csv + rf_dome.csv + rf_train.csv + bh_corpus.csv");
   } else {
     core2SdArchiveOk = false;
     Serial.println("[SD] archive unavailable; continuing without SD training log");
@@ -4264,6 +6340,506 @@ void appendCore2UniverseArchive() {
   f.println(row);
   f.close();
   core2SdArchiveRows++;
+#endif
+}
+
+
+void appendCore2AnchorRadarArchive() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  uint32_t now = millis();
+  if (!core2SdArchiveOk || !core2AnchorRadarLastMs) return;
+  if (now - core2LastAnchorRadarArchiveMs < CORE2_ANCHOR_ARCHIVE_MS) return;
+  core2LastAnchorRadarArchiveMs = now;
+  File f = SD.open("/janus/anchor_radar.csv", FILE_APPEND);
+  if (!f) { core2SdArchiveOk = false; Serial.println("[SD] anchor radar archive open failed"); return; }
+  String row;
+  row.reserve(180);
+  row += String(now); row += ',';
+  row += String(core2AnchorRadarNode); row += ',';
+  row += String((int)core2AnchorRadarRssi); row += ',';
+  row += String(core2AnchorPresence, 3); row += ',';
+  row += String(core2AnchorMotion, 3); row += ',';
+  row += String(core2AnchorEntropy, 3); row += ',';
+  row += String(core2AnchorDrift, 3); row += ',';
+  row += String(core2AnchorNoise, 3); row += ',';
+  row += String(core2AnchorPacketPressure, 3); row += ',';
+  row += String((unsigned)core2AnchorRadarConfidence); row += ',';
+  row += String((unsigned)core2AnchorRadarFlags); row += ',';
+  row += String(core2AnchorRadarHashRate); row += ',';
+  row += String(core2AnchorRadarBestBits);
+  f.println(row);
+  f.close();
+  core2AnchorRadarArchiveRows++;
+#endif
+}
+
+
+bool core2RfDomeFresh(uint32_t now) {
+  return core2RfDomeLastMs && (now - core2RfDomeLastMs < CORE2_RF_DOME_FRESH_MS);
+}
+
+uint32_t core2RfDomeCrc32(const void* data, size_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+  uint32_t h = 2166136261UL;
+  for (size_t i = 0; i < len; i++) { h ^= p[i]; h *= 16777619UL; }
+  return h;
+}
+
+void appendCore2RfDomeArchive() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  uint32_t now = millis();
+  if (!core2SdArchiveOk || !core2RfDomeLastMs) return;
+  if (now - core2LastRfDomeArchiveMs < CORE2_RF_DOME_ARCHIVE_MS) return;
+  core2LastRfDomeArchiveMs = now;
+  File f = SD.open("/janus/rf_dome.csv", FILE_APPEND);
+  if (!f) { core2SdArchiveOk = false; Serial.println("[SD] rf dome archive open failed"); return; }
+  String row;
+  row.reserve(220);
+  row += String(now); row += ','; row += String(core2RfDomeAnchor); row += ',';
+  row += String((int)core2RfDomeCoreRssi); row += ','; row += String((int)core2RfDomeAmbientRssi); row += ',';
+  row += String(core2RfDomeEma, 2); row += ','; row += String(core2RfDomeBase, 2); row += ','; row += String(core2RfDomeDelta, 2); row += ','; row += String(core2RfDomeVar, 2); row += ',';
+  row += String(core2RfDomePresence, 3); row += ','; row += String(core2RfDomeMotion, 3); row += ','; row += String(core2RfDomeHuman, 3); row += ','; row += String(core2RfDomePet, 3); row += ',';
+  row += String((unsigned)core2RfDomeZonePct); row += ','; row += String((unsigned)core2RfDomeDistanceCm); row += ','; row += String((unsigned)core2RfDomeConfidence); row += ','; row += String((unsigned)core2RfDomeFlags); row += ','; row += String((unsigned long)core2RfDomePacketsSeen);
+  row += ','; row += String((unsigned)core2RfDomeOccMin); row += ','; row += String((unsigned)core2RfDomeOccMax); row += ','; row += String((unsigned)core2RfDomeOccEstimate); row += ','; row += String((unsigned)core2RfZoneActiveMask);
+  for (int i = 0; i < 5; i++) { row += ','; row += String(core2RfZoneEnergy[i], 3); }
+  f.println(row); f.close(); core2RfDomeArchiveRows++;
+#endif
+}
+
+
+void core2RfDomeUpdateMultiZone(float zonePct, float energy) {
+  zonePct = clipf(zonePct, 0.0f, 100.0f);
+  energy = clipf(energy, 0.0f, 10.0f);
+  core2RfDomeTotalEnergy = 0.0f;
+  core2RfDomePeakEnergy = 0.0f;
+  core2RfZoneActiveMask = 0;
+  core2RfZonePeak = 2;
+
+  // Slow decay makes the radar stop jumping and gives several people/zones time to appear.
+  for (int i = 0; i < 5; i++) core2RfZoneEnergy[i] *= 0.92f;
+
+  static const float centers[5] = {10.0f, 30.0f, 50.0f, 70.0f, 90.0f};
+  for (int i = 0; i < 5; i++) {
+    float d = fabsf(zonePct - centers[i]);
+    float w = clipf(1.0f - d / 32.0f, 0.0f, 1.0f);
+    // Strong events spill into neighbouring zones, which is closer to a dome/sleeve than a point target.
+    core2RfZoneEnergy[i] += energy * w * (0.52f + 0.48f * w);
+    core2RfZoneEnergy[i] = clipf(core2RfZoneEnergy[i], 0.0f, 12.0f);
+  }
+
+  uint8_t active = 0;
+  for (int i = 0; i < 5; i++) {
+    core2RfDomeTotalEnergy += core2RfZoneEnergy[i];
+    if (core2RfZoneEnergy[i] > core2RfDomePeakEnergy) { core2RfDomePeakEnergy = core2RfZoneEnergy[i]; core2RfZonePeak = (uint8_t)i; }
+    if (core2RfZoneEnergy[i] >= 1.20f) { core2RfZoneActiveMask |= (uint8_t)(1U << i); active++; }
+  }
+
+  // This is an occupancy estimate, not a literal count. One corridor cannot separate two bodies in the same lobe.
+  core2RfDomeOccEstimate = 0;
+  if (core2RfDomeTotalEnergy > 0.95f || core2RfDomePresence > 0.28f || core2RfDomeMotion > 0.90f) core2RfDomeOccEstimate = 1;
+  if (active >= 2 || core2RfDomeTotalEnergy > 5.2f || (core2RfDomeHuman > 0.55f && core2RfDomeMotion > 1.8f)) core2RfDomeOccEstimate = 2;
+  if (active >= 3 || core2RfDomeTotalEnergy > 8.4f || (core2RfDomeHuman > 0.82f && core2RfDomeMotion > 2.8f && core2RfDomeVar > 4.0f)) core2RfDomeOccEstimate = 3;
+  if (core2RfDomeTotalEnergy > 11.5f && active >= 4) core2RfDomeOccEstimate = 4;
+
+  core2RfDomeUnresolvedMulti = (core2RfDomeOccEstimate >= 2) || (active >= 2) || (core2RfDomeTotalEnergy > 5.2f);
+  if (core2RfDomeUnresolvedMulti) core2RfDomeMultiEvents++;
+
+  core2RfDomeOccMin = core2RfDomeOccEstimate ? 1 : 0;
+  core2RfDomeOccMax = core2RfDomeOccEstimate;
+  if (core2RfDomeOccEstimate == 1 && (core2RfDomeTotalEnergy > 3.2f || active >= 2)) core2RfDomeOccMax = 2;
+  if (core2RfDomeOccEstimate >= 2) core2RfDomeOccMax = min((uint8_t)4, (uint8_t)(core2RfDomeOccEstimate + 1));
+
+  snprintf(core2RfOccupancyLine, sizeof(core2RfOccupancyLine), "OCC %u-%u? zones:%02X peak:%u E%.1f", (unsigned)core2RfDomeOccMin, (unsigned)core2RfDomeOccMax, (unsigned)core2RfZoneActiveMask, (unsigned)core2RfZonePeak, core2RfDomeTotalEnergy);
+}
+
+uint8_t core2RfDomeEstimateOccupancy() { return core2RfDomeOccEstimate; }
+
+const char* core2RfDomeOccupancyText() {
+  if (!core2RfDomeFresh()) return "WAIT";
+  if (core2RfDomeOccEstimate == 0) return "EMPTY?";
+  if (core2RfDomeOccEstimate == 1 && core2RfDomeOccMax <= 1) return "1?";
+  if (core2RfDomeOccEstimate == 1 && core2RfDomeOccMax >= 2) return "1-2?";
+  if (core2RfDomeOccEstimate == 2) return "2+?";
+  return "MULTI?";
+}
+
+const char* core2RfDomeTargetLabel() {
+  if (core2RfDomeUnresolvedMulti || core2RfDomeOccEstimate >= 2) return "MULTI?";
+  if (core2RfDomeFlags & 0x08) return "HUMAN?";
+  if (core2RfDomeFlags & 0x10) return "PET?";
+  if (core2RfDomeFlags & 0x02) return "BODY?";
+  return "MOTION";
+}
+
+
+#if CORE2_RF_TINYSLIME_ENABLE
+static float core2TinyClip01(float v) { return clipf(v, 0.0f, 1.0f); }
+static float core2TinyWeightFromSeed(uint32_t x) {
+  x ^= x >> 16; x *= 0x7feb352dUL; x ^= x >> 15; x *= 0x846ca68bUL; x ^= x >> 16;
+  float u = (float)(x & 0xFFFF) / 65535.0f;
+  return (u * 2.0f - 1.0f) * 0.18f;
+}
+
+const char* core2RfTinyLabelName(uint8_t label) {
+  switch (label) {
+    case RF_LABEL_EMPTY: return "EMPTY";
+    case RF_LABEL_HUMAN_CORE: return "HUMAN-C";
+    case RF_LABEL_HUMAN_MID: return "HUMAN-M";
+    case RF_LABEL_HUMAN_ANCHOR: return "HUMAN-A";
+    case RF_LABEL_MULTI: return "MULTI";
+    case RF_LABEL_PET: return "PET";
+    case RF_LABEL_NOISE: return "NOISE";
+    case RF_LABEL_DOOR: return "DOOR";
+    default: return "UNK";
+  }
+}
+
+void core2RfTinySlimeResetWeights() {
+  for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+    core2RfTinyB1[h] = core2TinyWeightFromSeed(0xA1100000UL + h) * 0.35f;
+    for (int i = 0; i < CORE2_RF_TINY_INPUTS; i++) {
+      core2RfTinyW1[h][i] = core2TinyWeightFromSeed(0xC4F00000UL + h * 131UL + i * 17UL);
+      core2RfTinyTrace1[h][i] = 0.75f;
+    }
+  }
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    core2RfTinyB2[o] = (o == RF_LABEL_EMPTY) ? 0.18f : -0.04f;
+    for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+      core2RfTinyW2[o][h] = core2TinyWeightFromSeed(0x5EED0000UL + o * 193UL + h * 29UL);
+      core2RfTinyTrace2[o][h] = 0.75f;
+    }
+  }
+  core2RfTinyTrust = 0.50f;
+  core2RfTinyTrainCount = 0;
+  core2RfTinySelfTrainCount = 0;
+  core2RfTinyManualTrainCount = 0;
+  core2RfTinyLoaded = false;
+}
+
+void core2RfTinySlimeBuildFeatures() {
+  float invLen = 1.0f / max(1.0f, (float)core2RfDomeLengthCm);
+  int k = 0;
+  core2RfTinyFeat[k++] = core2TinyClip01((float)core2RfDomeZonePct / 100.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01((float)core2RfDomeDistanceCm * invLen);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomePresence / 2.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomeMotion / 5.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomeHuman);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomePet);
+  core2RfTinyFeat[k++] = core2TinyClip01((float)core2RfDomeConfidence / 100.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(((float)core2RfDomeCoreRssi + 95.0f) / 60.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(fabsf(core2RfDomeDelta) / 18.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomeVar / 24.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(fabsf(core2RfDomeEma - core2RfDomeBase) / 18.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomeTotalEnergy / 14.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2RfDomePeakEnergy / 12.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01((float)core2RfDomeOccMax / 4.0f);
+  for (int i = 0; i < 5; i++) core2RfTinyFeat[k++] = core2TinyClip01(core2RfZoneEnergy[i] / 12.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01((float)__builtin_popcount((unsigned)core2RfZoneActiveMask) / 5.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2AnchorPresence / 2.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(core2AnchorMotion / 5.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01(airScore / 8.0f);
+  core2RfTinyFeat[k++] = core2TinyClip01((float)(millis() - core2RfDomeLastMs) / (float)CORE2_RF_DOME_FRESH_MS);
+  while (k < CORE2_RF_TINY_INPUTS) core2RfTinyFeat[k++] = 0.0f;
+}
+
+void core2RfTinySlimeForward() {
+  float maxLogit = -1.0e9f;
+  float logits[CORE2_RF_TINY_OUTPUTS];
+  for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+    float s = core2RfTinyB1[h];
+    for (int i = 0; i < CORE2_RF_TINY_INPUTS; i++) s += core2RfTinyW1[h][i] * core2RfTinyFeat[i];
+    core2RfTinyHidden[h] = tanhf(s);
+  }
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    float s = core2RfTinyB2[o];
+    for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) s += core2RfTinyW2[o][h] * core2RfTinyHidden[h];
+    logits[o] = s;
+    if (s > maxLogit) maxLogit = s;
+  }
+  float denom = 0.0f;
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    core2RfTinyProb[o] = expf(clipf(logits[o] - maxLogit, -40.0f, 40.0f));
+    denom += core2RfTinyProb[o];
+  }
+  if (denom <= 1.0e-9f) denom = 1.0f;
+  core2RfTinyPredLabel = 0;
+  core2RfTinyPredConf = 0.0f;
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    core2RfTinyProb[o] /= denom;
+    if (core2RfTinyProb[o] > core2RfTinyPredConf) {
+      core2RfTinyPredConf = core2RfTinyProb[o];
+      core2RfTinyPredLabel = (uint8_t)o;
+    }
+  }
+}
+
+uint8_t core2RfTinyHeuristicLabel(float* confOut) {
+  float conf = core2TinyClip01((float)core2RfDomeConfidence / 100.0f);
+  float e = core2RfDomeTotalEnergy;
+  uint8_t label = RF_LABEL_EMPTY;
+  if (!core2RfDomeFresh() || e < 0.55f) {
+    label = RF_LABEL_EMPTY;
+    conf = max(conf, 0.45f);
+  } else if (core2RfDomeVar > 9.0f && core2RfDomePresence < 0.22f && core2RfDomeHuman < 0.22f && core2RfDomePet < 0.22f) {
+    label = RF_LABEL_NOISE;
+    conf = max(conf, 0.62f);
+  } else if (core2RfDomeUnresolvedMulti || core2RfDomeOccMax >= 2 || __builtin_popcount((unsigned)core2RfZoneActiveMask) >= 2) {
+    label = RF_LABEL_MULTI;
+    conf = max(conf, 0.60f + core2TinyClip01(e / 18.0f) * 0.25f);
+  } else if (core2RfDomePet > core2RfDomeHuman + 0.12f && core2RfDomePet > 0.32f) {
+    label = RF_LABEL_PET;
+    conf = max(conf, 0.58f + core2RfDomePet * 0.22f);
+  } else if ((core2RfDomeFlags & 0x08) || core2RfDomeHuman > 0.34f || core2RfDomePresence > 0.52f) {
+    if (core2RfDomeZonePct < 34) label = RF_LABEL_HUMAN_CORE;
+    else if (core2RfDomeZonePct > 66) label = RF_LABEL_HUMAN_ANCHOR;
+    else label = RF_LABEL_HUMAN_MID;
+    conf = max(conf, 0.56f + max(core2RfDomeHuman, core2RfDomePresence) * 0.24f);
+  } else if (fabsf(core2RfDomeDelta) > 5.5f && core2RfDomeMotion > 2.2f) {
+    label = RF_LABEL_DOOR;
+    conf = max(conf, 0.54f + core2TinyClip01(fabsf(core2RfDomeDelta) / 20.0f) * 0.24f);
+  } else if (core2RfDomeMotion > 0.75f || core2RfDomePresence > 0.24f) {
+    label = (core2RfDomeZonePct < 50) ? RF_LABEL_HUMAN_CORE : RF_LABEL_HUMAN_ANCHOR;
+    conf = max(conf, 0.46f + core2TinyClip01(core2RfDomeMotion / 5.0f) * 0.18f);
+  }
+  if (confOut) *confOut = core2TinyClip01(conf);
+  return label;
+}
+
+float core2RfTinySlimeTrainStep(uint8_t label, float lr, bool manual) {
+  if (label >= CORE2_RF_TINY_OUTPUTS) return 0.0f;
+  core2RfTinySlimeBuildFeatures();
+  core2RfTinySlimeForward();
+  float p = max(1.0e-5f, core2RfTinyProb[label]);
+  float loss = -logf(p);
+  float bond = expf(-clipf(loss, 0.0f, 6.0f));
+  float dOut[CORE2_RF_TINY_OUTPUTS];
+  float dH[CORE2_RF_TINY_HIDDEN];
+  for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) dH[h] = 0.0f;
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    dOut[o] = core2RfTinyProb[o] - ((o == (int)label) ? 1.0f : 0.0f);
+    dOut[o] = clipf(dOut[o], -1.0f, 1.0f);
+  }
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+      dH[h] += dOut[o] * core2RfTinyW2[o][h];
+      float grad = dOut[o] * core2RfTinyHidden[h];
+      core2RfTinyTrace2[o][h] = 0.992f * core2RfTinyTrace2[o][h] + 0.008f * (manual ? 1.0f : bond);
+      float eff = lr * (0.25f + 0.75f * core2TinyClip01(core2RfTinyTrace2[o][h]));
+      core2RfTinyW2[o][h] -= eff * clipf(grad, -2.0f, 2.0f);
+    }
+    core2RfTinyB2[o] -= lr * 0.35f * dOut[o];
+  }
+  for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+    float dh = dH[h] * (1.0f - core2RfTinyHidden[h] * core2RfTinyHidden[h]);
+    dh = clipf(dh, -1.0f, 1.0f);
+    for (int i = 0; i < CORE2_RF_TINY_INPUTS; i++) {
+      float grad = dh * core2RfTinyFeat[i];
+      core2RfTinyTrace1[h][i] = 0.994f * core2RfTinyTrace1[h][i] + 0.006f * (manual ? 1.0f : bond);
+      float eff = lr * (0.20f + 0.80f * core2TinyClip01(core2RfTinyTrace1[h][i]));
+      core2RfTinyW1[h][i] -= eff * clipf(grad, -2.0f, 2.0f);
+    }
+    core2RfTinyB1[h] -= lr * 0.25f * dh;
+  }
+  for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) {
+    for (int i = 0; i < CORE2_RF_TINY_INPUTS; i++) core2RfTinyW1[h][i] = clipf(core2RfTinyW1[h][i], -2.5f, 2.5f);
+  }
+  for (int o = 0; o < CORE2_RF_TINY_OUTPUTS; o++) {
+    for (int h = 0; h < CORE2_RF_TINY_HIDDEN; h++) core2RfTinyW2[o][h] = clipf(core2RfTinyW2[o][h], -2.5f, 2.5f);
+  }
+  core2RfTinyLastLoss = loss;
+  core2RfTinyTrust = clipf(core2RfTinyTrust * 0.96f + bond * 0.04f + (manual ? 0.025f : 0.0f), 0.05f, 1.0f);
+  core2RfTinyTrainCount++;
+  if (manual) core2RfTinyManualTrainCount++; else core2RfTinySelfTrainCount++;
+  core2RfTinyDirty = true;
+  core2RfTinySlimeForward();
+  return loss;
+}
+
+void core2RfTinySlimeAppendTrainRow(const char* source, uint8_t label, float loss) {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk) return;
+  uint32_t now = millis();
+  if (now - core2RfTinyLastArchiveMs < CORE2_RF_TRAIN_ARCHIVE_MS && source && strcmp(source, "manual") != 0) return;
+  core2RfTinyLastArchiveMs = now;
+  File f = SD.open(CORE2_RF_TRAIN_PATH, FILE_APPEND);
+  if (!f) return;
+  String row; row.reserve(260);
+  row += String(now); row += ','; row += String(source ? source : "?"); row += ',';
+  row += String(core2RfTinyLabelName(label)); row += ','; row += String(core2RfTinyLabelName(core2RfTinyPredLabel)); row += ','; row += String(core2RfTinyPredConf, 3); row += ',';
+  row += String(core2RfTinyLabelName(core2RfTinyHeurLabel)); row += ','; row += String(core2RfTinyHeurConf, 3); row += ','; row += String(loss, 4); row += ','; row += String(core2RfTinyTrust, 3); row += ',';
+  row += String((unsigned)core2RfDomeZonePct); row += ','; row += String((unsigned)core2RfDomeDistanceCm); row += ','; row += String((unsigned)core2RfDomeOccMin); row += ','; row += String((unsigned)core2RfDomeOccMax); row += ',';
+  row += String(core2RfDomeTotalEnergy, 3); row += ','; row += String(core2RfDomePeakEnergy, 3); row += ','; row += String((int)core2RfDomeCoreRssi); row += ',';
+  row += String(core2RfDomeDelta, 3); row += ','; row += String(core2RfDomeVar, 3); row += ','; row += String(core2RfDomePresence, 3); row += ','; row += String(core2RfDomeMotion, 3); row += ','; row += String(core2RfDomeHuman, 3); row += ','; row += String(core2RfDomePet, 3);
+  for (int i = 0; i < 5; i++) { row += ','; row += String(core2RfZoneEnergy[i], 3); }
+  f.println(row); f.close(); core2RfTinyArchiveRows++;
+#endif
+}
+
+void core2RfTinySlimeSaveIfNeeded(bool force) {
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (!core2SdArchiveOk || !core2RfTinyReady || (!force && !core2RfTinyDirty)) return;
+  uint32_t now = millis();
+  if (!force && now - core2RfTinyLastSaveMs < CORE2_RF_TINY_SAVE_MS) return;
+  SD.remove(CORE2_RF_MODEL_PATH);
+  File f = SD.open(CORE2_RF_MODEL_PATH, FILE_WRITE);
+  if (!f) { Serial.println("[RF/ML] model save failed"); return; }
+  uint32_t magic = 0x52465331UL; // RFS1
+  uint16_t version = 1;
+  uint16_t dims[3] = {CORE2_RF_TINY_INPUTS, CORE2_RF_TINY_HIDDEN, CORE2_RF_TINY_OUTPUTS};
+  f.write((uint8_t*)&magic, sizeof(magic));
+  f.write((uint8_t*)&version, sizeof(version));
+  f.write((uint8_t*)dims, sizeof(dims));
+  f.write((uint8_t*)&core2RfTinyTrainCount, sizeof(core2RfTinyTrainCount));
+  f.write((uint8_t*)&core2RfTinyTrust, sizeof(core2RfTinyTrust));
+  f.write((uint8_t*)core2RfTinyW1, sizeof(core2RfTinyW1));
+  f.write((uint8_t*)core2RfTinyB1, sizeof(core2RfTinyB1));
+  f.write((uint8_t*)core2RfTinyW2, sizeof(core2RfTinyW2));
+  f.write((uint8_t*)core2RfTinyB2, sizeof(core2RfTinyB2));
+  f.write((uint8_t*)core2RfTinyTrace1, sizeof(core2RfTinyTrace1));
+  f.write((uint8_t*)core2RfTinyTrace2, sizeof(core2RfTinyTrace2));
+  f.close();
+  core2RfTinyDirty = false;
+  core2RfTinyLastSaveMs = now;
+  Serial.printf("[RF/ML] model saved trains=%lu trust=%.2f\n", (unsigned long)core2RfTinyTrainCount, core2RfTinyTrust);
+#endif
+}
+
+void core2RfTinySlimeInit() {
+#if CORE2_RF_TINYSLIME_ENABLE
+  core2RfTinySlimeResetWeights();
+#if CORE2_SD_ARCHIVE_ENABLE
+  if (core2SdArchiveOk && SD.exists(CORE2_RF_MODEL_PATH)) {
+    File f = SD.open(CORE2_RF_MODEL_PATH, FILE_READ);
+    if (f) {
+      uint32_t magic = 0; uint16_t version = 0; uint16_t dims[3] = {0,0,0};
+      f.read((uint8_t*)&magic, sizeof(magic));
+      f.read((uint8_t*)&version, sizeof(version));
+      f.read((uint8_t*)dims, sizeof(dims));
+      if (magic == 0x52465331UL && dims[0] == CORE2_RF_TINY_INPUTS && dims[1] == CORE2_RF_TINY_HIDDEN && dims[2] == CORE2_RF_TINY_OUTPUTS) {
+        f.read((uint8_t*)&core2RfTinyTrainCount, sizeof(core2RfTinyTrainCount));
+        f.read((uint8_t*)&core2RfTinyTrust, sizeof(core2RfTinyTrust));
+        f.read((uint8_t*)core2RfTinyW1, sizeof(core2RfTinyW1));
+        f.read((uint8_t*)core2RfTinyB1, sizeof(core2RfTinyB1));
+        f.read((uint8_t*)core2RfTinyW2, sizeof(core2RfTinyW2));
+        f.read((uint8_t*)core2RfTinyB2, sizeof(core2RfTinyB2));
+        f.read((uint8_t*)core2RfTinyTrace1, sizeof(core2RfTinyTrace1));
+        f.read((uint8_t*)core2RfTinyTrace2, sizeof(core2RfTinyTrace2));
+        core2RfTinyLoaded = true;
+      }
+      f.close();
+    }
+  }
+#endif
+  core2RfTinyReady = true;
+  snprintf(core2RfTinyLine, sizeof(core2RfTinyLine), "ML:%s trust%.0f%% trains:%lu", core2RfTinyLoaded ? "loaded" : "new", core2RfTinyTrust * 100.0f, (unsigned long)core2RfTinyTrainCount);
+  Serial.printf("[RF/ML] TinySlime %s inputs=%u hidden=%u out=%u trains=%lu trust=%.2f\n", core2RfTinyLoaded ? "loaded" : "new", CORE2_RF_TINY_INPUTS, CORE2_RF_TINY_HIDDEN, CORE2_RF_TINY_OUTPUTS, (unsigned long)core2RfTinyTrainCount, core2RfTinyTrust);
+#endif
+}
+
+void core2RfTinySlimeObserve() {
+#if CORE2_RF_TINYSLIME_ENABLE
+  if (!core2RfTinyReady) return;
+  core2RfTinySlimeBuildFeatures();
+  core2RfTinySlimeForward();
+  core2RfTinyHeurLabel = core2RfTinyHeuristicLabel(&core2RfTinyHeurConf);
+  uint32_t now = millis();
+  bool selfOk = (core2RfTinyHeurConf >= 0.82f) || (core2RfDomeConfidence >= 88) || ((core2RfDomeFlags & 0x08) && core2RfDomeHuman > 0.68f);
+  if (selfOk && now - core2RfTinyLastSelfMs >= CORE2_RF_TINY_SELF_MS) {
+    core2RfTinyLastSelfMs = now;
+    float loss = core2RfTinySlimeTrainStep(core2RfTinyHeurLabel, 0.0065f, false);
+    core2RfTinySlimeAppendTrainRow("self", core2RfTinyHeurLabel, loss);
+  }
+  snprintf(core2RfTinyLine, sizeof(core2RfTinyLine), "ML:%s %.0f%%  HEUR:%s %.0f%%  trust%.0f%% T%lu/%lu", core2RfTinyLabelName(core2RfTinyPredLabel), core2RfTinyPredConf * 100.0f, core2RfTinyLabelName(core2RfTinyHeurLabel), core2RfTinyHeurConf * 100.0f, core2RfTinyTrust * 100.0f, (unsigned long)core2RfTinyManualTrainCount, (unsigned long)core2RfTinySelfTrainCount);
+  core2RfTinySlimeSaveIfNeeded(false);
+#endif
+}
+
+void core2RfTinySlimeManualLabel(uint8_t label) {
+#if CORE2_RF_TINYSLIME_ENABLE
+  if (!core2RfTinyReady || label >= CORE2_RF_TINY_OUTPUTS) return;
+  float loss = 0.0f;
+  for (int i = 0; i < 4; i++) loss = core2RfTinySlimeTrainStep(label, 0.032f, true);
+  core2RfTinyLastManualLabel = label;
+  core2RfTinySlimeAppendTrainRow("manual", label, loss);
+  core2RfTinySlimeSaveIfNeeded(true);
+  snprintf(core2RfTinyTrainLine, sizeof(core2RfTinyTrainLine), "MANUAL %s loss%.3f trust%.0f%% saved", core2RfTinyLabelName(label), loss, core2RfTinyTrust * 100.0f);
+  eventLine = String(core2RfTinyTrainLine);
+  Serial.printf("[RF/ML] manual label=%s loss=%.4f trust=%.2f trains=%lu\n", core2RfTinyLabelName(label), loss, core2RfTinyTrust, (unsigned long)core2RfTinyTrainCount);
+#endif
+}
+#else
+const char* core2RfTinyLabelName(uint8_t label) { return "OFF"; }
+void core2RfTinySlimeInit() {}
+void core2RfTinySlimeObserve() {}
+void core2RfTinySlimeManualLabel(uint8_t label) {}
+void core2RfTinySlimeSaveIfNeeded(bool force) {}
+#endif
+
+void core2RememberRfDome(const RfDomeSonarPacket& rs, int8_t rxRssi) {
+  RfDomeSonarPacket tmp = rs; uint32_t got = tmp.crc; tmp.crc = 0; uint32_t exp = core2RfDomeCrc32(&tmp, sizeof(tmp));
+  if (got != exp && got != 0) Serial.printf("[RF/DOME] crc weak got=%08lX exp=%08lX; accepting visual-only\n", (unsigned long)got, (unsigned long)exp);
+  core2RfDomeLastMs = millis(); core2RfDomeRx++;
+  strlcpy(core2RfDomeAnchor, rs.anchorId[0] ? rs.anchorId : "RFAnchorAux", sizeof(core2RfDomeAnchor));
+  core2RfDomeCoreRssi = rs.coreRssi; core2RfDomeAmbientRssi = rxRssi ? rxRssi : rs.ambientRssi;
+  core2RfDomeEma = (float)rs.coreEma_x10 / 10.0f; core2RfDomeBase = (float)rs.coreBase_x10 / 10.0f; core2RfDomeDelta = (float)rs.coreDelta_x10 / 10.0f; core2RfDomeVar = (float)rs.coreVar_x10 / 10.0f;
+  core2RfDomeMotion = (float)rs.motion_x100 / 100.0f; core2RfDomePresence = (float)rs.presence_x100 / 100.0f; core2RfDomeHuman = (float)rs.human_x100 / 100.0f; core2RfDomePet = (float)rs.pet_x100 / 100.0f;
+  float rawZone = clipf((float)rs.zonePct, 0.0f, 100.0f);
+  if (!core2RfDomeZoneEmaInit) { core2RfDomeZoneEma = rawZone; core2RfDomeZoneEmaInit = 1; }
+  else { core2RfDomeZoneEma = core2RfDomeZoneEma * 0.76f + rawZone * 0.24f; }
+  core2RfDomeZonePct = (uint8_t)clipf(core2RfDomeZoneEma + 0.5f, 0.0f, 100.0f);
+  core2RfDomeDistanceCm = (uint16_t)max(0, (int)((float)(rs.domeLengthCm ? rs.domeLengthCm : 260) * ((float)core2RfDomeZonePct / 100.0f)));
+  core2RfDomeConfidence = rs.confidence; core2RfDomeFlags = rs.flags; core2RfDomeLengthCm = rs.domeLengthCm ? rs.domeLengthCm : 260; core2RfDomePacketsSeen = rs.packetsSeen;
+  float energy = clipf(core2RfDomePresence * 0.42f + core2RfDomeMotion * 0.18f + core2RfDomeHuman * 0.82f + core2RfDomePet * 0.62f + core2RfDomeVar * 0.045f, 0.0f, 10.0f);
+  core2RfDomeUpdateMultiZone((float)core2RfDomeZonePct, energy);
+  core2RfTinySlimeObserve();
+  core2RfTrailZone[core2RfTrailHead] = (float)core2RfDomeZonePct; core2RfTrailEnergy[core2RfTrailHead] = energy; core2RfTrailHead = (uint8_t)((core2RfTrailHead + 1) % 18);
+  snprintf(core2RfDomeLine, sizeof(core2RfDomeLine), "RF DOME %s occ:%s z%u d%ucm H%.0f%% P%.0f%% M%.1f C%u", core2RfDomeTargetLabel(), core2RfDomeOccupancyText(), (unsigned)core2RfDomeZonePct, (unsigned)core2RfDomeDistanceCm, core2RfDomeHuman * 100.0f, core2RfDomePet * 100.0f, core2RfDomeMotion, (unsigned)core2RfDomeConfidence);
+  appendCore2RfDomeArchive();
+}
+
+void handleRfDomeRaw(const uint8_t* data, uint16_t len, int8_t rxRssi) {
+  if (!data || len != sizeof(RfDomeSonarPacket) || data[0] != 'R' || data[1] != 'S') return;
+  RfDomeSonarPacket rs{}; memcpy(&rs, data, sizeof(rs));
+  core2RememberRfDome(rs, rxRssi);
+  core2RememberAnchorRadar(rs.anchorId, rxRssi, (float)rs.presence_x100 / 100.0f, (float)rs.motion_x100 / 100.0f, (float)(rs.human_x100 + rs.pet_x100) / 100.0f, (float)rs.coreDelta_x10 / 10.0f, sqrtf(max(1.0f, (float)rs.coreVar_x10 / 10.0f)), (float)rs.motion_x100 / 250.0f, 0, 0, rs.confidence, rs.flags);
+  eventLine = String(core2RfDomeLine);
+}
+
+void sendCore2RfDomePing(bool force) {
+  if (!espnowOk) return;
+  uint32_t now = millis(); uint32_t interval = (page == PAGE_ANCHOR) ? CORE2_RF_DOME_ACTIVE_MS : CORE2_RF_DOME_PING_MS;
+  if (!force && now - core2RfDomeLastPingMs < interval) return;
+  core2RfDomeLastPingMs = now; ensureColonyPeer();
+  RfDomePingPacket rp{}; rp.magic[0] = 'R'; rp.magic[1] = 'P'; rp.version = 1; rp.pingMode = (page == PAGE_ANCHOR) ? 1 : 0;
+  strlcpy(rp.source, "Core2Home", sizeof(rp.source)); rp.seq = ++core2RfDomePingSeq; rp.uptimeMs = now; rp.pulse = (uint16_t)((now ^ (core2RfDomePingSeq * 2654435761UL)) & 0xFFFF); rp.channel = getWifiChannelSafe();
+  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&rp, sizeof(rp)); if (err == ESP_OK) core2RfDomeTx++; else core2RfDomeTxFail++;
+}
+
+void appendCore2AirArchive() {
+#if CORE2_SD_ARCHIVE_ENABLE
+  uint32_t now = millis();
+  if (!core2SdArchiveOk || now - core2LastAirArchiveMs < CORE2_AIR_ARCHIVE_MS) return;
+  core2LastAirArchiveMs = now;
+  File f = SD.open("/janus/air_sgp30.csv", FILE_APPEND);
+  if (!f) { core2SdArchiveOk = false; Serial.println("[SD] air archive open failed"); return; }
+  String row;
+  row.reserve(170);
+  row += String(now); row += ',';
+  row += String(eco2); row += ',';
+  row += String(tvoc); row += ',';
+  row += String(rawH2); row += ',';
+  row += String(rawEthanol); row += ',';
+  row += String(airScore, 3); row += ',';
+  row += String(airTrend, 3); row += ',';
+  row += String(sgpSameCount); row += ',';
+  row += String(sgpReadOk); row += ',';
+  row += String(sgpReadFail); row += ',';
+  row += String(sgpBaselineLoaded ? 1 : 0); row += ',';
+  row += String(sgpHumidityApplied); row += ',';
+  row += String((eco2 >= 50000U || tvoc >= 50000U) ? 1 : 0);
+  f.println(row);
+  f.close();
+  core2AirArchiveRows++;
 #endif
 }
 
@@ -4309,19 +6885,29 @@ void hapticTick() {
 }
 
 int pickNodeIndex(const String& id) {
-  // v6.20 semantic slots for existing UI pages.
-  // Unknown/future devices still go into the universal registry and are visible on MESH.
+  // v6.41D strict semantic slots.
+  // Order matters: Stick must be detected before its role="Swarm";
+  // Pyramid/Atom Matrix must not be mistaken for TRON.
   if (id.indexOf("BlindEye") >= 0 || id.indexOf("blind_eye") >= 0 || id.indexOf("EYE_BLIND") >= 0 || id.indexOf("Eye") >= 0) return 0;
   if (id.indexOf("Beacon") >= 0 || id.indexOf("Cardputer") >= 0 || id.indexOf("ADV") >= 0 || id.indexOf("BCN") >= 0) return 1;
   if (id.indexOf("Buzz") >= 0 || id.indexOf("Lighter") >= 0 || id.indexOf("Miner") >= 0 || id.indexOf("Pool") >= 0) return 2;
-  if (id.indexOf("EchoMic") >= 0 || id.indexOf("Audio") >= 0 || id.indexOf("Mic") >= 0) return 3;
-  if (id.indexOf("ATOM_SWARM_TRON") >= 0 || id.indexOf("ATOM") >= 0 || id.indexOf("Tron") >= 0 ||
-      id.indexOf("Throne") >= 0 || id.indexOf("Swarm") >= 0 || id.indexOf("TD") >= 0 || id.indexOf("SWRM") >= 0) return 4;
-  if (id.indexOf("Stick3") >= 0 || id.indexOf("StickS3") >= 0 || id.indexOf("Stick") >= 0 ||
-      id.indexOf("M5Stick") >= 0 || id.indexOf("AlienRogue") >= 0 || id.indexOf("Rogue") >= 0 ||
-      id.indexOf("STK") >= 0) return 5;
-  if (id.indexOf("ZimGeek") >= 0 || id.indexOf("Zim") >= 0 || id.indexOf("ZIM_SOLO") >= 0 ||
-      id.indexOf("zim_solo") >= 0 || id.indexOf("ZIM") >= 0) return 6;
+
+  if (id.indexOf("Stick3") >= 0 || id.indexOf("StickS3") >= 0 || id.indexOf("EliteStick") >= 0 ||
+      id.indexOf("Yaks") >= 0 || id.indexOf("yaks_gate") >= 0 ||
+      id.indexOf("Stick") >= 0 || id.indexOf("M5Stick") >= 0 || id.indexOf("AlienRogue") >= 0) return 5;
+
+  if (id.indexOf("EchoMic") >= 0 || id.indexOf("AudioMic") >= 0 || id.indexOf("EchoMicLive") >= 0) return 3;
+
+  if (id.indexOf("ATOM_BH") >= 0 || id.indexOf("BH_GPT") >= 0 ||
+      id.indexOf("Blackhole") >= 0 || id.indexOf("BlackStar") >= 0 ||
+      id.indexOf("Gargantua") >= 0 || id.indexOf("GARGANTUA") >= 0) return 7;
+  if ((id.indexOf("GroundOps") >= 0 || id.indexOf("Swarm_") >= 0) &&
+      id.indexOf("ATOM_SWARM_TRON") < 0 && id.indexOf("TRON") < 0 && id.indexOf("Tron") < 0) return 7;
+
+  if (id.indexOf("ATOM_SWARM_TRON") >= 0 || id.indexOf("Swarm_") >= 0 ||
+      id.indexOf("GroundOps") >= 0 || id.indexOf("TRON") >= 0 || id.indexOf("Tron") >= 0 ||
+      id.indexOf("SWRM") >= 0) return 4;
+
   return 6;
 }
 
@@ -4333,6 +6919,7 @@ void* semanticNodeSlot(uint8_t idx) {
     case 3: return &audioNode;
     case 4: return &swarm;
     case 5: return &stick;
+    case 7: return &blackStar;
     default: return &unknownNode;
   }
 }
@@ -4345,7 +6932,9 @@ const char* semanticSlotName(uint8_t idx) {
     case 3: return "MIC";
     case 4: return "SWRM";
     case 5: return "STK";
-    default: return "ZIM";
+    case 6: return "ZIM";
+    case 7: return "BH";
+    default: return "UNK";
   }
 }
 
@@ -4512,26 +7101,50 @@ uint8_t getWifiChannelSafe() {
   return primary;
 }
 
-void ensureColonyPeer() {
-  if (!espnowOk) return;
-  if (millis() - colonyLastPeerFixMs < COLONY_PEER_FIX_MS) return;
-  colonyLastPeerFixMs = millis();
+bool forceColonyPeerRebuild(const char* reason) {
+  if (!espnowOk) return false;
 
   uint8_t ch = getWifiChannelSafe();
-  if (ch == 0) ch = JANUS_BROADCAST_CHANNEL;
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
 
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC) && colonyPeerChannel == ch) return;
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) {
+    esp_now_del_peer(JANUS_BROADCAST_MAC);
+  }
 
   esp_now_peer_info_t peer{};
   memcpy(peer.peer_addr, JANUS_BROADCAST_MAC, 6);
   peer.channel = ch;
   peer.encrypt = false;
 
-  if (esp_now_add_peer(&peer) == ESP_OK) {
+  esp_err_t err = esp_now_add_peer(&peer);
+  if (err == ESP_OK || err == ESP_ERR_ESPNOW_EXIST) {
     colonyPeerChannel = ch;
-    Serial.printf("[COLONY] peer channel=%u\n", ch);
+    colonyPeerRebuilds++;
+    Serial.printf("[COLONY] peer ready ch=%u rebuilds=%lu reason=%s\n",
+                  (unsigned)ch, (unsigned long)colonyPeerRebuilds, reason ? reason : "-");
+    return true;
   }
+
+  colonyPeerChannel = 0;
+  Serial.printf("[COLONY] peer rebuild FAIL err=%d ch=%u reason=%s\n",
+                (int)err, (unsigned)ch, reason ? reason : "-");
+  return false;
+}
+
+void ensureColonyPeer() {
+  if (!espnowOk) return;
+  if (millis() - colonyLastPeerFixMs < COLONY_PEER_FIX_MS) return;
+  colonyLastPeerFixMs = millis();
+
+  uint8_t ch = getWifiChannelSafe();
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
+
+  bool exists = esp_now_is_peer_exist(JANUS_BROADCAST_MAC);
+  if (exists && colonyPeerChannel == ch) return;
+
+  forceColonyPeerRebuild(exists ? "channel-change" : "ensure");
 }
 
 void initWiFiEspNow() {
@@ -4563,6 +7176,9 @@ void initWiFiEspNow() {
 
 // ========================= SGP30 =========================
 
+void initSGP30();
+void sgp30ResetBaselineAndReinit(const char* reason);
+
 bool i2cProbe(uint8_t addr) {
   Wire.beginTransmission(addr);
   return Wire.endTransmission() == 0;
@@ -4581,6 +7197,73 @@ void scanI2C() {
   if (!any) Serial.println("[I2C] none");
 }
 
+bool sgp30BaselineLooksUsable(uint16_t eco2Base, uint16_t tvocBase) {
+  if (eco2Base == 0 || tvocBase == 0) return false;
+  if (eco2Base == 0xFFFF || tvocBase == 0xFFFF) return false;
+  // v6.42C3: the user's previous baseline eCO2=0xFE2C drove the SGP30 algorithm
+  // into saturated 57330/60000 output. Real baselines are opaque, but values near
+  // erased-flash/high-end are too risky for this swarm station.
+  if (eco2Base >= 0xF000 || tvocBase >= 0xF000) return false;
+  if (eco2Base < 0x0100 || tvocBase < 0x0100) return false;
+  return true;
+}
+
+uint32_t sgp30AbsoluteHumidityMgM3(float temperatureC, float humidityPct) {
+  if (!isfinite(temperatureC) || !isfinite(humidityPct)) return 0;
+  humidityPct = clipf(humidityPct, 0.0f, 100.0f);
+  temperatureC = clipf(temperatureC, -20.0f, 60.0f);
+  // Sensirion/Adafruit approximation: result is absolute humidity in mg/m^3.
+  float ah_gm3 = 216.7f * ((humidityPct / 100.0f) * 6.112f *
+                           expf((17.62f * temperatureC) / (243.12f + temperatureC)) /
+                           (273.15f + temperatureC));
+  if (!isfinite(ah_gm3) || ah_gm3 <= 0.0f) return 0;
+  return (uint32_t)clipf(ah_gm3 * 1000.0f, 0.0f, 100000.0f);
+}
+
+void sgp30ApplyHumidityCompensation(bool force = false) {
+  if (!sgpReady) return;
+  uint32_t now = millis();
+  if (!force && now - sgpLastHumidityMs < SGP30_HUMIDITY_MS) return;
+  sgpLastHumidityMs = now;
+
+  // Prefer BeaconADV real ENV values already mirrored into Core2.
+  float t = beacon.refresh() ? beacon.v0 : NAN;
+  float h = beacon.refresh() ? beacon.v1 : NAN;
+  if (!isfinite(t) || !isfinite(h) || h <= 0.1f || h > 100.0f || t < -20.0f || t > 60.0f) return;
+
+  uint32_t ah = sgp30AbsoluteHumidityMgM3(t, h);
+  if (ah > 0 && sgp.setHumidity(ah)) {
+    sgpHumidityApplied = ah;
+    if (force || (sgpReadOk % 30UL) == 0) {
+      Serial.printf("[SGP30] humidity compensation T=%.1f RH=%.1f AH=%lu mg/m3\n", t, h, (unsigned long)ah);
+    }
+  }
+}
+
+void sgp30ClearStoredBaseline() {
+  prefs.remove("eco2base");
+  prefs.remove("tvocbase");
+  sgpBaselineLoaded = false;
+  sgpBaselineEco2Last = 0;
+  sgpBaselineTvocLast = 0;
+  Serial.println("[SGP30] stored baseline cleared; reboot/reinit will let sensor learn fresh air again");
+}
+
+void sgp30ResetBaselineAndReinit(const char* reason) {
+  sgp30ClearStoredBaseline();
+  sgpReady = false;
+  sgpReadOk = 0;
+  sgpReadFail = 0;
+  sgpSameCount = 0;
+  sgpAirStaleWarned = false;
+  sgpSaturationCount = 0;
+  sgpResetArmedMs = 0;
+  sgpLastChangeMs = millis();
+  snprintf(sgpStatusLine, sizeof(sgpStatusLine), "AUTO BASELINE RESET: %s", reason ? reason : "manual");
+  eventLine = "SGP30 baseline reset";
+  initSGP30();
+}
+
 void initSGP30() {
   Wire.begin(CORE2_PORTA_SDA, CORE2_PORTA_SCL, 100000U);
   Wire.setClock(100000U);
@@ -4590,6 +7273,7 @@ void initSGP30() {
   if (!i2cProbe(SGP30_ADDR)) {
     sgpReady = false;
     eventLine = "SGP30 missing 0x58";
+    snprintf(sgpStatusLine, sizeof(sgpStatusLine), "SGP30 missing 0x58 on SDA32/SCL33");
     Serial.println("[SGP30] no ACK at 0x58");
     return;
   }
@@ -4597,49 +7281,111 @@ void initSGP30() {
   sgpReady = sgp.begin(&Wire);
   if (!sgpReady) {
     eventLine = "SGP30 begin failed";
+    snprintf(sgpStatusLine, sizeof(sgpStatusLine), "SGP30 begin failed after ACK");
     Serial.println("[SGP30] begin failed");
     return;
   }
 
   sgp.IAQinit();
   sgpWarmupStart = millis();
+  lastBaselineAt = millis();
+  sgpReadOk = 0;
+  sgpReadFail = 0;
+  sgpSameCount = 0;
+  sgpAirStaleWarned = false;
+  sgpLastChangeMs = millis();
+  sgpLastEco2 = 0;
+  sgpLastTvoc = 0;
+
+  Serial.printf("[SGP30] serial=%04X-%04X-%04X\n", sgp.serialnumber[0], sgp.serialnumber[1], sgp.serialnumber[2]);
 
   uint16_t eco2Base = prefs.getUShort("eco2base", 0);
   uint16_t tvocBase = prefs.getUShort("tvocbase", 0);
-  if (eco2Base != 0 && tvocBase != 0) {
-    sgp.setIAQBaseline(eco2Base, tvocBase);
-    Serial.printf("[SGP30] loaded baseline eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
+  sgpBaselineLoaded = false;
+  if (sgp30BaselineLooksUsable(eco2Base, tvocBase)) {
+    if (sgp.setIAQBaseline(eco2Base, tvocBase)) {
+      sgpBaselineLoaded = true;
+      sgpBaselineEco2Last = eco2Base;
+      sgpBaselineTvocLast = tvocBase;
+      Serial.printf("[SGP30] loaded baseline eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
+    } else {
+      Serial.printf("[SGP30] baseline load failed eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
+    }
+  } else if (eco2Base || tvocBase) {
+    Serial.printf("[SGP30] ignored suspicious baseline eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
+  } else {
+    Serial.println("[SGP30] no stored baseline; learning fresh baseline");
   }
 
+  sgp30ApplyHumidityCompensation(true);
+  snprintf(sgpStatusLine, sizeof(sgpStatusLine), "SGP30 ready base:%s", sgpBaselineLoaded ? "loaded" : "learning");
   eventLine = "SGP30 ready";
-  Serial.println("[SGP30] ready");
+  Serial.println("[SGP30] ready; IAQmeasure must tick once per second");
 }
 
 void readSGP30() {
+  uint32_t now = millis();
   if (!sgpReady) {
     static uint32_t lastRetry = 0;
-    if (millis() - lastRetry > 10000UL) {
-      lastRetry = millis();
+    if (now - lastRetry > 10000UL) {
+      lastRetry = now;
       initSGP30();
     }
     return;
   }
 
+  sgp30ApplyHumidityCompensation(false);
+
   if (!sgp.IAQmeasure()) {
+    sgpReadFail++;
     eventLine = "SGP30 read fail";
-    Serial.println("[SGP30] IAQmeasure failed");
+    snprintf(sgpStatusLine, sizeof(sgpStatusLine), "SGP30 IAQmeasure failed #%lu", (unsigned long)sgpReadFail);
+    Serial.printf("[SGP30] IAQmeasure failed fail=%lu ok=%lu\n", (unsigned long)sgpReadFail, (unsigned long)sgpReadOk);
+    if (now - sgpLastRecoveryMs > SGP30_REINIT_MS) {
+      sgpLastRecoveryMs = now;
+      Serial.println("[SGP30] recovery reinit after repeated read trouble");
+      initSGP30();
+    }
     return;
   }
 
+  sgpReadOk++;
   uint16_t oldEco2 = eco2;
   uint16_t oldTvoc = tvoc;
 
   eco2 = sgp.eCO2;
   tvoc = sgp.TVOC;
 
-  if (sgp.IAQmeasureRaw()) {
-    rawH2 = sgp.rawH2;
-    rawEthanol = sgp.rawEthanol;
+  if (now - sgpLastRawMs >= SGP30_RAW_MS) {
+    sgpLastRawMs = now;
+    if (sgp.IAQmeasureRaw()) {
+      rawH2 = sgp.rawH2;
+      rawEthanol = sgp.rawEthanol;
+    }
+  }
+
+  bool saturatedIaq = (eco2 >= 50000U || tvoc >= 50000U);
+  if (saturatedIaq) sgpSaturationCount++;
+  else sgpSaturationCount = 0;
+
+  // v6.42C3: if a loaded baseline instantly forces ridiculous maxed IAQ values,
+  // throw that baseline away once. Raw channels moving means the chip/I2C are alive.
+  if (sgpBaselineLoaded && !sgpAutoBaselineResetDone && sgpSaturationCount >= 8 && (now - sgpWarmupStart) < 300000UL) {
+    sgpAutoBaselineResetDone = true;
+    Serial.printf("[SGP30] AUTO BASELINE RESET saturated eCO2=%u TVOC=%u raw=%u/%u base=loaded\n", eco2, tvoc, rawH2, rawEthanol);
+    sgp30ResetBaselineAndReinit("auto saturated baseline");
+    return;
+  }
+
+  bool changed = (eco2 != sgpLastEco2) || (tvoc != sgpLastTvoc);
+  if (changed) {
+    sgpLastEco2 = eco2;
+    sgpLastTvoc = tvoc;
+    sgpSameCount = 0;
+    sgpAirStaleWarned = false;
+    sgpLastChangeMs = now;
+  } else {
+    sgpSameCount++;
   }
 
   float d = fabsf((float)eco2 - (float)oldEco2) / 100.0f + fabsf((float)tvoc - (float)oldTvoc) / 80.0f;
@@ -4654,13 +7400,41 @@ void readSGP30() {
   else if (tvoc > 220 || eco2 > 900) eventLine = "air watch";
   else eventLine = "air stable";
 
-  if (millis() - lastBaselineAt > SGP30_BASELINE_MS && millis() - sgpWarmupStart > 120000UL) {
-    lastBaselineAt = millis();
+  if (now - sgpLastLogMs >= SGP30_LOG_MS) {
+    sgpLastLogMs = now;
+    uint32_t warm = (now - sgpWarmupStart) / 1000UL;
+    uint32_t stale = sgpLastChangeMs ? ((now - sgpLastChangeMs) / 1000UL) : 0;
+    snprintf(sgpStatusLine, sizeof(sgpStatusLine), "eCO2=%u TVOC=%u rawH2=%u rawEtOH=%u same=%lu", eco2, tvoc, rawH2, rawEthanol, (unsigned long)sgpSameCount);
+    Serial.printf("[SGP30] read ok=%lu fail=%lu eCO2=%u TVOC=%u rawH2=%u rawEtOH=%u score=%.2f trend=%.3f warm=%lus same=%lu stale=%lus base=%s AH=%lu\n",
+                  (unsigned long)sgpReadOk, (unsigned long)sgpReadFail,
+                  eco2, tvoc, rawH2, rawEthanol, airScore, airTrend,
+                  (unsigned long)warm, (unsigned long)sgpSameCount, (unsigned long)stale,
+                  sgpBaselineLoaded ? "loaded" : "learn", (unsigned long)sgpHumidityApplied);
+  }
+
+  if (sgpSameCount >= SGP30_STALE_WARN_COUNT && !sgpAirStaleWarned) {
+    sgpAirStaleWarned = true;
+    Serial.printf("[SGP30] STALE? eCO2/TVOC unchanged for %lu samples; raw=%u/%u. If you breathe near sensor and raw changes, IAQ may simply be stable. Core2 will auto-clear only a clearly saturated bad baseline.\n",
+                  (unsigned long)sgpSameCount, rawH2, rawEthanol);
+  }
+
+  appendCore2AirArchive();
+
+  bool looksLikeDefaultWarmup = (eco2 == 400 && tvoc == 0);
+  bool enoughWarmup = (now - sgpWarmupStart > SGP30_BASELINE_WARMUP_MS);
+  if (now - lastBaselineAt > SGP30_BASELINE_MS && enoughWarmup && !looksLikeDefaultWarmup) {
+    lastBaselineAt = now;
     uint16_t eco2Base = 0, tvocBase = 0;
-    if (sgp.getIAQBaseline(&eco2Base, &tvocBase)) {
+    if (sgp.getIAQBaseline(&eco2Base, &tvocBase) && sgp30BaselineLooksUsable(eco2Base, tvocBase)) {
       prefs.putUShort("eco2base", eco2Base);
       prefs.putUShort("tvocbase", tvocBase);
-      Serial.printf("[SGP30] saved baseline eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
+      sgpBaselineLoaded = true;
+      sgpBaselineEco2Last = eco2Base;
+      sgpBaselineTvocLast = tvocBase;
+      Serial.printf("[SGP30] saved baseline eCO2=0x%04X TVOC=0x%04X after warmup=%lus\n",
+                    eco2Base, tvocBase, (unsigned long)((now - sgpWarmupStart) / 1000UL));
+    } else {
+      Serial.printf("[SGP30] baseline skip invalid eCO2=0x%04X TVOC=0x%04X\n", eco2Base, tvocBase);
     }
   }
 }
@@ -4669,9 +7443,14 @@ void readSGP30() {
 void sendCore2Heartbeat();
 void sendCore2Entropy();
 void sendCore2SwarmSense();
+void sendCore2NasBrainReport(bool force = false);
 void initCore2SdArchive();
 void appendCore2UniverseArchive();
+void appendCore2AnchorRadarArchive();
+void appendCore2AirArchive();
 void handleSwarmSenseRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void handlePnCortexRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void handleGladiusMemoryRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
 void processRxFrames();
 float homeEntropy();
 float homeSync();
@@ -4697,6 +7476,20 @@ void core2TachyonProphecyTick();
 bool coreWorkerEnabled();
 void janusEyeVisionSynthesizeFromEye(bool force = false);
 void handleZimAgentMemoryRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void handleJanusAiNodeRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void handleHiveMetricRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void handleJanusEventRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveHeartbeat(const JanusColonyPacket& pkt, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveSwarmSense(const SwarmSensePacket& ss, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveEntropyV1(const EntropyReport& er, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveEntropyV2(const EntropyReportV2& er2, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveZimAgent(const ZimAgentMemoryPacket& za, int8_t rxRssi, const uint8_t* mac = nullptr);
+void janusObserveEyeFrame(const JanusEyeFramePacket& ef, int8_t rxRssi);
+void janusObserveTachyon(const JanusTachyonProphecyPacket& tp, int8_t rxRssi);
+void janusObserveKenshi(const JanusKenshiPacket& k2, int8_t rxRssi);
+void janusBlackboardTick();
+void janusPolicyTick(bool force = false);
+bool janusEmitLocalEvent(uint8_t eventType, uint8_t confidence, uint8_t urgency, int16_t a, int16_t b, int16_t c, int16_t d);
 bool janusAudioShouldListen();
 void handleJanusAudioFrameRaw(const uint8_t* data, uint16_t len, int8_t rxRssi);
 void updateWeather(bool force = false);
@@ -4856,7 +7649,7 @@ void sendBuzzControl(const char* cmd, int32_t value) {
 // ========================= AUDIO LIVE CONTROL / PLAYBACK =========================
 
 bool janusAudioShouldListen() {
-#if JANUS_AUDIO_LIVE_ENABLE
+#if JANUS_AUDIO_LIVE_ENABLE && JANUS_AUDIO_OUTPUT_ENABLE
   return espnowOk && janusAudioLiveUserEnabled && page == PAGE_AUDIO;
 #else
   return false;
@@ -5097,6 +7890,9 @@ void janusAudioPlaybackTick() {
 
 void sendJanusAudioControl(bool enable, bool force) {
 #if JANUS_AUDIO_LIVE_ENABLE
+#if !JANUS_AUDIO_OUTPUT_ENABLE
+  if (enable) enable = false;  // v6.41D: Core2 speaker path is quarantined; never request noisy A/F stream automatically.
+#endif
   if (!espnowOk) return;
   uint32_t now = millis();
   if (!force && janusAudioLiveSentState == enable && now - janusAudioLastControlMs < JANUS_AUDIO_CONTROL_REPEAT_MS) return;
@@ -5139,7 +7935,16 @@ void janusAudioLiveTick() {
   janusAudioPlaybackTick();
 
   if (!want) {
-    if (now - janusAudioLastFrameMs > JANUS_AUDIO_IDLE_TIMEOUT_MS) snprintf(janusAudioStatusLine, sizeof(janusAudioStatusLine), "AUDIO OFF");
+    if (core2AudioNodePresenceFresh(now)) {
+#if JANUS_AUDIO_OUTPUT_ENABLE
+      snprintf(janusAudioStatusLine, sizeof(janusAudioStatusLine), "AUDIO NODE READY");
+#else
+      snprintf(janusAudioStatusLine, sizeof(janusAudioStatusLine), "AUDIO RX QUARANTINE");
+#endif
+    } else {
+      if (core2BlackStarFresh(now)) snprintf(janusAudioStatusLine, sizeof(janusAudioStatusLine), "AUDIO BH LINK");
+      else snprintf(janusAudioStatusLine, sizeof(janusAudioStatusLine), "AUDIO OFF");
+    }
     return;
   }
 
@@ -5187,6 +7992,9 @@ void sendJanusEyeVisionControl(bool enable, bool force) {
     eventLine = enable ? "BlindEye sensor-field ON" : "BlindEye sensor-field OFF";
   } else {
     janusEyeVisionControlFail++;
+    colonyPeerSendFails++;
+    colonyPeerChannel = 0;
+    forceColonyPeerRebuild("eye-ctrl-fail");
     snprintf(janusEyeVisionStatusLine, sizeof(janusEyeVisionStatusLine), "EYE CTRL FAIL %d", (int)err);
   }
 #endif
@@ -5404,10 +8212,33 @@ void handleHeartbeat(const JanusColonyPacket& pkt, int8_t rxRssi) {
     universalMirrorToFixedSlot(uidx);
   }
 
+  if (core2LooksLikeAudioMirror(pkt.nodeId, pkt.role)) {
+    core2TouchAudioNodeMirror(pkt.nodeId, pkt.role, rxRssi ? rxRssi : pkt.rssi,
+                              (float)pkt.shares, pkt.diff, pkt.aiHint ? (float)pkt.aiHint / 3.0f : 0.55f,
+                              (float)pkt.shares, (float)pkt.rejects, -1.0f, -1.0f);
+  }
+
+  if (core2LooksLikeBlackStarNode(pkt.nodeId, pkt.role)) {
+    core2RememberBlackStar(pkt.nodeId, rxRssi ? rxRssi : pkt.rssi,
+                           0.0f, core2BlackStarPressure, core2BlackStarTemp,
+                           (float)pkt.aiHint, pkt.diff,
+                           (float)pkt.hashRate, (float)pkt.bestBits,
+                           70.0f, 0.62f);
+    if (uidx >= 0) {
+      colonyNodes[uidx].semanticSlot = 7;
+      strlcpy(colonyNodes[uidx].role, "BlackStar", sizeof(colonyNodes[uidx].role));
+      universalRecountNodes();
+      universalMirrorToFixedSlot(uidx);
+    }
+  }
+
   heartbeatPackets++;
 
   String roleStr = String(pkt.role);
-  if (roleStr.indexOf("BuzzLighter") >= 0 || id.indexOf("Buzz") >= 0) eventLine = "Buzz master seen";
+  if (core2LooksLikeBlackStarNode(pkt.nodeId, pkt.role)) eventLine = "BlackStar study target seen";
+  else if (id.indexOf("Cardputer") >= 0 || id.indexOf("Elite") >= 0 || roleStr.indexOf("CARD_A9") >= 0) eventLine = "Cardputer Elite pilot seen";
+  else if (roleStr.indexOf("Beacon") >= 0 || id.indexOf("Beacon") >= 0 || id.indexOf("ADV") >= 0) eventLine = "Beacon route node seen";
+  else if (roleStr.indexOf("BuzzLighter") >= 0 || id.indexOf("Buzz") >= 0) eventLine = "Buzz master seen";
   else if (roleStr.indexOf("Stick") >= 0 || id.indexOf("Stick3") >= 0 || id.indexOf("StickS3") >= 0) eventLine = "Stick3 worker seen";
   else if (roleStr.indexOf("ATOM") >= 0 || roleStr.indexOf("Tron") >= 0 || id.indexOf("ATOM") >= 0) eventLine = "ATOM/TRON worker seen";
 }
@@ -5425,8 +8256,277 @@ void handleEntropyV1(const EntropyReport& er, int8_t rxRssi) {
   }
 }
 
+
+bool core2LooksLikeAnchorRadarNode(const char* id, const char* kindOrRole = nullptr) {
+  String a = String(id ? id : "");
+  String b = String(kindOrRole ? kindOrRole : "");
+  a.toLowerCase();
+  b.toLowerCase();
+  return a.indexOf("rfanchor") >= 0 || a.indexOf("anchor") >= 0 || b.indexOf("rf_anchor") >= 0 || b.indexOf("anchor") >= 0;
+}
+
+bool core2AnchorRadarFresh(uint32_t now = millis()) {
+  return core2AnchorRadarLastMs && (now - core2AnchorRadarLastMs < 18000UL);
+}
+
+bool core2BlackStarFresh(uint32_t now) {
+  return core2BlackStarLastMs && (now - core2BlackStarLastMs < 26000UL);
+}
+
+void core2RememberBlackStar(const char* id, int8_t rxRssi,
+                            float mic, float pressure, float temp,
+                            float surprise, float loss, float hashRate,
+                            float bestBits, float mood, float fit) {
+  uint32_t now = millis();
+  strlcpy(core2BlackStarNode, (id && id[0]) ? id : "ATOM_BH", sizeof(core2BlackStarNode));
+  core2BlackStarLastMs = now;
+  core2BlackStarRx++;
+  core2BlackStarRssi = rxRssi;
+
+  core2BlackStarMic = core2BlackStarMic * 0.80f + clipf(mic, 0.0f, 5000.0f) * 0.20f;
+  if (pressure > 100.0f && pressure < 1400.0f) core2BlackStarPressure = core2BlackStarPressure * 0.82f + pressure * 0.18f;
+  if (temp > -40.0f && temp < 120.0f) core2BlackStarTemp = core2BlackStarTemp * 0.82f + temp * 0.18f;
+  core2BlackStarSurprise = core2BlackStarSurprise * 0.78f + clipf(surprise, 0.0f, 12.0f) * 0.22f;
+  core2BlackStarLoss = core2BlackStarLoss * 0.82f + clipf(fabsf(loss), 0.0f, 12.0f) * 0.18f;
+  if (hashRate > 0.0f) core2BlackStarHash = core2BlackStarHash * 0.72f + hashRate * 0.28f;
+  if (bestBits > 0.0f) core2BlackStarBest = max(core2BlackStarBest * 0.995f, bestBits);
+  core2BlackStarMood = core2BlackStarMood * 0.80f + clipf(mood / 100.0f, 0.0f, 1.5f) * 0.20f;
+
+  float signal = nodeSignalRaw(true, now, rxRssi);
+  core2BlackStarLensing = clipf(core2BlackStarSurprise * 0.18f + core2BlackStarLoss * 0.10f + signal * 0.34f + fit * 0.28f, 0.0f, 1.5f);
+  core2BlackStarStudy = clipf(core2BlackStarStudy * 0.92f + (signal * 0.36f + fit * 0.26f + clipf(core2BlackStarBest / 34.0f, 0.0f, 1.0f) * 0.24f + core2BlackStarMood * 0.14f) * 0.08f, 0.0f, 1.5f);
+
+  blackStar.touch(core2BlackStarNode);
+  strlcpy(blackStar.role, "BlackStar", sizeof(blackStar.role));
+  blackStar.rssi = rxRssi;
+  blackStar.entropy = core2BlackStarSurprise;
+  blackStar.loss = core2BlackStarLoss;
+  blackStar.sync = clipf(core2BlackStarStudy, 0.0f, 1.0f);
+  blackStar.fit = clipf(fit, 0.0f, 1.5f);
+  blackStar.v0 = core2BlackStarMic;
+  blackStar.v1 = core2BlackStarPressure;
+  blackStar.v2 = core2BlackStarTemp;
+  blackStar.v3 = core2BlackStarSurprise;
+  blackStar.v4 = core2BlackStarLoss;
+  blackStar.v5 = core2BlackStarHash;
+  blackStar.v6 = core2BlackStarBest;
+  blackStar.v7 = core2BlackStarMood * 100.0f;
+  blackStar.hashRate = (uint32_t)max(0.0f, core2BlackStarHash);
+  blackStar.bestBits = (uint32_t)max(0.0f, core2BlackStarBest);
+
+  core2BhCorpusObserveTelemetry(now);
+
+  snprintf(core2BlackStarLine, sizeof(core2BlackStarLine),
+           "BH LAB lens %.0f%% study %.0f%% %s",
+           clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f,
+           clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f,
+           core2BhCorpus.line);
+
+  if (now - core2BlackStarLastLogMs > 8500UL) {
+    core2BlackStarLastLogMs = now;
+    Serial.printf("[CORE2/BH] node=%s rssi=%d lens=%.0f study=%.0f H=%lu best=%lu T=%.1f loss=%.2f rx=%lu\n",
+                  core2BlackStarNode, (int)core2BlackStarRssi,
+                  clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f,
+                  clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f,
+                  (unsigned long)blackStar.hashRate,
+                  (unsigned long)blackStar.bestBits,
+                  core2BlackStarTemp,
+                  core2BlackStarLoss,
+                  (unsigned long)core2BlackStarRx);
+  }
+}
+
+void handlePnCortexRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  if (!data || len != sizeof(JanusPnCortexPacket)) return;
+  JanusPnCortexPacket pn{};
+  memcpy(&pn, data, sizeof(pn));
+  if (pn.magic[0] != 'P' || pn.magic[1] != 'N' || pn.version != 1) return;
+
+  const bool fromYaks = core2PnLooksLikeYaks(pn.nodeId, pn.kind, pn.role);
+  const bool fromBh = core2LooksLikeBlackStarNode(pn.nodeId, pn.kind);
+  const bool fromAdvSky = core2PnLooksLikeAdvSky(pn.nodeId, pn.kind, pn.role);
+
+  core2PnCortexRx++;
+  core2CopyPnPacket(&core2PnCortex, &pn, rxRssi);
+  if (fromYaks) core2MurphCortex = core2PnCortex;
+  if (fromBh && !fromYaks) core2BlackStarCortex = core2PnCortex;
+
+  const char* roleName = fromYaks ? "YaksGate" : (fromBh ? "BlackStar" : (fromAdvSky ? "ADVSKY" : "PNCortex"));
+  int idx = universalRememberNodeEx(pn.nodeId[0] ? pn.nodeId : roleName, roleName, rxRssi ? rxRssi : pn.rssi, mac);
+  if (idx >= 0) {
+    UniversalNode& n = colonyNodes[idx];
+    if (fromYaks) n.semanticSlot = 5;
+    else if (fromBh) n.semanticSlot = 7;
+    else if (fromAdvSky) n.semanticSlot = 1;
+    n.worker = pn.worker_id;
+    n.entropy = core2PnCortex.entropy;
+    n.loss = clipf((float)pn.jitter_us / 3600.0f, 0.0f, 8.0f);
+    n.sync = clipf(1.0f - n.loss * 0.18f + core2PnCortex.murph * 0.10f, 0.0f, 1.0f);
+    n.fit = clipf(core2PnCortex.murph, 0.0f, 1.5f);
+    n.v[0] = core2PnCortex.heat;
+    n.v[1] = core2PnCortex.load;
+    n.v[2] = core2PnCortex.murph;
+    n.v[3] = core2PnCortex.labyrinth;
+    n.v[4] = core2PnCortex.silicon;
+    n.v[5] = core2PnCortex.tail;
+    n.v[6] = (float)(pn.packet_hash & 0xFFFFUL);
+    n.v[7] = (float)pn.ir_phase;
+    n.hashRate = pn.hash_rate;
+    n.bestBits = pn.best_bits;
+    n.targetBits = pn.target_bits;
+    n.aiHint = pn.lane;
+    n.jobAgeMs = pn.uptime_ms;
+    n.uptime = pn.uptime_ms;
+    universalMirrorToFixedSlot(idx);
+  }
+
+  if (fromAdvSky) {
+    beacon.touch(pn.nodeId[0] ? pn.nodeId : "CardputerElite");
+    strlcpy(beacon.role, "ADV/SKY", sizeof(beacon.role));
+    beacon.rssi = rxRssi ? rxRssi : pn.rssi;
+    beacon.worker = pn.worker_id;
+    beacon.entropy = core2PnCortex.entropy;
+    beacon.loss = clipf((float)pn.jitter_us / 3600.0f, 0.0f, 8.0f);
+    beacon.sync = (pn.flags & 0x08) ? 1.0f : clipf(core2PnCortex.tail, 0.0f, 1.0f);
+    beacon.fit = clipf(core2PnCortex.murph, 0.0f, 1.5f);
+    beacon.v0 = core2PnCortex.heat;
+    beacon.v1 = core2PnCortex.load;
+    beacon.v2 = core2PnCortex.tail;
+    beacon.v3 = (float)pn.sector;
+    beacon.v4 = (float)(pn.flags & 0xFF);
+    beacon.v5 = (float)pn.ir_phase;
+    beacon.v6 = (float)(pn.packet_hash & 0xFFFFUL);
+    beacon.v7 = (float)pn.reserved;
+    beacon.hashRate = pn.hash_rate;
+    beacon.bestBits = pn.best_bits;
+  }
+
+  if (fromYaks) {
+    stick.touch(pn.nodeId[0] ? pn.nodeId : "YaksGateS3");
+    strlcpy(stick.role, "YaksGate", sizeof(stick.role));
+    stick.rssi = rxRssi ? rxRssi : pn.rssi;
+    stick.entropy = core2MurphCortex.entropy;
+    stick.loss = clipf((float)pn.jitter_us / 3600.0f, 0.0f, 8.0f);
+    stick.sync = clipf(1.0f - stick.loss * 0.18f, 0.0f, 1.0f);
+    stick.fit = clipf(core2MurphCortex.murph, 0.0f, 1.5f);
+    stick.v0 = core2MurphCortex.heat;
+    stick.v1 = core2MurphCortex.load;
+    stick.v2 = core2MurphCortex.murph;
+    stick.v3 = core2MurphCortex.labyrinth;
+    stick.v4 = core2MurphCortex.silicon;
+    stick.v5 = core2MurphCortex.tail;
+    stick.v6 = (float)(pn.packet_hash & 0xFFFFUL);
+    stick.v7 = (float)pn.ir_phase;
+    stick.hashRate = pn.hash_rate;
+    stick.bestBits = pn.best_bits;
+
+    uint8_t sec = pn.sector % JanusGalaxyStationSim::UNIVERSE_SECTORS;
+    galaxy.universePilotSector = sec;
+    galaxy.universePilotDistance = clipf(1.0f - core2MurphCortex.murph * 0.28f + core2MurphCortex.labyrinth * 0.08f, 0.0f, 1.5f);
+    galaxy.universeProspect[sec] = clipf(max(galaxy.universeProspect[sec], core2MurphCortex.murph * 0.60f + core2MurphCortex.silicon * 0.25f), 0.0f, 1.5f);
+    galaxy.universeThreat[sec] = clipf(galaxy.universeThreat[sec] * 0.996f + core2MurphCortex.labyrinth * 0.0016f, 0.02f, 1.5f);
+    snprintf(galaxy.universePilotLine, sizeof(galaxy.universePilotLine),
+             "Yaks Gate: S%02u %s murph %02d maze %02d IR %s",
+             (unsigned)sec, core2PnLaneName(pn.lane, pn.kind),
+             (int)(clipf(core2MurphCortex.murph, 0.0f, 1.0f) * 99.0f),
+             (int)(clipf(core2MurphCortex.labyrinth, 0.0f, 1.0f) * 99.0f),
+             (pn.flags & 0x02) ? "ON" : "--");
+    snprintf(galaxy.universeStationLine, sizeof(galaxy.universeStationLine),
+             "Gargantua Lab: Murph %02d maze %02d silicon %02d",
+             (int)(clipf(core2MurphCortex.murph, 0.0f, 1.0f) * 99.0f),
+             (int)(clipf(core2MurphCortex.labyrinth, 0.0f, 1.0f) * 99.0f),
+             (int)(clipf(core2MurphCortex.silicon, 0.0f, 1.0f) * 99.0f));
+    snprintf(galaxy.missionLine, sizeof(galaxy.missionLine),
+             "Mission: hold horizon, read Murph signs, keep SHA256 honest");
+  }
+
+  if (fromBh && !fromYaks) {
+    blackStar.touch(pn.nodeId[0] ? pn.nodeId : "ATOM_BH");
+    strlcpy(blackStar.role, "BlackStar", sizeof(blackStar.role));
+    blackStar.rssi = rxRssi ? rxRssi : pn.rssi;
+    blackStar.hashRate = pn.hash_rate;
+    blackStar.bestBits = pn.best_bits;
+    blackStar.entropy = core2PnCortex.entropy;
+    blackStar.loss = clipf((float)pn.jitter_us / 3200.0f, 0.0f, 8.0f);
+    blackStar.sync = clipf(core2PnCortex.labyrinth, 0.0f, 1.0f);
+    blackStar.fit = clipf(core2PnCortex.murph, 0.0f, 1.5f);
+  }
+
+  uint32_t now = millis();
+  uint32_t* lastLogMs = &core2PnCortexLastLogMs;
+  const Core2PnCortexState* logState = &core2PnCortex;
+  const char* trackName = "GEN";
+  if (fromYaks) {
+    lastLogMs = &core2MurphCortexLastLogMs;
+    logState = &core2MurphCortex;
+    trackName = "YAKS";
+  } else if (fromBh) {
+    lastLogMs = &core2BlackStarCortexLastLogMs;
+    logState = &core2BlackStarCortex;
+    trackName = "BH";
+  } else if (fromAdvSky) {
+    trackName = "ADVSKY";
+  }
+  if (now - *lastLogMs > 7600UL) {
+    *lastLogMs = now;
+    const Core2PnCortexState& s = *logState;
+    Serial.printf("[CORE2/PN] track=%s node=%s kind=%s lane=%s H=%lu best=%u/%u heat=%.2f load=%.2f murph=%.2f maze=%.2f si=%.2f flags=0x%02X rx=%lu\n",
+                  trackName, s.nodeId, s.kind, core2PnLaneName(s.lane, s.kind),
+                  (unsigned long)s.hashRate, (unsigned)s.bestBits, (unsigned)s.targetBits,
+                  s.heat, s.load, s.murph, s.labyrinth, s.silicon,
+                  (unsigned)s.flags, (unsigned long)core2PnCortexRx);
+  }
+}
+
+void core2RememberAnchorRadar(const char* id, int8_t rxRssi,
+                              float presence, float motion, float entropy,
+                              float drift, float noise, float pressure,
+                              uint32_t hashRate, uint16_t bestBits,
+                              uint8_t confidence, uint16_t flags) {
+  uint32_t now = millis();
+  strlcpy(core2AnchorRadarNode, (id && id[0]) ? id : "RFAnchorAux", sizeof(core2AnchorRadarNode));
+  core2AnchorRadarLastMs = now;
+  core2AnchorRadarRx++;
+  core2AnchorRadarRssi = rxRssi;
+  core2AnchorPresence = clipf(core2AnchorPresence * 0.70f + clipf(presence, 0.0f, 9.0f) * 0.30f, 0.0f, 9.0f);
+  core2AnchorMotion = clipf(core2AnchorMotion * 0.62f + clipf(motion, 0.0f, 18.0f) * 0.38f, 0.0f, 18.0f);
+  core2AnchorEntropy = clipf(core2AnchorEntropy * 0.72f + clipf(entropy, 0.0f, 12.0f) * 0.28f, 0.0f, 12.0f);
+  core2AnchorDrift = clipf(core2AnchorDrift * 0.70f + clipf(drift, 0.0f, 80.0f) * 0.30f, 0.0f, 80.0f);
+  core2AnchorNoise = clipf(core2AnchorNoise * 0.78f + clipf(noise, 0.0f, 24.0f) * 0.22f, 0.0f, 24.0f);
+  core2AnchorPacketPressure = clipf(core2AnchorPacketPressure * 0.72f + clipf(pressure, 0.0f, 8.0f) * 0.28f, 0.0f, 8.0f);
+  core2AnchorRadarHashRate = hashRate;
+  core2AnchorRadarBestBits = bestBits;
+  core2AnchorRadarFlags = flags;
+  float derived = core2AnchorPresence * 44.0f + core2AnchorMotion * 5.5f + core2AnchorPacketPressure * 16.0f + core2AnchorEntropy * 4.0f;
+  uint8_t derivedConf = (uint8_t)clipf(derived, 0.0f, 100.0f);
+  core2AnchorRadarConfidence = max(confidence, derivedConf);
+  snprintf(core2AnchorRadarLine, sizeof(core2AnchorRadarLine),
+           "ANCHOR RF P%.2f M%.2f D%.1f N%.1f C%u R%d",
+           core2AnchorPresence, core2AnchorMotion, core2AnchorDrift, core2AnchorNoise,
+           (unsigned)core2AnchorRadarConfidence, (int)core2AnchorRadarRssi);
+  appendCore2AnchorRadarArchive();
+}
+
 void handleEntropyV2(const EntropyReportV2& er2, int8_t rxRssi) {
   String id = String(er2.nodeId);
+
+  if (core2LooksLikeAnchorRadarNode(er2.nodeId, "")) {
+    core2RememberAnchorRadar(er2.nodeId, rxRssi,
+                             er2.values[0], er2.values[1], er2.values[2],
+                             er2.values[3], er2.values[4], er2.values[5],
+                             (uint32_t)max(0.0f, er2.values[6]),
+                             (uint16_t)clipf(er2.values[7], 0.0f, 65535.0f),
+                             (uint8_t)clipf(er2.sync_hint * 100.0f + er2.values[0] * 18.0f, 0.0f, 100.0f),
+                             er2.sensor_flags);
+    eventLine = String("Anchor RF radar P") + String(core2AnchorPresence, 1) + " M" + String(core2AnchorMotion, 1);
+  }
+
+  if (core2LooksLikeBlackStarNode(er2.nodeId, "")) {
+    core2RememberBlackStar(er2.nodeId, rxRssi,
+                           er2.values[0], er2.values[1], er2.values[2],
+                           er2.values[3], er2.values[4], er2.values[5],
+                           er2.values[6], er2.values[7], er2.fit);
+  }
 
   int uidx = universalRememberNode(er2.nodeId, "", rxRssi);
   if (uidx >= 0) {
@@ -5440,9 +8540,24 @@ void handleEntropyV2(const EntropyReportV2& er2, int8_t rxRssi) {
     // Some workers put mining stats into values[5]/[6]/[7].
     if (er2.values[5] > 0.0f) colonyNodes[uidx].hashRate = (uint32_t)max(0.0f, er2.values[5]);
     if (er2.values[6] > 0.0f) colonyNodes[uidx].bestBits = (uint32_t)max(0.0f, er2.values[6]);
+    if (core2LooksLikeBlackStarNode(er2.nodeId, "")) {
+      colonyNodes[uidx].semanticSlot = 7;
+      strlcpy(colonyNodes[uidx].role, "BlackStar", sizeof(colonyNodes[uidx].role));
+    }
 
     universalRecountNodes();
     universalMirrorToFixedSlot(uidx);
+  }
+
+  bool er2AudioMirror = core2LooksLikeAudioMirror(er2.nodeId, "");
+  bool er2TronMic = core2LooksLikeTronMicNode(er2.nodeId, "") && er2.values[0] > 0.0f;
+  bool er2BlackStarMic = core2LooksLikeBlackStarNode(er2.nodeId, "") && (er2.sensor_flags & 0x01) && er2.values[0] > 0.0f;
+  if (er2AudioMirror || er2TronMic || er2BlackStarMic) {
+    core2TouchAudioNodeMirror(er2AudioMirror ? er2.nodeId : (er2BlackStarMic ? er2.nodeId : "EchoMic"),
+                              er2AudioMirror ? "AudioMic" : (er2BlackStarMic ? "BH-Mic" : "TRON-Mic"),
+                              rxRssi,
+                              er2.values[0], er2.local_entropy, er2.fit,
+                              er2.values[5], er2.values[4], -1.0f, -1.0f);
   }
 
   er2Packets++;
@@ -5455,6 +8570,10 @@ void handleEntropyV2(const EntropyReportV2& er2, int8_t rxRssi) {
     eventLine = String("Eye TM ") + String(er2.values[1], 0) + "/" + String(er2.values[2], 0);
   } else if (id.indexOf("Beacon") >= 0 || id.indexOf("ADV") >= 0) {
     eventLine = "Beacon telemetry";
+  } else if (core2LooksLikeAnchorRadarNode(er2.nodeId, "")) {
+    eventLine = String("Anchor RF P") + String(core2AnchorPresence, 1) + " M" + String(core2AnchorMotion, 1);
+  } else if (core2LooksLikeBlackStarNode(er2.nodeId, "")) {
+    eventLine = String("BH study ") + String((int)(clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f)) + "%";
   } else if (id.indexOf("EchoMic") >= 0 || id.indexOf("Audio") >= 0 || id.indexOf("Swarm") >= 0 || id.indexOf("TD") >= 0 || id.indexOf("ATOM") >= 0 || id.indexOf("Tron") >= 0) {
     eventLine = String("Swarm mic ") + String(er2.values[0], 0);
   } else if (id.indexOf("Stick3") >= 0 || id.indexOf("StickS3") >= 0 || id.indexOf("Stick") >= 0 || id.indexOf("AlienRogue") >= 0) {
@@ -5462,6 +8581,76 @@ void handleEntropyV2(const EntropyReportV2& er2, int8_t rxRssi) {
   } else if (uidx >= 0) {
     eventLine = String("Node telemetry ") + (colonyNodes[uidx].nodeId[0] ? colonyNodes[uidx].nodeId : "future");
   }
+}
+
+
+uint32_t core2EyePowerCrc32(const void* data, size_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+  uint32_t h = 2166136261UL;
+  for (size_t i = 0; i < len; ++i) { h ^= p[i]; h *= 16777619UL; }
+  return h;
+}
+
+void handleJanusEyePowerRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  if (!data || len != sizeof(JanusEyePowerPacket)) return;
+  JanusEyePowerPacket eb{};
+  memcpy(&eb, data, sizeof(eb));
+  if (eb.magic[0] != 'E' || eb.magic[1] != 'B' || eb.version != 1) return;
+  uint32_t got = eb.crc;
+  eb.crc = 0;
+  uint32_t expect = core2EyePowerCrc32(&eb, sizeof(eb));
+  // CRC is advisory: accept old/debug packets with crc=0, but mark mismatch in flags/line.
+  bool crcOk = (got == 0 || got == expect);
+
+  core2EyeBatteryLastMs = millis();
+  core2EyeBatterySeq = eb.seq;
+  strlcpy(core2EyeBatteryNode, eb.nodeId[0] ? eb.nodeId : "BlindEye", sizeof(core2EyeBatteryNode));
+  core2EyeBatteryPct = constrain((int)eb.battery_pct, 0, 100);
+  core2EyeBatteryMv = eb.bus_mv;
+  core2EyeBatteryCurrentRaw = eb.current_raw;
+  core2EyeBatteryPowerRaw = eb.power_raw;
+  core2EyeBatteryFlags = eb.flags;
+  core2EyeBatterySource = eb.source;
+  core2EyeBatteryRssi = rxRssi;
+
+  core2EyeMotionBaseLastMs = millis();
+  core2EyeMotionBasePower = (eb.flags & 0x02) ? 1 : 0;
+  if (eb.flags & 0x01) core2EyeMotionBaseReady = 1;
+  const bool eyeCharging = (eb.flags & 0x20) || eb.source == 3;
+  const bool eyeFull = (eb.flags & 0x40) || eb.source == 4;
+  const bool eyeExternal = (eb.flags & 0x04) || eb.source == 2 || eyeCharging || eyeFull;
+  const char* src = eyeCharging ? "CHG" : (eyeFull ? "FULL" : (eyeExternal ? "EXT" : ((eb.flags & 0x02) ? "BAT" : "NOINA")));
+  snprintf(core2EyeBatteryLine, sizeof(core2EyeBatteryLine),
+           "BlindEye %s %u%% %umV%s%s", src, (unsigned)core2EyeBatteryPct,
+           (unsigned)core2EyeBatteryMv, (eb.flags & 0x08) ? " LOW" : "",
+           crcOk ? "" : " CRC?");
+  snprintf(core2EyeMotionBaseLine, sizeof(core2EyeMotionBaseLine),
+           "ATOMIC BASE %s PWR:%s %u%% %umV", (eb.flags & 0x01) ? "READY" : "WAIT",
+           src, (unsigned)core2EyeBatteryPct, (unsigned)core2EyeBatteryMv);
+
+  int uidx = universalRememberNodeEx(core2EyeBatteryNode, "blind_eye_power", rxRssi, mac);
+  if (uidx >= 0) {
+    colonyNodes[uidx].v[0] = core2EyeBatteryPct;
+    colonyNodes[uidx].v[1] = core2EyeBatteryMv;
+    colonyNodes[uidx].v[2] = core2EyeBatteryCurrentRaw;
+    colonyNodes[uidx].v[3] = core2EyeBatteryPowerRaw;
+    colonyNodes[uidx].fit = (float)core2EyeBatteryPct / 100.0f;
+    universalRecountNodes();
+    universalMirrorToFixedSlot(uidx);
+  }
+
+  if ((eb.flags & 0x08) && !((eb.flags & 0x20) || (eb.flags & 0x04))) {
+    eventLine = "BlindEye battery low";
+  } else if ((eb.flags & 0x20) || eb.source == 3) {
+    eventLine = "BlindEye charging";
+  } else {
+    eventLine = "BlindEye battery telemetry";
+  }
+  Serial.printf("[EYE/BATT] rx node=%s pct=%u mv=%u flags=0x%02X src=%u/%s rssi=%d crc=%s\n",
+                core2EyeBatteryNode, (unsigned)core2EyeBatteryPct, (unsigned)core2EyeBatteryMv,
+                (unsigned)core2EyeBatteryFlags, (unsigned)core2EyeBatterySource, src, (int)rxRssi,
+                crcOk ? "OK" : "BAD");
 }
 
 
@@ -5609,6 +8798,17 @@ void handleJanusKenshiRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, cons
                                   (float)kp.priority, (float)kp.worldFlags, (float)kp.sector, (float)kp.predictedSector);
   core2FeedUniverseFromPrediction(kpNode, kp.sector, kp.predictedSector, kp.values[4], sync, kp.values[0], kp.values[1]);
 
+  String kpid = String(kpNode);
+  if (kpid.indexOf("BlindEye") >= 0 || kpid.indexOf("Eye") >= 0) {
+    core2EyeMotionBaseLastMs = millis();
+    core2EyeMotionBaseFlags = kp.flags;
+    core2EyeMotionBaseReady = (kp.flags & 0x08) ? 1 : 0;
+    core2EyeMotionBasePower = (kp.flags & 0x08) ? 1 : 0;
+    snprintf(core2EyeMotionBaseLine, sizeof(core2EyeMotionBaseLine),
+             "ATOMIC BASE %s K2 flags=0x%02X P%.0f M%.0f",
+             core2EyeMotionBaseReady ? "READY" : "WAIT", (unsigned)kp.flags, kp.values[0], kp.values[1]);
+  }
+
   if (kp.flags & 0x02) eventLine = String("Kenshi alert ") + kpNode;
   snprintf(core2TachyonLine, sizeof(core2TachyonLine), "K2 RX %s B%u/%u rx/tx %lu/%lu",
            kpNode, (unsigned)kp.activeBubbleNodes, (unsigned)kp.virtualNodes,
@@ -5643,13 +8843,17 @@ void updateCore2TachyonPrediction() {
   }
 
   bool eyeOn = eye.refresh();
-  bool audOn = audioNode.refresh();
+  bool audOn = core2AudioUiFresh();
   float eyePresence = eyeOn ? max(eye.v1, eye.entropy * 85.0f) : 0.0f;
   float eyeMotion = eyeOn ? max(eye.v2, eye.v5 * 18.0f) : 0.0f;
   float audioPresence = audOn ? max(audioNode.v0, audioNode.entropy * 130.0f) : 0.0f;
 
-  float presenceNow = clipf(max(eyePresence, audioPresence) + spacePresence * 180.0f + (float)eco2 * 0.035f + (float)tvoc * 0.075f, 0.0f, 9000.0f);
-  float motionNow = clipf(max(eyeMotion, spaceMotion * 160.0f) + spaceNovelty * 70.0f + coreTheta.resonance * 30.0f + (float)coreBestBits * 1.4f, 0.0f, 3000.0f);
+  bool anchorRadarOn = core2AnchorRadarFresh(now);
+  float anchorPresence = anchorRadarOn ? clipf(core2AnchorPresence * 180.0f + core2AnchorEntropy * 24.0f + core2AnchorPacketPressure * 45.0f, 0.0f, 1200.0f) : 0.0f;
+  float anchorMotion = anchorRadarOn ? clipf(core2AnchorMotion * 62.0f + core2AnchorDrift * 4.5f + core2AnchorPacketPressure * 120.0f, 0.0f, 1200.0f) : 0.0f;
+
+  float presenceNow = clipf(max(max(eyePresence, audioPresence), anchorPresence) + spacePresence * 180.0f + (float)eco2 * 0.035f + (float)tvoc * 0.075f, 0.0f, 9000.0f);
+  float motionNow = clipf(max(max(eyeMotion, spaceMotion * 160.0f), anchorMotion) + spaceNovelty * 70.0f + coreTheta.resonance * 30.0f + (float)coreBestBits * 1.4f, 0.0f, 3000.0f);
 
   float trendP = clipf(presenceNow - core2TachyonLastPresence, -2200.0f, 2200.0f);
   float trendM = clipf(motionNow - core2TachyonLastMotion, -900.0f, 900.0f);
@@ -5776,6 +8980,62 @@ uint8_t core2SwarmSenseLabel(uint8_t thermal, uint16_t jitter, int8_t rssi) {
   return 1;                                           // GOOD
 }
 
+void handleGladiusMemoryRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  if (!data || len != sizeof(GladiusMemoryPacket)) return;
+  GladiusMemoryPacket gm{};
+  memcpy(&gm, data, sizeof(gm));
+  if (gm.magic[0] != 'G' || gm.magic[1] != 'M' || gm.version != 1) return;
+
+  core2GladiusGexRx++;
+  core2GladiusGexLastMs = millis();
+  core2GladiusActiveLane = gm.activeLane;
+  core2GladiusTopLane = gm.gexTopLane;
+  core2GladiusTailX100 = gm.gexTailX100;
+  core2GladiusConfidence = gm.gexConfidenceX100;
+  core2GladiusWeightPct = gm.gexWeightPct;
+  core2GladiusBestZ = gm.bestZ;
+
+  snprintf(core2GladiusGexLine, sizeof(core2GladiusGexLine),
+           "GLAD GEX %s top:%s x%.2f C%u W%u B%u",
+           core2GladiusLaneName(gm.activeLane),
+           core2GladiusLaneName(gm.gexTopLane),
+           (double)((float)gm.gexTailX100 / 100.0f),
+           (unsigned)gm.gexConfidenceX100,
+           (unsigned)gm.gexWeightPct,
+           (unsigned)gm.bestZ);
+
+  int uidx = universalRememberNodeEx("Gladius", "gex_memory", rxRssi, mac);
+  if (uidx >= 0) {
+    colonyNodes[uidx].worker = gm.nodeId;
+    colonyNodes[uidx].hashRate = 0;
+    colonyNodes[uidx].shares = gm.shares;
+    colonyNodes[uidx].bestBits = gm.bestZ;
+    colonyNodes[uidx].targetBits = gm.targetBits;
+    colonyNodes[uidx].aiBatch = gm.gexWeightPct;
+    colonyNodes[uidx].aiHint = gm.gexTopLane;
+    colonyNodes[uidx].jobAgeMs = 0;
+    colonyNodes[uidx].uptime = gm.uptimeMs / 1000UL;
+    colonyNodes[uidx].entropy = (float)gm.gexConfidenceX100 / 100.0f;
+    colonyNodes[uidx].loss = (float)gm.gexTailX100 / 100.0f;
+    colonyNodes[uidx].fit = (float)gm.gexWeightPct / 100.0f;
+    colonyNodes[uidx].v[0] = gm.activeLane;
+    colonyNodes[uidx].v[1] = gm.gexTopLane;
+    colonyNodes[uidx].v[2] = gm.gexTailX100;
+    colonyNodes[uidx].v[3] = gm.gexConfidenceX100;
+    colonyNodes[uidx].v[4] = gm.gexWeightPct;
+    colonyNodes[uidx].v[5] = gm.memoryEpoch;
+    colonyNodes[uidx].v[6] = gm.flags;
+    colonyNodes[uidx].v[7] = gm.jobId & 0xFFFF;
+    universalRecountNodes();
+    universalMirrorToFixedSlot(uidx);
+  }
+
+  if ((gm.flags & 0x0014) || (core2GladiusGexRx % 8UL) == 1UL) {
+    eventLine = String("Gladius GEX ") + core2GladiusLaneName(gm.gexTopLane) + " C" + String(gm.gexConfidenceX100);
+  }
+}
+
+
 void handleSwarmSenseRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
 #if CORE2_SWARMSENSE_OBSERVE
   if (!data || len != sizeof(SwarmSensePacket)) { core2SwarmSenseBad++; return; }
@@ -5787,6 +9047,30 @@ void handleSwarmSenseRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const
   }
 
   core2SwarmSenseRx++;
+
+  if (core2LooksLikeAnchorRadarNode(ss.nodeId, ss.kind)) {
+    // Anchor S/S is compact. E2 carries the full RF vector, but S/S keeps radar fresh even if E2 is throttled.
+    float p = (float)ss.knn_confidence / 100.0f;
+    float m = ((ss.bt_flags & 0x02) ? 1.4f : 0.0f) + (float)ss.touch_delta / 140.0f;
+    float e = (float)ss.entropy_x1000 / 100.0f;
+    float drift = fabsf((float)ss.prediction_error_x1000) / 15.0f;
+    float pressure = (ss.bt_flags & 0x01) ? 0.85f : 0.15f;
+    core2RememberAnchorRadar(ss.nodeId, rxRssi ? rxRssi : ss.rssi,
+                             p, m, e, drift, core2AnchorNoise, pressure,
+                             ss.hash_rate, ss.best_bits, ss.knn_confidence, ss.flags);
+    eventLine = String("Anchor radar ") + String((ss.bt_flags & 0x01) ? "presence" : "watch");
+  }
+
+  if (core2LooksLikeBlackStarNode(ss.nodeId, ss.kind)) {
+    core2RememberBlackStar(ss.nodeId, rxRssi ? rxRssi : ss.rssi,
+                           0.0f, core2BlackStarPressure, core2BlackStarTemp,
+                           (float)ss.entropy_x1000 / 1000.0f,
+                           (float)ss.prediction_error_x1000 / 1000.0f,
+                           (float)ss.hash_rate, (float)ss.best_bits,
+                           (float)ss.knn_confidence, (float)ss.knn_confidence / 100.0f);
+    eventLine = String("BH SwarmSense H:") + compactU(ss.hash_rate);
+  }
+
   int uidx = universalRememberNodeEx(ss.nodeId, ss.kind[0] ? ss.kind : "SwarmSense", rxRssi ? rxRssi : ss.rssi, mac);
   if (uidx >= 0) {
     colonyNodes[uidx].worker = ss.worker_id;
@@ -5811,6 +9095,28 @@ void handleSwarmSenseRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const
     colonyNodes[uidx].v[5] = ss.flags;
     colonyNodes[uidx].v[6] = ss.touch_delta;
     colonyNodes[uidx].v[7] = ss.radio_mode;
+    if (core2LooksLikeAnchorRadarNode(ss.nodeId, ss.kind)) {
+      colonyNodes[uidx].v[0] = core2AnchorPresence;
+      colonyNodes[uidx].v[1] = core2AnchorMotion;
+      colonyNodes[uidx].v[2] = core2AnchorEntropy;
+      colonyNodes[uidx].v[3] = core2AnchorDrift;
+      colonyNodes[uidx].v[4] = core2AnchorNoise;
+      colonyNodes[uidx].v[5] = core2AnchorPacketPressure;
+      colonyNodes[uidx].fit = (float)core2AnchorRadarConfidence / 100.0f;
+    }
+    if (core2LooksLikeBlackStarNode(ss.nodeId, ss.kind)) {
+      colonyNodes[uidx].semanticSlot = 7;
+      strlcpy(colonyNodes[uidx].role, "BlackStar", sizeof(colonyNodes[uidx].role));
+      colonyNodes[uidx].v[0] = core2BlackStarMic;
+      colonyNodes[uidx].v[1] = core2BlackStarPressure;
+      colonyNodes[uidx].v[2] = core2BlackStarTemp;
+      colonyNodes[uidx].v[3] = core2BlackStarSurprise;
+      colonyNodes[uidx].v[4] = core2BlackStarLoss;
+      colonyNodes[uidx].v[5] = core2BlackStarLensing;
+      colonyNodes[uidx].v[6] = core2BlackStarBest;
+      colonyNodes[uidx].v[7] = core2BlackStarStudy;
+      colonyNodes[uidx].fit = clipf(core2BlackStarStudy, 0.0f, 1.0f);
+    }
     universalRecountNodes();
     universalMirrorToFixedSlot(uidx);
   }
@@ -6177,6 +9483,7 @@ void coreConfigureThetaForJob(RemoteJobState& job) {
     job.thetaOffset = 0;
     job.thetaStride = 1;
   }
+  core2BhCorpusApplyToJob(job);
   job.nonce = job.startNonce;
 #else
   job.thetaCursor = 0;
@@ -6195,8 +9502,11 @@ uint32_t coreThetaNonceForCursor(const RemoteJobState& job, uint32_t cursor) {
 #endif
 }
 
-void handleJobPacket(const JobPacket& jp) {
+void handleJobPacket(const JobPacket& jp, int8_t rxRssi) {
   if (jp.range_size == 0) return;
+  buzz.touch("Buzz");
+  strlcpy(buzz.role, "PoolMaster", sizeof(buzz.role));
+  buzz.rssi = rxRssi;
   memcpy(coreJob.job_id, jp.job_id, 8);
   memcpy(coreJob.header, jp.header, 80);
   memcpy(coreJob.target, jp.target, 32);
@@ -6207,10 +9517,10 @@ void handleJobPacket(const JobPacket& jp) {
   if (coreJob.endNonce < coreJob.startNonce) coreJob.endNonce = 0xFFFFFFFFUL;
   coreJob.receivedAt = millis();
   coreJob.extranonce2 = jp.extranonce2;
+  formatCoreJobId(coreJob.job_id);
   coreConfigureThetaForJob(coreJob);
   coreJob.active = coreWorkerEnabled();
   coreTargetBits = countLeadingZeroBitsBE(coreJob.target);
-  formatCoreJobId(coreJob.job_id);
   coreLastJobMs = millis();
   coreJobsSeen++;
   Serial.printf("[CORE2 MINER] JOB rx=%s start=%08lX range=%lu targetBits=%u active=%d\n",
@@ -6294,6 +9604,7 @@ void runCore2MiningBatch() {
     }
 
     bool targetOk = (bits >= coreTargetBits) && hashMeetsTargetBE(shareHash, coreJob.target);
+    core2BhCorpusObserveMiner(core2BhCorpus.currentLane, bits, targetOk);
     if (targetOk) {
       sendCoreShare(coreJob, nonce);
       coreJob.active = false;
@@ -6431,9 +9742,10 @@ uint8_t onlineNodeCount() {
   uint8_t c = 0;
   if (eye.refresh()) c++;
   if (beacon.refresh()) c++;
-  if (buzz.refresh()) c++;
+  if (core2BuzzUiFresh()) c++;
   if (audioNode.refresh()) c++;
   if (swarm.refresh()) c++;
+  if (blackStar.refresh()) c++;
   if (stick.refresh()) c++;
   if (unknownNode.refresh()) c++;
   return c;
@@ -6448,10 +9760,11 @@ float nodeSignalRaw(bool online, uint32_t lastMs, int8_t rssi) {
 
 float nodeSlotAngle(uint8_t idx) {
   // Stable semantic bearings: Eye/front, Beacon/front-left, Buzz/front-right,
-  // Mic/Swarm side sensors, Stick/mobile node, Unknown/back.
+  // Mic/Swarm side sensors, Stick/mobile node, Unknown/back, BH/deep rear.
   static const float base[JANUS_SPACE_NODE_SLOTS] = {
     -JANUS_PI * 0.50f, -JANUS_PI * 0.78f, -JANUS_PI * 0.22f,
-    JANUS_PI * 0.95f, 0.0f, JANUS_PI * 0.50f, JANUS_PI * 0.78f
+    JANUS_PI * 0.95f, 0.0f, JANUS_PI * 0.50f, JANUS_PI * 0.78f,
+    JANUS_PI * 0.25f
   };
   if (idx >= JANUS_SPACE_NODE_SLOTS) idx = JANUS_SPACE_NODE_SLOTS - 1;
   return base[idx] + selfPose.yaw + spaceUserYaw;
@@ -6634,6 +9947,7 @@ void spaceAssimilateSwarm() {
   assimilateNodeSample(swarm.online, swarm.lastMs, swarm.rssi, swarm.entropy, swarm.loss, swarm.sync, 4, 0.10f, clipf(swarmSound * 0.25f, 0.0f, 1.0f), swarmSound, 0.0f, swarm.v0, swarm.v1, swarm.v2, slime.trustSwarm);
   assimilateNodeSample(stick.online, stick.lastMs, stick.rssi, stick.entropy, stick.loss, stick.sync, 5, nodeSignalRaw(stick.online, stick.lastMs, stick.rssi) * 0.20f, clipf(fabsf(stick.v1) + fabsf(stick.v2), 0.0f, 1.0f), 0.0f, 0.0f, stick.v0, stick.v1, stick.v2, slime.trustRssi);
   assimilateNodeSample(unknownNode.online, unknownNode.lastMs, unknownNode.rssi, unknownNode.entropy, unknownNode.loss, unknownNode.sync, 6, nodeSignalRaw(unknownNode.online, unknownNode.lastMs, unknownNode.rssi) * 0.15f, 0.02f, 0.0f, 0.0f, unknownNode.v0, unknownNode.v1, unknownNode.v2, 0.35f);
+  assimilateNodeSample(blackStar.online, blackStar.lastMs, blackStar.rssi, blackStar.entropy, blackStar.loss, blackStar.sync, 7, clipf(core2BlackStarStudy, 0.0f, 1.0f), clipf(core2BlackStarLensing, 0.0f, 1.0f), 0.0f, clipf(core2BlackStarTemp / 60.0f, 0.0f, 1.0f), blackStar.v0, blackStar.v3, blackStar.v4, 0.58f);
 }
 
 float mapMeanConfidence() {
@@ -6733,6 +10047,556 @@ void slimeLearnMicroModels() {
   slime.lastAir = obsAir;
 }
 
+// ========================= JANUS BLACKBOARD HOME CORTEX =========================
+
+uint16_t janusHash16(const char* s) {
+  uint32_t h = 2166136261UL;
+  if (!s) return 0;
+  while (*s) {
+    h ^= (uint8_t)(*s++);
+    h *= 16777619UL;
+  }
+  return (uint16_t)((h >> 16) ^ (h & 0xFFFF));
+}
+
+uint32_t janusHash32Str(const char* a, const char* b, uint16_t t, uint16_t o, uint8_t e) {
+  uint32_t h = 2166136261UL;
+  const char* p = a ? a : "";
+  while (*p) { h ^= (uint8_t)(*p++); h *= 16777619UL; }
+  p = b ? b : "";
+  while (*p) { h ^= (uint8_t)(*p++); h *= 16777619UL; }
+  h ^= (uint32_t)t | ((uint32_t)o << 16) | ((uint32_t)e << 24);
+  h *= 16777619UL;
+  return h ? h : 1UL;
+}
+
+bool janusHasText(const char* s, const char* needle) {
+  if (!s || !needle) return false;
+  String a(s);
+  String b(needle);
+  a.toLowerCase();
+  b.toLowerCase();
+  return a.indexOf(b) >= 0;
+}
+
+uint8_t janusRoleFromName(const char* nodeId, const char* kind) {
+  if (janusHasText(nodeId, "core") || janusHasText(kind, "core")) return JR_CORE;
+  if (janusHasText(nodeId, "zim") || janusHasText(kind, "zim")) return JR_ZIM;
+  if (janusHasText(nodeId, "buzz") || janusHasText(kind, "buzz")) return JR_BUZZ;
+  if (janusHasText(nodeId, "beacon") || janusHasText(kind, "beacon") ||
+      janusHasText(nodeId, "cardputer") || janusHasText(nodeId, "elite") ||
+      janusHasText(nodeId, "adv") || janusHasText(kind, "card") ||
+      janusHasText(kind, "elite") || janusHasText(kind, "card_a9")) return JR_BEACON;
+  if (core2LooksLikeBlackStarNode(nodeId, kind)) return JR_BLACKSTAR;
+  if (janusHasText(nodeId, "tron") || janusHasText(kind, "swarm") || janusHasText(nodeId, "atom_swarm")) return JR_TRON;
+  if (janusHasText(nodeId, "blind") || janusHasText(kind, "eye")) return JR_BLIND;
+  if (janusHasText(nodeId, "pyramid")) return JR_PYRAMID;
+  if (janusHasText(nodeId, "echo") || janusHasText(kind, "audio") || janusHasText(nodeId, "mic")) return JR_AUDIO;
+  return JR_SENSOR;
+}
+
+uint16_t janusCapsFromNameKind(const char* nodeId, const char* kind) {
+  uint16_t c = JC_RF;
+  uint8_t r = janusRoleFromName(nodeId, kind);
+  if (r == JR_CORE) c |= JC_AIR | JC_RELAY | JC_MEMORY | JC_AI | JC_TOUCH;
+  if (r == JR_ZIM) c |= JC_HASH | JC_AI | JC_MEMORY;
+  if (r == JR_BUZZ) c |= JC_HASH | JC_AUDIO | JC_RELAY | JC_MEMORY;
+  if (r == JR_BEACON) c |= JC_TEMP | JC_HUM | JC_PRESS | JC_IMU | JC_MEMORY | JC_AI | JC_BATTERY;
+  if (r == JR_TRON) c |= JC_TEMP | JC_PRESS | JC_IMU | JC_MIC | JC_AUDIO | JC_HASH;
+  if (r == JR_BLACKSTAR) c |= JC_TEMP | JC_PRESS | JC_MIC | JC_HASH | JC_AI | JC_MEMORY;
+  if (r == JR_BLIND) c |= JC_TMOS | JC_IMU | JC_VISION;
+  if (r == JR_AUDIO) c |= JC_MIC | JC_AUDIO | JC_PRESS | JC_TEMP;
+  if (r == JR_PYRAMID) c |= JC_AUDIO | JC_TOUCH | JC_HASH;
+  return c;
+}
+
+const char* janusMoodName(uint8_t m) {
+  switch (m) {
+    case JM_QUIET: return "QUIET";
+    case JM_ALERT: return "ALERT";
+    case JM_EXPLORE: return "EXPLORE";
+    case JM_GUARD: return "GUARD";
+    case JM_RECOVER: return "RECOVER";
+    default: return "IDLE";
+  }
+}
+
+int janusFindNodeSlot(const char* nodeId, const char* kind) {
+  uint32_t now = millis();
+  int freeIdx = -1;
+  int oldestIdx = 0;
+  uint32_t oldestAge = 0;
+  for (uint8_t i = 0; i < JANUS_NODEMAP_SLOTS; i++) {
+    if (janusNodeMap[i].used) {
+      if (nodeId && nodeId[0] && strncmp(janusNodeMap[i].nodeId, nodeId, sizeof(janusNodeMap[i].nodeId)) == 0) return i;
+      uint32_t age = now - janusNodeMap[i].lastMs;
+      if (age > oldestAge) { oldestAge = age; oldestIdx = i; }
+    } else if (freeIdx < 0) freeIdx = i;
+  }
+  return (freeIdx >= 0) ? freeIdx : oldestIdx;
+}
+
+int janusTouchNode(const char* nodeId, const char* kind, uint16_t caps, int8_t rssi) {
+  int idx = janusFindNodeSlot(nodeId, kind);
+  JanusNodeSemanticSlot& n = janusNodeMap[idx];
+  n.used = true;
+  if (nodeId && nodeId[0]) strlcpy(n.nodeId, nodeId, sizeof(n.nodeId));
+  if (kind && kind[0]) strlcpy(n.kind, kind, sizeof(n.kind));
+  n.role = janusRoleFromName(n.nodeId, n.kind);
+  n.capabilities |= caps | janusCapsFromNameKind(n.nodeId, n.kind);
+  n.lastMs = millis();
+  n.rssi = rssi;
+  return idx;
+}
+
+void janusBlackboardRemember(const char* nodeId, const char* kind, uint8_t role, uint8_t eventType,
+                             uint8_t confidence, uint8_t urgency, uint16_t topicHash, uint16_t objectHash,
+                             uint16_t caps, int16_t a, int16_t b, int16_t c, int16_t d,
+                             uint32_t ttlMs, int8_t rssi) {
+#if JANUS_BLACKBOARD_ENABLE
+  if (!nodeId || !nodeId[0]) nodeId = "unknown";
+  if (!kind) kind = "";
+  if (!role) role = janusRoleFromName(nodeId, kind);
+  uint32_t h = janusHash32Str(nodeId, kind, topicHash, objectHash, eventType);
+  uint32_t now = millis();
+  int freeIdx = -1;
+  int oldestIdx = 0;
+  uint32_t oldestAge = 0;
+  for (uint8_t i = 0; i < JANUS_BLACKBOARD_SLOTS; i++) {
+    JanusBlackboardSlot& s = janusBlackboard[i];
+    if (s.used && s.eventHash == h) {
+      s.confidence = (uint8_t)min(100, (int)((s.confidence * 3 + confidence) / 4 + 1));
+      s.urgency = (uint8_t)min(100, max((int)s.urgency, (int)urgency));
+      s.valueA_x10 = (int16_t)((s.valueA_x10 * 3 + a) / 4);
+      s.valueB_x10 = (int16_t)((s.valueB_x10 * 3 + b) / 4);
+      s.valueC_x10 = (int16_t)((s.valueC_x10 * 3 + c) / 4);
+      s.valueD_x10 = (int16_t)((s.valueD_x10 * 3 + d) / 4);
+      s.lastMs = now;
+      s.ttlMs = ttlMs ? ttlMs : JANUS_BLACKBOARD_EVENT_TTL_MS;
+      s.hits = (uint16_t)min(65535, (int)s.hits + 1);
+      s.trust = (int8_t)min(100, (int)s.trust + ((confidence > 70) ? 1 : 0));
+      s.rssi = rssi;
+      janusBlackboardMerged++;
+      return;
+    }
+    if (!s.used && freeIdx < 0) freeIdx = i;
+    if (s.used) {
+      uint32_t age = now - s.lastMs;
+      if (age > oldestAge) { oldestAge = age; oldestIdx = i; }
+    }
+  }
+
+  int idx = (freeIdx >= 0) ? freeIdx : oldestIdx;
+  JanusBlackboardSlot& s = janusBlackboard[idx];
+  memset(&s, 0, sizeof(s));
+  s.used = true;
+  s.eventHash = h;
+  strlcpy(s.nodeId, nodeId, sizeof(s.nodeId));
+  strlcpy(s.kind, kind, sizeof(s.kind));
+  s.eventType = eventType;
+  s.nodeRole = role;
+  s.confidence = confidence;
+  s.urgency = urgency;
+  s.topicHash = topicHash;
+  s.objectHash = objectHash;
+  s.capabilities = caps;
+  s.valueA_x10 = a;
+  s.valueB_x10 = b;
+  s.valueC_x10 = c;
+  s.valueD_x10 = d;
+  s.firstMs = now;
+  s.lastMs = now;
+  s.ttlMs = ttlMs ? ttlMs : JANUS_BLACKBOARD_EVENT_TTL_MS;
+  s.hits = 1;
+  s.trust = 50 + (confidence / 10);
+  s.rssi = rssi;
+  janusBlackboardRx++;
+#endif
+}
+
+void janusUpdateHomeModelFromNodes() {
+  uint32_t now = millis();
+  float tSum = 0.0f, hSum = 0.0f, pSum = 0.0f;
+  uint8_t tc = 0, hc = 0, pc = 0;
+  float motion = 0.0f, presence = 0.0f, sound = 0.0f, conf = 0.0f;
+  for (uint8_t i = 0; i < JANUS_NODEMAP_SLOTS; i++) {
+    JanusNodeSemanticSlot& n = janusNodeMap[i];
+    if (!n.used || now - n.lastMs > 90000UL) continue;
+    float ageK = 1.0f - clipf((float)(now - n.lastMs) / 90000.0f, 0.0f, 1.0f);
+    if (isfinite(n.tempC) && n.tempC > -40 && n.tempC < 90) { tSum += n.tempC * ageK; tc++; }
+    if (isfinite(n.humidity) && n.humidity >= 0 && n.humidity <= 100) { hSum += n.humidity * ageK; hc++; }
+    if (isfinite(n.pressureHpa) && n.pressureHpa > 800 && n.pressureHpa < 1200) { pSum += n.pressureHpa * ageK; pc++; }
+    motion = max(motion, n.motion * ageK);
+    presence = max(presence, n.presence * ageK);
+    sound = max(sound, n.sound * ageK);
+    conf += n.confidence * ageK;
+  }
+  if (tc) janusHomeTempC = tSum / (float)tc;
+  if (hc) janusHomeHumidity = hSum / (float)hc;
+  if (pc) janusHomePressureHpa = pSum / (float)pc;
+  janusHomeMotion = janusHomeMotion * 0.88f + clipf(motion, 0.0f, 10.0f) * 0.12f;
+  janusHomePresence = janusHomePresence * 0.88f + clipf(presence, 0.0f, 10.0f) * 0.12f;
+  janusHomeSound = janusHomeSound * 0.90f + clipf(sound, 0.0f, 10.0f) * 0.10f;
+
+  float airBad = clipf(airScore / 10.0f, 0.0f, 1.0f);
+  float m = clipf(janusHomeMotion / 5.0f, 0.0f, 1.0f);
+  float pr = clipf(janusHomePresence / 5.0f, 0.0f, 1.0f);
+  float snd = clipf(janusHomeSound / 5.0f, 0.0f, 1.0f);
+  float radioBad = (wifiOk && WiFi.RSSI() < -75) ? 0.35f : 0.0f;
+  janusHomeDanger = clipf(janusHomeDanger * 0.86f + (airBad * 0.30f + max(m, pr) * 0.42f + snd * 0.18f + radioBad) * 0.14f, 0.0f, 1.5f);
+  janusHomeComfort = clipf(1.0f - airBad * 0.55f - radioBad * 0.20f, 0.0f, 1.0f);
+  janusHomeSensorConfidence = clipf(conf / 4.0f + homeSync() * 20.0f, 0.0f, 100.0f);
+
+  snprintf(janusHomeLine, sizeof(janusHomeLine), "HOME T%.1f H%.0f P%.0f mot%.2f pres%.2f",
+           isfinite(janusHomeTempC) ? janusHomeTempC : -99.0f,
+           isfinite(janusHomeHumidity) ? janusHomeHumidity : -1.0f,
+           isfinite(janusHomePressureHpa) ? janusHomePressureHpa : 0.0f,
+           janusHomeMotion, janusHomePresence);
+}
+
+void janusObserveHeartbeat(const JanusColonyPacket& pkt, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  uint16_t caps = janusCapsFromNameKind(pkt.nodeId, pkt.role);
+  int idx = janusTouchNode(pkt.nodeId, pkt.role, caps, rxRssi ? rxRssi : pkt.rssi);
+  janusNodeMap[idx].confidence = 0.45f;
+  if (pkt.hashRate > 0 || pkt.bestBits > 0) caps |= JC_HASH;
+  janusBlackboardRemember(pkt.nodeId, pkt.role, janusRoleFromName(pkt.nodeId, pkt.role), JE_HEARTBEAT, 72, 20,
+                          janusHash16("heartbeat"), janusHash16(pkt.nodeId), caps,
+                          (int16_t)min(32767UL, pkt.hashRate / 10UL), (int16_t)pkt.bestBits, (int16_t)pkt.shares, (int16_t)pkt.rejects,
+                          JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi ? rxRssi : pkt.rssi);
+  if (pkt.rssi < -75 || rxRssi < -75) {
+    janusBlackboardRemember(pkt.nodeId, pkt.role, janusRoleFromName(pkt.nodeId, pkt.role), JE_WIFI_WEAK, 68, 60,
+                            janusHash16("radio"), janusHash16(pkt.nodeId), caps, pkt.rssi * 10, rxRssi * 10, 0, 0,
+                            30000UL, rxRssi ? rxRssi : pkt.rssi);
+  }
+}
+
+void janusObserveSwarmSense(const SwarmSensePacket& ss, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  uint16_t caps = janusCapsFromNameKind(ss.nodeId, ss.kind);
+  if (ss.flags & 0x0004) caps |= JC_TEMP;
+  if (ss.flags & 0x0008) caps |= JC_AIR;
+  if (ss.flags & 0x0010) caps |= JC_TOUCH;
+  if (ss.flags & 0x0020) caps |= JC_HASH;
+  if (ss.hash_rate || ss.best_bits) caps |= JC_HASH;
+  int idx = janusTouchNode(ss.nodeId, ss.kind, caps, rxRssi ? rxRssi : ss.rssi);
+  janusNodeMap[idx].air = max(janusNodeMap[idx].air, (float)ss.thermal_load / 10.0f);
+  janusNodeMap[idx].confidence = (float)ss.knn_confidence / 100.0f;
+  if ((ss.flags & 0x0008) || ss.thermal_load > 65) {
+    janusBlackboardRemember(ss.nodeId, ss.kind, janusRoleFromName(ss.nodeId, ss.kind), JE_ENV, ss.knn_confidence, ss.thermal_load,
+                            janusHash16("environment"), janusHash16(ss.nodeId), caps,
+                            (int16_t)ss.thermal_load, (int16_t)ss.loop_jitter_us, (int16_t)(ss.free_heap / 1024UL), (int16_t)ss.rssi,
+                            JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi ? rxRssi : ss.rssi);
+  }
+  if (ss.free_heap < 60000UL) {
+    janusBlackboardRemember(ss.nodeId, ss.kind, janusRoleFromName(ss.nodeId, ss.kind), JE_LOW_HEAP, 80, 70,
+                            janusHash16("health"), janusHash16(ss.nodeId), caps, (int16_t)(ss.free_heap / 1024UL), 0, 0, 0,
+                            30000UL, rxRssi ? rxRssi : ss.rssi);
+  }
+  if (ss.rssi < -75 || rxRssi < -75) {
+    janusBlackboardRemember(ss.nodeId, ss.kind, janusRoleFromName(ss.nodeId, ss.kind), JE_WIFI_WEAK, 75, 65,
+                            janusHash16("radio"), janusHash16(ss.nodeId), caps, ss.rssi * 10, rxRssi * 10, 0, 0,
+                            30000UL, rxRssi ? rxRssi : ss.rssi);
+  }
+  if (ss.hash_rate > 0 || ss.best_bits >= 16) {
+    janusBlackboardRemember(ss.nodeId, ss.kind, janusRoleFromName(ss.nodeId, ss.kind), JE_HASH, min(100, (int)ss.best_bits * 4), 25,
+                            janusHash16("hash"), janusHash16(ss.nodeId), caps,
+                            (int16_t)min(32767UL, ss.hash_rate / 10UL), (int16_t)ss.best_bits, (int16_t)ss.effective_batch, 0,
+                            JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi ? rxRssi : ss.rssi);
+  }
+}
+
+void janusObserveEntropyV1(const EntropyReport& er, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  char node[24];
+  snprintf(node, sizeof(node), "ER1-%u", er.worker_id);
+  uint16_t caps = JC_RF;
+  if (er.sensor_flags & 0x01) caps |= JC_TEMP | JC_HUM | JC_AIR;
+  if (er.sensor_flags & 0x08) caps |= JC_IMU;
+  int idx = janusTouchNode(node, "EntropyV1", caps, rxRssi);
+  janusNodeMap[idx].motion = max(janusNodeMap[idx].motion, er.values[2]);
+  janusNodeMap[idx].confidence = clipf(er.local_entropy / 10.0f, 0.0f, 1.0f);
+  janusBlackboardRemember(node, "EntropyV1", JR_SENSOR, JE_ENV, (uint8_t)clipf(er.local_entropy * 10.0f, 5, 100), 30,
+                          janusHash16("entropy"), er.worker_id, caps,
+                          (int16_t)(er.values[0] * 10.0f), (int16_t)(er.values[1] * 10.0f), (int16_t)(er.values[2] * 10.0f), (int16_t)(er.values[3] * 10.0f),
+                          JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi);
+}
+
+void janusObserveEntropyV2(const EntropyReportV2& er2, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  uint16_t caps = janusCapsFromNameKind(er2.nodeId, "EntropyV2");
+  int idx = janusTouchNode(er2.nodeId, "EntropyV2", caps, rxRssi);
+  uint8_t role = janusRoleFromName(er2.nodeId, "EntropyV2");
+
+  if (role == JR_BEACON) {
+    janusNodeMap[idx].tempC = er2.values[0];
+    janusNodeMap[idx].humidity = er2.values[1];
+    janusNodeMap[idx].imu = er2.values[4];
+    janusNodeMap[idx].motion = max(janusNodeMap[idx].motion * 0.90f, er2.values[4]);
+    caps |= JC_TEMP | JC_HUM | JC_IMU | JC_AI;
+  } else if (role == JR_TRON || janusHasText(er2.nodeId, "swarm") || janusHasText(er2.nodeId, "td")) {
+    janusNodeMap[idx].sound = er2.values[0];
+    janusNodeMap[idx].pressureHpa = er2.values[1];
+    janusNodeMap[idx].tempC = er2.values[2];
+    caps |= JC_MIC | JC_PRESS | JC_TEMP | JC_IMU;
+  } else if (role == JR_BLIND) {
+    janusNodeMap[idx].presence = er2.values[1];
+    janusNodeMap[idx].motion = er2.values[2];
+    caps |= JC_TMOS | JC_IMU | JC_VISION;
+  }
+  janusNodeMap[idx].confidence = clipf(er2.sync_hint, 0.0f, 1.0f);
+
+  uint8_t conf = (uint8_t)clipf(er2.sync_hint * 100.0f, 10.0f, 100.0f);
+  janusBlackboardRemember(er2.nodeId, "EntropyV2", role, JE_ENV, conf, (uint8_t)clipf(er2.local_entropy * 9.0f, 10.0f, 100.0f),
+                          janusHash16("environment"), er2.worker_id, caps,
+                          (int16_t)(er2.values[0] * 10.0f), (int16_t)(er2.values[1] * 10.0f), (int16_t)(er2.values[2] * 10.0f), (int16_t)(er2.values[4] * 10.0f),
+                          JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi);
+  if ((role == JR_BLIND && (er2.values[1] > 0.25f || er2.values[2] > 0.25f)) || (role == JR_BEACON && er2.values[4] > 1.35f)) {
+    janusBlackboardRemember(er2.nodeId, "EntropyV2", role, JE_MOTION, conf, 65,
+                            janusHash16("motion"), er2.worker_id, caps, (int16_t)(er2.values[1] * 10.0f), (int16_t)(er2.values[2] * 10.0f), (int16_t)(er2.values[4] * 10.0f), 0,
+                            30000UL, rxRssi);
+  }
+}
+
+void handleJanusEventRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  if (!data || len != sizeof(JanusEventPacket)) return;
+  JanusEventPacket je{};
+  memcpy(&je, data, sizeof(je));
+  if (je.magic[0] != 'J' || je.magic[1] != 'E' || je.version != 1) return;
+  uint16_t caps = je.capabilities | janusCapsFromNameKind(je.nodeId, je.kind);
+  janusTouchNode(je.nodeId, je.kind, caps, rxRssi);
+  janusBlackboardRemember(je.nodeId, je.kind, je.nodeRole, je.eventType, je.confidence, je.urgency,
+                          je.topicHash, je.objectHash, caps, je.valueA_x10, je.valueB_x10,
+                          je.valueC_x10, je.valueD_x10, je.ttlMs, rxRssi);
+  bool jeAudioMirror = core2LooksLikeAudioMirror(je.nodeId, je.kind);
+  bool jeTronMic = core2LooksLikeTronMicNode(je.nodeId, je.kind);
+  bool jeBlackStarMic = core2LooksLikeBlackStarNode(je.nodeId, je.kind) &&
+                        (je.eventType == JE_SOUND || (je.capabilities & (JC_MIC | JC_AUDIO)));
+  if ((je.eventType == JE_SOUND || jeAudioMirror || jeTronMic || jeBlackStarMic) &&
+      (core2IsRealAudioPresenceSource(je.nodeId, je.kind) || jeBlackStarMic)) {
+    core2TouchAudioNodeMirror(je.nodeId,
+                              jeAudioMirror ? je.kind : (jeBlackStarMic ? "BH-Mic" : "TRON-Mic"),
+                              rxRssi,
+                              (float)je.valueA_x10, (float)je.urgency / 10.0f, (float)je.confidence / 100.0f,
+                              -1.0f, -1.0f, -1.0f, -1.0f);
+  }
+}
+
+void handleJanusAiNodeRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  if (!data || len != sizeof(JanusAiNodePacket)) return;
+  JanusAiNodePacket ai{};
+  memcpy(&ai, data, sizeof(ai));
+  if (ai.magic[0] != 'A' || ai.magic[1] != 'I' || ai.version != 1) return;
+  uint16_t caps = janusCapsFromNameKind(ai.nodeId, ai.role) | JC_AI | JC_MEMORY;
+  int idx = janusTouchNode(ai.nodeId, ai.role, caps, rxRssi);
+  janusNodeMap[idx].tempC = ai.values[0];
+  janusNodeMap[idx].humidity = ai.values[1];
+  janusNodeMap[idx].pressureHpa = ai.values[2];
+  janusNodeMap[idx].confidence = clipf(ai.sync, 0.0f, 1.0f);
+  janusBlackboardRemember(ai.nodeId, ai.role, janusRoleFromName(ai.nodeId, ai.role), JE_ENV,
+                          (uint8_t)clipf(ai.sync * 100.0f, 10.0f, 100.0f), (uint8_t)clipf(ai.attention * 60.0f, 5.0f, 100.0f),
+                          janusHash16("beacon-env"), janusHash16(ai.nodeId), caps,
+                          (int16_t)(ai.values[0] * 10.0f), (int16_t)(ai.values[1] * 10.0f), (int16_t)(ai.values[2] * 10.0f), (int16_t)(ai.prediction_error * 100.0f),
+                          60000UL, rxRssi);
+  if (millis() - janusLastBlackboardLogMs > 2500UL) {
+    Serial.printf("[BLACKBOARD] AI %s T=%.1f H=%.1f P=%.1f sync=%.2f\n", ai.nodeId, ai.values[0], ai.values[1], ai.values[2], ai.sync);
+  }
+}
+
+void handleHiveMetricRaw(const uint8_t* data, uint16_t len, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  if (!data || len != sizeof(HiveMetricPacket)) return;
+  HiveMetricPacket hm{};
+  memcpy(&hm, data, sizeof(hm));
+  if (hm.magic[0] != 'H' || hm.magic[1] != 'M' || hm.version != 2) return;
+  uint16_t caps = janusCapsFromNameKind(hm.nodeId, hm.kind) | JC_RF;
+  if (hm.bt_flags) caps |= JC_AUDIO;
+  if (hm.touch_count) caps |= JC_TOUCH;
+  if (hm.hash_rate || hm.best_bits) caps |= JC_HASH;
+  int idx = janusTouchNode(hm.nodeId, hm.kind, caps, rxRssi ? rxRssi : hm.rssi);
+  janusNodeMap[idx].confidence = clipf((float)hm.entropy_x1000 / 1000.0f / 10.0f, 0.0f, 1.0f);
+  janusBlackboardRemember(hm.nodeId, hm.kind, janusRoleFromName(hm.nodeId, hm.kind), JE_HEARTBEAT, 68, 22,
+                          janusHash16("hive"), hm.worker_id, caps,
+                          (int16_t)min(32767UL, hm.hash_rate / 10UL), (int16_t)hm.best_bits, (int16_t)(hm.free_heap / 1024UL), (int16_t)hm.rssi,
+                          JANUS_BLACKBOARD_EVENT_TTL_MS, rxRssi ? rxRssi : hm.rssi);
+  if (hm.free_heap < 60000UL || hm.min_free_heap < 50000UL) {
+    janusBlackboardRemember(hm.nodeId, hm.kind, janusRoleFromName(hm.nodeId, hm.kind), JE_LOW_HEAP, 80, 70,
+                            janusHash16("health"), hm.worker_id, caps, (int16_t)(hm.free_heap / 1024UL), (int16_t)(hm.min_free_heap / 1024UL), 0, 0,
+                            30000UL, rxRssi ? rxRssi : hm.rssi);
+  }
+}
+
+void janusObserveZimAgent(const ZimAgentMemoryPacket& za, int8_t rxRssi, const uint8_t* mac) {
+  (void)mac;
+  uint16_t caps = janusCapsFromNameKind(za.nodeId, za.kind) | JC_AI | JC_MEMORY | JC_HASH;
+  int idx = janusTouchNode(za.nodeId[0] ? za.nodeId : "ZimGeek", za.kind[0] ? za.kind : "zim_slime_ai", caps, rxRssi);
+  janusNodeMap[idx].confidence = (float)za.confidence / 100.0f;
+  janusBlackboardRemember(za.nodeId[0] ? za.nodeId : "ZimGeek", za.kind[0] ? za.kind : "zim_slime_ai", JR_ZIM, JE_AI_MEMORY,
+                          za.confidence, max(30, (int)za.shaObsession), janusHash16("zim-memory"), za.worker_id, caps,
+                          (int16_t)za.accepts, (int16_t)za.policy, (int16_t)za.weaponCharge, (int16_t)za.btcHunger,
+                          90000UL, rxRssi);
+  if (za.accepts > 0) {
+    janusBlackboardRemember(za.nodeId[0] ? za.nodeId : "ZimGeek", "solo", JR_ZIM, JE_SOLO_ACCEPT,
+                            100, 55, janusHash16("hash"), za.worker_id, caps, (int16_t)za.accepts, (int16_t)za.confidence, 0, 0,
+                            60000UL, rxRssi);
+  }
+}
+
+void janusObserveEyeFrame(const JanusEyeFramePacket& ef, int8_t rxRssi) {
+  uint16_t caps = JC_TMOS | JC_VISION | JC_IMU | JC_RF;
+  int idx = janusTouchNode("BlindEye", "thermal_eye", caps, rxRssi);
+  bool motion = ef.flags & 0x01;
+  bool presence = ef.flags & 0x02;
+  janusNodeMap[idx].motion = motion ? 1.0f : janusNodeMap[idx].motion * 0.90f;
+  janusNodeMap[idx].presence = presence ? 1.0f : janusNodeMap[idx].presence * 0.92f;
+  janusNodeMap[idx].confidence = 0.80f;
+  if (motion || presence) {
+    janusBlackboardRemember("BlindEye", "thermal_eye", JR_BLIND, presence ? JE_PRESENCE : JE_MOTION,
+                            86, presence ? 72 : 55, janusHash16("presence"), janusHash16("BlindEye"), caps,
+                            (int16_t)ef.min_x10, (int16_t)ef.max_x10, (int16_t)ef.flags, 0, 20000UL, rxRssi);
+  }
+}
+
+void janusObserveTachyon(const JanusTachyonProphecyPacket& tp, int8_t rxRssi) {
+  uint16_t caps = janusCapsFromNameKind(tp.nodeId, "tachyon") | JC_AI;
+  int idx = janusTouchNode(tp.nodeId, "tachyon", caps, rxRssi);
+  janusNodeMap[idx].presence = max(tp.presence_now, tp.pred_presence_1);
+  janusNodeMap[idx].motion = max(tp.motion_now, tp.pred_motion_1);
+  janusNodeMap[idx].confidence = (float)tp.confidence / 100.0f;
+  if (tp.flags & 0x04 || tp.future_stress > 0.55f) {
+    janusBlackboardRemember(tp.nodeId, "tachyon", janusRoleFromName(tp.nodeId, "tachyon"), JE_DANGER,
+                            tp.confidence, (uint8_t)clipf(tp.future_stress * 100.0f, 10.0f, 100.0f),
+                            janusHash16("future-risk"), tp.worker_id, caps,
+                            (int16_t)(tp.future_stress * 100.0f), (int16_t)(tp.event_eta_ms / 10.0f), (int16_t)(tp.presence_now * 100.0f), (int16_t)(tp.motion_now * 100.0f),
+                            30000UL, rxRssi);
+  }
+}
+
+void janusObserveKenshi(const JanusKenshiPacket& k2, int8_t rxRssi) {
+  uint16_t caps = janusCapsFromNameKind(k2.nodeId, "kenshi") | JC_AI;
+  int idx = janusTouchNode(k2.nodeId, "kenshi", caps, rxRssi);
+  janusNodeMap[idx].presence = k2.values[0];
+  janusNodeMap[idx].motion = k2.values[1];
+  janusNodeMap[idx].air = k2.values[2];
+  janusNodeMap[idx].confidence = clipf(k2.confidence, 0.0f, 1.0f);
+  if (k2.flags & 0x02 || k2.jobState == 3 || k2.priority > 70) {
+    janusBlackboardRemember(k2.nodeId, "kenshi", janusRoleFromName(k2.nodeId, "kenshi"), JE_DANGER,
+                            (uint8_t)clipf(k2.confidence * 100.0f, 10.0f, 100.0f), k2.priority,
+                            janusHash16("kenshi-alert"), k2.worker_id, caps,
+                            (int16_t)(k2.values[0] * 100.0f), (int16_t)(k2.values[1] * 100.0f), (int16_t)(k2.values[3] * 100.0f), 0,
+                            30000UL, rxRssi);
+  }
+}
+
+bool janusEmitLocalEvent(uint8_t eventType, uint8_t confidence, uint8_t urgency, int16_t a, int16_t b, int16_t c, int16_t d) {
+  janusBlackboardRemember("Core2Home", "core2_station", JR_CORE, eventType, confidence, urgency,
+                          janusHash16("core-local"), janusHash16("Core2Home"), JC_AIR | JC_RELAY | JC_AI | JC_MEMORY,
+                          a, b, c, d, JANUS_BLACKBOARD_EVENT_TTL_MS, wifiOk ? WiFi.RSSI() : -127);
+  return true;
+}
+
+void janusPolicyTick(bool force) {
+#if JANUS_BLACKBOARD_ENABLE
+  if (!espnowOk) return;
+  uint32_t now = millis();
+  bool moodChanged = janusSwarmMood != janusPrevSwarmMood;
+  if (!force && !moodChanged && now - janusLastPolicyMs < JANUS_BLACKBOARD_POLICY_MS) return;
+  janusLastPolicyMs = now;
+  janusPrevSwarmMood = janusSwarmMood;
+  ensureColonyPeer();
+
+  JanusPolicyPacket jp{};
+  jp.magic[0] = 'J'; jp.magic[1] = 'P';
+  jp.version = 1;
+  jp.swarmMood = janusSwarmMood;
+  jp.radioRate = (janusSwarmMood == JM_ALERT || janusSwarmMood == JM_GUARD) ? 2 : (janusSwarmMood == JM_QUIET ? 0 : 1);
+  bool buzzLinkFresh = core2BuzzUiFresh(now);
+  jp.buzzBudget = (janusSwarmMood == JM_QUIET) ? 0 : (janusSwarmMood == JM_ALERT ? 2 : (buzzLinkFresh ? 1 : 0));
+  jp.sensorRate = (janusSwarmMood == JM_ALERT || janusSwarmMood == JM_GUARD) ? 2 : 1;
+  jp.confidence = (uint8_t)clipf(janusHomeSensorConfidence, 0.0f, 100.0f);
+  jp.flags = 0;
+  if (janusHomeDanger > 0.55f) jp.flags |= 0x0001;
+  if (wifiOk && WiFi.RSSI() < -72) jp.flags |= 0x0002;
+  if (airScore > 4.0f) jp.flags |= 0x0004;
+  jp.seq = ++janusPolicySeq;
+  jp.ttlMs = 16000UL;
+  // Duration, not Core2 absolute millis(): remote nodes have their own uptime clocks.
+  jp.quietUntilMs = (janusSwarmMood == JM_QUIET) ? 20000UL : 0;
+  jp.dominantTopic = (janusHomeDanger > 0.55f) ? janusHash16("danger") : janusHash16("home");
+  jp.danger_x100 = (uint16_t)clipf(janusHomeDanger * 100.0f, 0.0f, 65535.0f);
+  snprintf(jp.order, sizeof(jp.order), "mood=%s danger=%.2f H=%.0f P=%.0f", janusMoodName(janusSwarmMood), janusHomeDanger,
+           isfinite(janusHomeHumidity) ? janusHomeHumidity : -1.0f,
+           isfinite(janusHomePressureHpa) ? janusHomePressureHpa : 0.0f);
+
+  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&jp, sizeof(jp));
+  if (err == ESP_OK) {
+    janusBlackboardPolicyTx++;
+    Serial.printf("[BLACKBOARD] POLICY #%lu mood=%s radio=%u buzz=%u sensor=%u danger=%.2f conf=%u\n",
+                  (unsigned long)jp.seq, janusMoodName(janusSwarmMood), (unsigned)jp.radioRate, (unsigned)jp.buzzBudget,
+                  (unsigned)jp.sensorRate, janusHomeDanger, (unsigned)jp.confidence);
+  } else {
+    janusBlackboardPolicyFail++;
+    Serial.printf("[BLACKBOARD] POLICY FAIL err=%d fail=%lu\n", (int)err, (unsigned long)janusBlackboardPolicyFail);
+  }
+#endif
+}
+
+void janusBlackboardTick() {
+#if JANUS_BLACKBOARD_ENABLE
+  uint32_t now = millis();
+  uint8_t active = 0;
+  uint8_t dangerEvents = 0;
+  uint8_t weakRadio = 0;
+  uint8_t lowHeap = 0;
+  uint8_t envEvents = 0;
+
+  for (uint8_t i = 0; i < JANUS_BLACKBOARD_SLOTS; i++) {
+    JanusBlackboardSlot& s = janusBlackboard[i];
+    if (!s.used) continue;
+    if (now - s.lastMs > s.ttlMs) {
+      s.used = false;
+      janusBlackboardExpired++;
+      continue;
+    }
+    active++;
+    if (s.eventType == JE_DANGER || s.eventType == JE_MOTION || s.eventType == JE_PRESENCE) dangerEvents++;
+    if (s.eventType == JE_WIFI_WEAK) weakRadio++;
+    if (s.eventType == JE_LOW_HEAP) lowHeap++;
+    if (s.eventType == JE_ENV) envEvents++;
+  }
+
+  janusUpdateHomeModelFromNodes();
+
+  uint8_t nextMood = JM_IDLE;
+  if (lowHeap >= 2) nextMood = JM_RECOVER;
+  else if (janusHomeDanger > 0.64f || dangerEvents >= 3) nextMood = JM_ALERT;
+  else if (janusHomePresence > 0.35f || janusHomeMotion > 0.40f) nextMood = JM_GUARD;
+  else if (weakRadio >= 2 || (wifiOk && WiFi.RSSI() < -76)) nextMood = JM_QUIET;
+  else if (active >= 5 && envEvents >= 2) nextMood = JM_EXPLORE;
+  else nextMood = JM_IDLE;
+  janusSwarmMood = nextMood;
+
+  snprintf(janusBlackboardLine, sizeof(janusBlackboardLine), "BB %s act%u dang%u rf%u env%u pol%lu",
+           janusMoodName(janusSwarmMood), (unsigned)active, (unsigned)dangerEvents, (unsigned)weakRadio,
+           (unsigned)envEvents, (unsigned long)janusBlackboardPolicyTx);
+
+  if (now - janusLastBlackboardLogMs >= JANUS_BLACKBOARD_LOG_MS) {
+    janusLastBlackboardLogMs = now;
+    Serial.printf("[BLACKBOARD] %s | %s | rx=%lu merge=%lu exp=%lu nodes=%u\n",
+                  janusBlackboardLine, janusHomeLine, (unsigned long)janusBlackboardRx,
+                  (unsigned long)janusBlackboardMerged, (unsigned long)janusBlackboardExpired,
+                  (unsigned)colonyKnownCount);
+  }
+
+  if (airScore > 4.5f) janusEmitLocalEvent(JE_ENV, 88, 70, (int16_t)eco2, (int16_t)tvoc, (int16_t)(airScore * 10.0f), 0);
+  if (ESP.getFreeHeap() < 70000UL) janusEmitLocalEvent(JE_LOW_HEAP, 85, 80, (int16_t)(ESP.getFreeHeap() / 1024UL), 0, 0, 0);
+  janusPolicyTick(false);
+#endif
+}
+
+
 void updateSwarmSpace() {
   // Compatibility name: PAGE_SPACE is now JANUS GALAXY STATION.
   // The galaxy lives even when hidden; mining remains gated by page == PAGE_SPACE.
@@ -6754,23 +10618,41 @@ void processRxFrames() {
   while (popRxFrame(f)) {
     rxPackets++;
 
+    if (f.len == sizeof(JanusEventPacket) && f.data[0] == 'J' && f.data[1] == 'E') {
+      handleJanusEventRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
+    if (f.len == sizeof(JanusPolicyPacket) && f.data[0] == 'J' && f.data[1] == 'P') {
+      // Future nodes may echo policy; Core2 is the policy authority, so just ignore incoming policy.
+      continue;
+    }
+
     if (f.len == sizeof(JanusColonyPacket)) {
       JanusColonyPacket pkt{};
       memcpy(&pkt, f.data, sizeof(pkt));
-      if (memcmp(pkt.magic, "JANUS", 5) == 0) handleHeartbeat(pkt, f.rssi);
+      if (memcmp(pkt.magic, "JANUS", 5) == 0) {
+        janusObserveHeartbeat(pkt, f.rssi, f.mac);
+        handleHeartbeat(pkt, f.rssi);
+      }
       continue;
     }
 
     if (f.len == sizeof(JobPacket) && f.data[0] == 'J' && f.data[1] == 'B') {
       JobPacket jp{};
       memcpy(&jp, f.data, sizeof(jp));
-      handleJobPacket(jp);
+      handleJobPacket(jp, f.rssi);
       continue;
     }
 
     if (f.len == sizeof(JanusBuzzStatusPacket) && f.data[0] == 'B' && f.data[1] == 'S') {
       JanusBuzzStatusPacket bs{};
       memcpy(&bs, f.data, sizeof(bs));
+      janusBlackboardRemember(bs.nodeId[0] ? bs.nodeId : "Buzz", "buzz_audio_miner", JR_BUZZ, JE_HEARTBEAT,
+                              76, 28, janusHash16("buzz-status"), janusHash16(bs.nodeId),
+                              JC_AUDIO | JC_HASH | JC_RELAY | JC_MEMORY | JC_RF,
+                              (int16_t)min(32767UL, bs.hashRate / 10UL), (int16_t)bs.bestBits, (int16_t)bs.shares, (int16_t)bs.rejects,
+                              JANUS_BLACKBOARD_EVENT_TTL_MS, f.rssi);
       handleBuzzStatus(bs, f.rssi);
       continue;
     }
@@ -6781,27 +10663,72 @@ void processRxFrames() {
     }
 
     if (f.len == sizeof(ZimAgentMemoryPacket) && f.data[0] == 'Z' && f.data[1] == 'A') {
+      ZimAgentMemoryPacket za{};
+      memcpy(&za, f.data, sizeof(za));
+      janusObserveZimAgent(za, f.rssi, f.mac);
       handleZimAgentMemoryRaw(f.data, f.len, f.rssi, f.mac);
       continue;
     }
 
+    if (f.len == sizeof(JanusEyePowerPacket) && f.data[0] == 'E' && f.data[1] == 'B') {
+      handleJanusEyePowerRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
     if (f.len == sizeof(JanusEyeFramePacket) && f.data[0] == 'E' && f.data[1] == 'F') {
+      JanusEyeFramePacket ef{};
+      memcpy(&ef, f.data, sizeof(ef));
+      janusObserveEyeFrame(ef, f.rssi);
       handleJanusEyeFrameRaw(f.data, f.len, f.rssi);
       continue;
     }
 
     if (f.len == sizeof(JanusTachyonProphecyPacket) && f.data[0] == 'T' && f.data[1] == 'P') {
+      JanusTachyonProphecyPacket tp{};
+      memcpy(&tp, f.data, sizeof(tp));
+      janusObserveTachyon(tp, f.rssi);
       handleJanusTachyonProphecyRaw(f.data, f.len, f.rssi, f.mac);
       continue;
     }
 
     if (f.len == sizeof(JanusKenshiPacket) && f.data[0] == 'K' && f.data[1] == '2') {
+      JanusKenshiPacket k2{};
+      memcpy(&k2, f.data, sizeof(k2));
+      janusObserveKenshi(k2, f.rssi);
       handleJanusKenshiRaw(f.data, f.len, f.rssi, f.mac);
       continue;
     }
 
+    if (f.len == sizeof(GladiusMemoryPacket) && f.data[0] == 'G' && f.data[1] == 'M') {
+      handleGladiusMemoryRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
+    if (f.len == sizeof(RfDomeSonarPacket) && f.data[0] == 'R' && f.data[1] == 'S') {
+      handleRfDomeRaw(f.data, f.len, f.rssi);
+      continue;
+    }
+
     if (f.len == sizeof(SwarmSensePacket) && f.data[0] == 'S' && f.data[1] == 'S') {
+      SwarmSensePacket ss{};
+      memcpy(&ss, f.data, sizeof(ss));
+      janusObserveSwarmSense(ss, f.rssi, f.mac);
       handleSwarmSenseRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
+    if (f.len == sizeof(JanusPnCortexPacket) && f.data[0] == 'P' && f.data[1] == 'N') {
+      handlePnCortexRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
+    if (f.len == sizeof(JanusAiNodePacket) && f.data[0] == 'A' && f.data[1] == 'I') {
+      handleJanusAiNodeRaw(f.data, f.len, f.rssi, f.mac);
+      continue;
+    }
+
+    if (f.len == sizeof(HiveMetricPacket) && f.data[0] == 'H' && f.data[1] == 'M') {
+      handleHiveMetricRaw(f.data, f.len, f.rssi, f.mac);
       continue;
     }
 
@@ -6813,6 +10740,7 @@ void processRxFrames() {
     if (f.len == sizeof(EntropyReportV2) && f.data[0] == 'E' && f.data[1] == '2') {
       EntropyReportV2 er2{};
       memcpy(&er2, f.data, sizeof(er2));
+      janusObserveEntropyV2(er2, f.rssi, f.mac);
       handleEntropyV2(er2, f.rssi);
       continue;
     }
@@ -6820,6 +10748,7 @@ void processRxFrames() {
     if (f.len == sizeof(EntropyReport) && f.data[0] == 'E' && f.data[1] == 'R') {
       EntropyReport er{};
       memcpy(&er, f.data, sizeof(er));
+      janusObserveEntropyV1(er, f.rssi, f.mac);
       handleEntropyV1(er, f.rssi);
       continue;
     }
@@ -6832,7 +10761,7 @@ float homeEntropy() {
   float e = airEntropy + spaceNovelty * 3.0f + spaceMotion * 1.8f + spaceSound * 1.2f;
   if (eye.refresh()) e += clipf(eye.entropy * 0.08f + eye.loss * 0.8f, 0.0f, 4.0f);
   if (beacon.refresh()) e += clipf(beacon.entropy * 0.06f, 0.0f, 3.0f);
-  if (audioNode.refresh()) e += clipf(audioNode.entropy * 0.07f, 0.0f, 3.0f);
+  if (audioNode.refresh() || core2AudioNodePresenceFresh()) e += clipf(audioNode.entropy * 0.07f, 0.0f, 3.0f);
   e += clipf(universalMeanEntropy() * 0.045f, 0.0f, 4.0f);
   return clipf(e, 0.01f, 20.0f);
 }
@@ -6842,7 +10771,7 @@ float homeSync() {
   int c = 1;
   if (eye.refresh()) { s += eye.sync; c++; }
   if (beacon.refresh()) { s += beacon.sync; c++; }
-  if (audioNode.refresh()) { s += audioNode.sync; c++; }
+  if (audioNode.refresh() || core2AudioNodePresenceFresh()) { s += audioNode.sync; c++; }
   float us = universalMeanSync();
   if (us > 0.0f) { s += us; c++; }
   return clipf(s / (float)c, 0.0f, 1.5f);
@@ -6965,6 +10894,175 @@ void sendCore2SwarmSense() {
 #endif
 }
 
+void sendCore2NasBrainReport(bool force) {
+#if CORE2_NAS_BRAIN_ENABLE
+  uint32_t now = millis();
+  if (!force && now - core2LastNasBrainMs < CORE2_NAS_BRAIN_TX_MS) return;
+  if (WiFi.status() != WL_CONNECTED) {
+    snprintf(core2NasBrainLine, sizeof(core2NasBrainLine), "NAS brain: WiFi wait");
+    return;
+  }
+  if (!force && millis() - lastHttpAt < 220UL) return;
+  lastHttpAt = millis();
+  core2LastNasBrainMs = now;
+
+  bool murphFresh = core2MurphFresh(now);
+  bool bhPnFresh = core2BlackStarCortexFresh(now);
+  bool pnFresh = murphFresh || bhPnFresh || core2PnCortexFresh(now);
+
+  char report[720];
+  snprintf(report, sizeof(report),
+           "Core2 station report: Gargantua Lab S%02u lens %.0f%% study %.0f%% corpus %lu lane %s. "
+           "BH Cortex fresh %u H %lu best %u/%u murph %.0f%% maze %.0f%% silicon %.0f%% lane %s. "
+           "Yaks/Murph fresh %u H %lu best %u/%u murph %.0f%% maze %.0f%% silicon %.0f%% lane %s. "
+           "Demiurge goal P=NP belief %.0f%% discovery %.0f%% hunger %.0f%% mode %s. "
+           "SHA256 miner best %lu target %u H %lu. Rule: do not increase submit pressure, do not change Stratum/target.",
+           (unsigned)galaxy.blackHoleSector(),
+           clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f,
+           clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f,
+           (unsigned long)core2BhCorpus.samples,
+           core2BhLaneName(core2BhCorpus.bestLane),
+           bhPnFresh ? 1U : 0U,
+           (unsigned long)(bhPnFresh ? core2BlackStarCortex.hashRate : 0UL),
+           (unsigned)(bhPnFresh ? core2BlackStarCortex.bestBits : 0U),
+           (unsigned)(bhPnFresh ? core2BlackStarCortex.targetBits : 0U),
+           clipf(bhPnFresh ? core2BlackStarCortex.murph : 0.0f, 0.0f, 1.0f) * 100.0f,
+           clipf(bhPnFresh ? core2BlackStarCortex.labyrinth : 0.0f, 0.0f, 1.0f) * 100.0f,
+           clipf(bhPnFresh ? core2BlackStarCortex.silicon : 0.0f, 0.0f, 1.0f) * 100.0f,
+           bhPnFresh ? core2PnLaneName(core2BlackStarCortex.lane, core2BlackStarCortex.kind) : "WAIT",
+           murphFresh ? 1U : 0U,
+           (unsigned long)(murphFresh ? core2MurphCortex.hashRate : 0UL),
+           (unsigned)(murphFresh ? core2MurphCortex.bestBits : 0U),
+           (unsigned)(murphFresh ? core2MurphCortex.targetBits : 0U),
+           clipf(murphFresh ? core2MurphCortex.murph : 0.0f, 0.0f, 1.0f) * 100.0f,
+           clipf(murphFresh ? core2MurphCortex.labyrinth : 0.0f, 0.0f, 1.0f) * 100.0f,
+           clipf(murphFresh ? core2MurphCortex.silicon : 0.0f, 0.0f, 1.0f) * 100.0f,
+           murphFresh ? core2PnLaneName(core2MurphCortex.lane, core2MurphCortex.kind) : "WAIT",
+           galaxy.pnpBelief * 100.0f,
+           galaxy.pnpDiscovery * 100.0f,
+           galaxy.pnpHunger * 100.0f,
+           galaxy.demiurgeModeName(galaxy.demiurgeModeCode()),
+           (unsigned long)coreBestBits,
+           (unsigned)coreTargetBits,
+           (unsigned long)coreRemoteHashrate);
+
+  StaticJsonDocument<4096> doc;
+  doc["mode"] = "triumvirate";
+  doc["node_id"] = "Core2Home";
+  doc["target"] = "JANUS_TRIUMVIRATE";
+  doc["topic"] = "gargantua_lab";
+  doc["quality"] = clipf(galaxy.pnpMinerUtility, 0.0f, 1.5f);
+  doc["text"] = report;
+  JsonArray tags = doc.createNestedArray("tags");
+  tags.add("core2");
+  tags.add("gargantua");
+  tags.add("pnp_sha256");
+  tags.add("bh_miner_bias");
+  JsonObject ctx = doc.createNestedObject("context");
+  ctx["node_id"] = "Core2Home";
+  ctx["role"] = "core2_station";
+  ctx["goal"] = "P=NP_SHA256_EVOLUTION";
+  ctx["bh_sector"] = galaxy.blackHoleSector();
+  ctx["bh_lens"] = clipf(core2BlackStarLensing, 0.0f, 1.0f);
+  ctx["bh_study"] = clipf(core2BlackStarStudy, 0.0f, 1.0f);
+  ctx["bh_corpus"] = core2BhCorpus.samples;
+  ctx["bh_lane"] = core2BhLaneName(core2BhCorpus.bestLane);
+  ctx["pn_fresh"] = pnFresh;
+  ctx["bh_pn_fresh"] = bhPnFresh;
+  ctx["bh_pn_node"] = bhPnFresh ? core2BlackStarCortex.nodeId : "";
+  ctx["bh_pn_lane"] = bhPnFresh ? core2PnLaneName(core2BlackStarCortex.lane, core2BlackStarCortex.kind) : "";
+  ctx["bh_pn_hash_rate"] = bhPnFresh ? core2BlackStarCortex.hashRate : 0UL;
+  ctx["bh_pn_best_bits"] = bhPnFresh ? core2BlackStarCortex.bestBits : 0U;
+  ctx["bh_pn_target_bits"] = bhPnFresh ? core2BlackStarCortex.targetBits : 0U;
+  ctx["bh_murph"] = bhPnFresh ? clipf(core2BlackStarCortex.murph, 0.0f, 1.5f) : 0.0f;
+  ctx["bh_silicon_maze"] = bhPnFresh ? clipf(core2BlackStarCortex.labyrinth, 0.0f, 1.5f) : 0.0f;
+  ctx["bh_silicon_body"] = bhPnFresh ? clipf(core2BlackStarCortex.silicon, 0.0f, 1.5f) : 0.0f;
+  ctx["bh_pn_heat"] = bhPnFresh ? core2BlackStarCortex.heat : 0.0f;
+  ctx["bh_pn_load"] = bhPnFresh ? core2BlackStarCortex.load : 0.0f;
+  ctx["bh_pn_hash"] = bhPnFresh ? core2BlackStarCortex.packetHash : 0UL;
+  ctx["yaks_pn_fresh"] = murphFresh;
+  ctx["yaks_pn_node"] = murphFresh ? core2MurphCortex.nodeId : "";
+  ctx["yaks_pn_lane"] = murphFresh ? core2PnLaneName(core2MurphCortex.lane, core2MurphCortex.kind) : "";
+  ctx["yaks_pn_hash_rate"] = murphFresh ? core2MurphCortex.hashRate : 0UL;
+  ctx["yaks_pn_best_bits"] = murphFresh ? core2MurphCortex.bestBits : 0U;
+  ctx["yaks_pn_target_bits"] = murphFresh ? core2MurphCortex.targetBits : 0U;
+  ctx["yaks_murph"] = murphFresh ? clipf(core2MurphCortex.murph, 0.0f, 1.5f) : 0.0f;
+  ctx["yaks_silicon_maze"] = murphFresh ? clipf(core2MurphCortex.labyrinth, 0.0f, 1.5f) : 0.0f;
+  ctx["yaks_silicon_body"] = murphFresh ? clipf(core2MurphCortex.silicon, 0.0f, 1.5f) : 0.0f;
+  ctx["yaks_pn_heat"] = murphFresh ? core2MurphCortex.heat : 0.0f;
+  ctx["yaks_pn_load"] = murphFresh ? core2MurphCortex.load : 0.0f;
+  ctx["yaks_pn_hash"] = murphFresh ? core2MurphCortex.packetHash : 0UL;
+  ctx["demiurge_mode"] = galaxy.demiurgeModeName(galaxy.demiurgeModeCode());
+  ctx["pnp_belief"] = galaxy.pnpBelief;
+  ctx["pnp_discovery"] = galaxy.pnpDiscovery;
+  ctx["pnp_hunger"] = galaxy.pnpHunger;
+  ctx["miner_best_bits"] = coreBestBits;
+  ctx["miner_target_bits"] = coreTargetBits;
+  ctx["hash_rate"] = coreRemoteHashrate;
+  ctx["submit_pressure"] = "do_not_increase";
+
+  String payload;
+  serializeJson(doc, payload);
+
+  const char* urls[] = {
+    JANUS_NAS_BRAIN_VOICE_URL,
+    JANUS_NAS_BRAIN_FACE_URL,
+    JANUS_NAS_BRAIN_MEMORY_URL
+  };
+  const char* lanes[] = { "voice", "face", "memory" };
+  const uint8_t laneCount = sizeof(urls) / sizeof(urls[0]);
+  const char* usedLane = lanes[0];
+  int code = -1;
+  String body;
+  for (uint8_t i = 0; i < laneCount; ++i) {
+    usedLane = lanes[i];
+    body = "";
+    HTTPClient http;
+    http.setConnectTimeout(900);
+    http.setTimeout(1000);
+    if (!http.begin(urls[i])) {
+      code = -100 - (int)i;
+    } else {
+      http.addHeader("Content-Type", "application/json");
+      code = http.POST(payload);
+      body = (code > 0) ? http.getString() : "";
+      http.end();
+    }
+    if (code >= 200 && code < 300) break;
+    if (code != 404 && code != 405) break;
+  }
+
+  if (code >= 200 && code < 300) {
+    StaticJsonDocument<1024> resp;
+    DeserializationError err = body.length() > 0 ? deserializeJson(resp, body) : DeserializationError::EmptyInput;
+    const bool memoryOnly = (strcmp(usedLane, "memory") == 0);
+    const char* speech = memoryOnly ? "Gargantua report archived" : "Triumvirate answered";
+    const char* intent = memoryOnly ? "library_sync" : "observe";
+    const char* focus = memoryOnly ? "gargantua_corpus" : "swarm_library";
+    if (!err && !memoryOnly) {
+      speech = resp["speech"] | resp["reply"] | speech;
+      JsonObject dir = resp["directive"];
+      if (!dir.isNull()) {
+        intent = dir["intent"] | intent;
+        focus = dir["focus"] | focus;
+      }
+    }
+    core2NasBrainTx++;
+    if (strcmp(intent, "study_bh") == 0 || strcmp(intent, "pnp_sha256_evolution") == 0) {
+      galaxy.demiurgeMode = 4;
+      galaxy.pnpMinerUtility = clipf(galaxy.pnpMinerUtility + 0.015f, 0.0f, 1.5f);
+      galaxy.universeServiceSector = galaxy.blackHoleSector();
+    }
+    snprintf(core2NasBrainLine, sizeof(core2NasBrainLine), "NAS %s %s/%s: %.30s", usedLane, intent, focus, speech);
+    Serial.printf("[NAS/TRIUMVIRATE] ok code=%d via=%s intent=%s focus=%s tx=%lu\n", code, usedLane, intent, focus, (unsigned long)core2NasBrainTx);
+  } else {
+    core2NasBrainFail++;
+    snprintf(core2NasBrainLine, sizeof(core2NasBrainLine), "NAS brain: %s fail %d", usedLane, code);
+    Serial.printf("[NAS/TRIUMVIRATE] fail via=%s code=%d fail=%lu\n", usedLane, code, (unsigned long)core2NasBrainFail);
+  }
+#endif
+}
+
 
 void handlePilotLinkRaw(const uint8_t* data, int len, int8_t rxRssi) {
   if (!data || len != (int)sizeof(JanusPilotLinkPacket)) return;
@@ -6973,18 +11071,14 @@ void handlePilotLinkRaw(const uint8_t* data, int len, int8_t rxRssi) {
   if (pl.magic[0] != 'P' || pl.magic[1] != 'L' || pl.version != 1) return;
   core2PilotLinkRx++;
   core2LastPilotLinkMs = millis();
-  galaxy.universePilotSector = pl.sector % JanusGalaxyStationSim::UNIVERSE_SECTORS;
-  galaxy.universeSelectedSector = galaxy.universePilotSector;
-  galaxy.universePilotDistance = pl.distance;
+  galaxy.eliteSetPilotFromLink(pl.galaxy, pl.system, pl.sector, pl.nodeId, rxRssi, pl.mode, pl.objective, pl.distance);
   galaxy.universePartyPower = clipf(galaxy.universePartyPower * 0.82f + clipf((float)pl.shield_x10 / 1000.0f + (float)pl.energy_x10 / 1200.0f + (float)pl.mech_level * 0.08f, 0.0f, 1.8f) * 0.18f, 0.0f, 2.0f);
-  snprintf(galaxy.universePilotLine, sizeof(galaxy.universePilotLine),
-           "PilotLink: %s S%02u sys%u mode%u mech%u armor%u rssi%d",
-           pl.nodeId, (unsigned)galaxy.universePilotSector, (unsigned)pl.system,
-           (unsigned)pl.mode, (unsigned)pl.mech_level, (unsigned)pl.mech_armor, (int)rxRssi);
   if ((core2PilotLinkRx <= 3) || (core2PilotLinkRx % 20UL == 0)) {
-    Serial.printf("[PILOTLINK] RX %s sector=%u sys=%u mode=%u mech=%u armor=%u rssi=%d\n",
-                  pl.nodeId, (unsigned)pl.sector, (unsigned)pl.system, (unsigned)pl.mode,
-                  (unsigned)pl.mech_level, (unsigned)pl.mech_armor, (int)rxRssi);
+    Serial.printf("[PILOTLINK] RX %s g=%u sys=%u/%s sector=%u->S%02u mode=%u mech=%u armor=%u obj=%u rssi=%d\n",
+                  pl.nodeId, (unsigned)pl.galaxy + 1U, (unsigned)pl.system,
+                  galaxy.eliteSystems[pl.system].name,
+                  (unsigned)pl.sector, (unsigned)galaxy.universePilotSector, (unsigned)pl.mode,
+                  (unsigned)pl.mech_level, (unsigned)pl.mech_armor, (unsigned)pl.objective, (int)rxRssi);
   }
 }
 
@@ -6997,13 +11091,19 @@ void sendCore2GroundOrderTick() {
   core2LastGroundOrderMs = now;
   ensureColonyPeer();
 
-  uint8_t sector = galaxy.universeServiceSector % JanusGalaxyStationSim::UNIVERSE_SECTORS;
+  uint8_t bhSector = galaxy.nodeSectorSlot(4) % JanusGalaxyStationSim::UNIVERSE_SECTORS;
+  uint8_t serviceSector = galaxy.universeServiceSector % JanusGalaxyStationSim::UNIVERSE_SECTORS;
+  bool bhFresh = core2BlackStarFresh(now);
+  bool bhServiceFocus = (serviceSector == bhSector);
+  bool bhLabFocus = (page == PAGE_SPACE && galaxy.s.viewMode == JanusGalaxyStationSim::VIEW_GARGANTUA);
+  bool bhStudyWindow = bhFresh || bhServiceFocus || bhLabFocus || (page == PAGE_SPACE && ((core2GroundOrderSeq % 4UL) == 2UL));
+  uint8_t sector = bhStudyWindow ? bhSector : serviceSector;
   float threat = galaxy.universeThreat[sector];
   float supply = galaxy.universeSupply[sector];
   float influence = galaxy.universeInfluence[sector];
   bool pilotOnline = core2LastPilotLinkMs && (now - core2LastPilotLinkMs < 26000UL);
   bool baseCrisis = (threat > 0.66f || galaxy.universeOwner[sector] != 1 || galaxy.universeStationLevel[sector] == 0);
-  bool raidWindow = pilotOnline && !baseCrisis && ((core2GroundOrderSeq % 3UL) != 1UL || supply > 0.50f);
+  bool raidWindow = !bhStudyWindow && pilotOnline && !baseCrisis && ((core2GroundOrderSeq % 3UL) != 1UL || supply > 0.50f);
 
   GroundOrderPacket go{};
   go.magic[0] = 'G'; go.magic[1] = 'O';
@@ -7016,14 +11116,28 @@ void sendCore2GroundOrderTick() {
   if (pilotOnline) go.flags |= 0x0002;
   if (threat > influence) go.flags |= 0x0004;
   if (raidWindow) go.flags |= 0x0008;
+  if (bhStudyWindow) {
+    go.mode = 0;
+    go.flags |= 0x0020;
+    if (bhFresh) go.flags |= 0x0040;
+    uint8_t bhBoost = (uint8_t)clipf(165.0f + core2BlackStarLensing * 38.0f + core2BlackStarStudy * 28.0f, 0.0f, 255.0f);
+    if (go.priority < bhBoost) go.priority = bhBoost;
+  }
   go.mission_id = (++core2GroundOrderSeq) ^ ((uint32_t)sector << 24) ^ (now & 0x00FFFFFFUL);
-  snprintf(go.target, sizeof(go.target), "%s", raidWindow ? "HERO_RAID" : "BASE_HOLD");
+  snprintf(go.target, sizeof(go.target), "%s", bhStudyWindow ? "BH_STUDY" : (raidWindow ? "HERO_RAID" : "BASE_HOLD"));
 
   esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&go, sizeof(go));
   if (err == ESP_OK) {
-    Serial.printf("[GROUNDOPS] ORDER TX mode=%u sector=%u prio=%u mission=%lu target=%s pilot=%u crisis=%u\n",
+    if (bhStudyWindow) {
+      snprintf(galaxy.universePilotLine, sizeof(galaxy.universePilotLine),
+               "Core2 BH_STUDY S%02u lens %.0f%% corpus %lu", (unsigned)sector,
+               clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f,
+               (unsigned long)core2BhCorpus.samples);
+    }
+    Serial.printf("[GROUNDOPS] ORDER TX mode=%u sector=%u prio=%u mission=%lu target=%s pilot=%u crisis=%u bh=%u fresh=%u focus=%u lab=%u\n",
                   (unsigned)go.mode, (unsigned)go.sector, (unsigned)go.priority,
-                  (unsigned long)go.mission_id, go.target, (unsigned)pilotOnline, (unsigned)baseCrisis);
+                  (unsigned long)go.mission_id, go.target, (unsigned)pilotOnline, (unsigned)baseCrisis,
+                  (unsigned)bhStudyWindow, (unsigned)bhFresh, (unsigned)bhServiceFocus, (unsigned)bhLabFocus);
   } else {
     Serial.printf("[GROUNDOPS] ORDER TX FAIL err=%d\n", (int)err);
   }
@@ -7053,10 +11167,12 @@ void sendCore2ZimMissionTick() {
   float threat = galaxy.universeThreat[sector];
   float supply = galaxy.universeSupply[sector];
   float influence = galaxy.universeInfluence[sector];
+  bool bhSector = (sector == galaxy.blackHoleSector());
   bool crisis = (threat > 0.66f || galaxy.universeOwner[sector] != 1 || galaxy.universeStationLevel[sector] == 0);
 
   uint8_t mtype = 0;
-  if (crisis) mtype = 2;                    // raid / hostile sector
+  if (bhSector) mtype = (core2ZimMissionSeq & 1UL) ? 1 : 0; // edge recon/sample, not diving into the hole
+  else if (crisis) mtype = 2;               // raid / hostile sector
   else if (supply < 0.32f) mtype = 3;       // salvage resources
   else if (influence < 0.48f) mtype = 1;    // collect samples / local intel
   else if ((core2ZimMissionSeq % 5UL) == 4) mtype = 4;
@@ -7068,7 +11184,9 @@ void sendCore2ZimMissionTick() {
   zm.sector = sector;
   zm.missionType = mtype;
   zm.priority = (uint8_t)clipf(60.0f + threat * 120.0f + supply * 24.0f + (page == PAGE_SPACE ? 20.0f : 0.0f), 0.0f, 255.0f);
+  if (bhSector && zm.priority < 190) zm.priority = 190;
   zm.floorMax = (uint8_t)clipf(2.0f + threat * 3.0f + (float)(core2ZimMissionSeq % 2UL), 2.0f, 5.0f);
+  if (bhSector && zm.floorMax > 3) zm.floorMax = 3;
   zm.fuel = (uint16_t)clipf(16.0f + supply * 14.0f + influence * 10.0f + (float)zm.floorMax * 3.0f, 14.0f, 48.0f);
   zm.difficulty_x100 = (uint16_t)clipf(100.0f + threat * 180.0f + (float)galaxy.universeStationLevel[sector] * 22.0f, 100.0f, 999.0f);
   zm.mission_id = (++core2ZimMissionSeq) ^ ((uint32_t)sector << 24) ^ (now & 0x00FFFFFFUL);
@@ -7077,9 +11195,11 @@ void sendCore2ZimMissionTick() {
   if (page == PAGE_SPACE) zm.flags |= 0x00000001UL;
   if (crisis) zm.flags |= 0x00000002UL;
   if (mtype == 2) zm.flags |= 0x00000004UL;
+  if (bhSector) zm.flags |= 0x00000010UL;
   snprintf(zm.target, sizeof(zm.target), "ZimGeek");
   snprintf(zm.planet, sizeof(zm.planet), "%s", galaxy.universePlanetName(sector));
-  snprintf(zm.order, sizeof(zm.order), "%s %s F%u", core2ZimMissionTypeName(mtype), zm.planet, (unsigned)zm.floorMax);
+  if (bhSector) snprintf(zm.order, sizeof(zm.order), "EDGE_%s %s F%u", core2ZimMissionTypeName(mtype), zm.planet, (unsigned)zm.floorMax);
+  else snprintf(zm.order, sizeof(zm.order), "%s %s F%u", core2ZimMissionTypeName(mtype), zm.planet, (unsigned)zm.floorMax);
 
   esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&zm, sizeof(zm));
   if (err == ESP_OK) {
@@ -7191,6 +11311,7 @@ uint16_t pageAccent() {
     case PAGE_SPACE: return colorCyan();
     case PAGE_AUDIO: return colorPurple();
     case PAGE_MESH: return colorBlue();
+    case PAGE_ANCHOR: return colorCyan();
     case PAGE_RSSI: return colorCyan();
     case PAGE_SYSTEM: return colorDim();
     case PAGE_WEATHER: return colorBlue();
@@ -7224,6 +11345,26 @@ void drawButton(int x, int y, int w, int h, const char* label, uint16_t accent, 
   cPrint(tx, ty, active ? edge : colorDim(), fill, label, 1);
 }
 
+void drawCoreBatteryGauge(int x, int y) {
+  int pct = constrain(M5.Power.getBatteryLevel(), 0, 100);
+  uint16_t col = (pct <= 15) ? colorBad() : ((pct <= 35) ? colorWarn() : colorGood());
+  uint16_t bg = rgb565(2,3,8);
+  canvas.drawRoundRect(x, y, 30, 12, 3, colorDim());
+  canvas.fillRect(x + 30, y + 3, 2, 6, colorDim());
+  int bars = (pct + 19) / 20;
+  for (int i = 0; i < 5; ++i) {
+    uint16_t bcol = (i < bars) ? col : rgb565(13, 14, 20);
+    canvas.fillRect(x + 3 + i * 5, y + 3, 3, 6, bcol);
+  }
+}
+
+void drawSmallBatteryPctBar(int x, int y, int w, int h, uint8_t pct, uint16_t col) {
+  pct = constrain((int)pct, 0, 100);
+  canvas.drawRoundRect(x, y, w, h, 4, colorDim());
+  int fill = max(1, (w - 4) * (int)pct / 100);
+  canvas.fillRoundRect(x + 2, y + 2, fill, h - 4, 3, col);
+}
+
 void drawBackHeader(const char* title, const char* sub, uint16_t accent) {
   canvas.fillRect(0, 0, 320, 30, rgb565(2, 3, 8));
   canvas.drawFastHLine(0, 29, 320, accent);
@@ -7232,20 +11373,21 @@ void drawBackHeader(const char* title, const char* sub, uint16_t accent) {
   cPrint(68, 6, colorText(), rgb565(2,3,8), title, 1);
   cPrint(68, 18, colorDim(), rgb565(2,3,8), sub, 1);
 
-  cPrintf(244, 6, wifiOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "W:%s", wifiOk ? "OK" : "--");
-  cPrintf(280, 6, espnowOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "N:%s", espnowOk ? "OK" : "--");
-  cPrintf(244, 18, colorDim(), rgb565(2,3,8), 1, "ch:%u", colonyPeerChannel);
+  drawCoreBatteryGauge(282, 4);
+  cPrintf(228, 6, wifiOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "W:%s", wifiOk ? "OK" : "--");
+  cPrintf(228, 18, colorDim(), rgb565(2,3,8), 1, "N:%s ch:%u", espnowOk ? "OK" : "--", colonyPeerChannel);
 }
 
 void drawHomeHeader() {
   canvas.fillRect(0, 0, 320, 30, rgb565(2, 3, 8));
   canvas.drawFastHLine(0, 29, 320, colorPurple());
   universalRecountNodes();
-  cPrintf(8, 5, colorText(), rgb565(2,3,8), 1, "JANUS CORE2 v6.35  RX:%lu E2:%lu N:%u/%u",
+  cPrintf(8, 5, colorText(), rgb565(2,3,8), 1, "JANUS CORE2 v6.42C4B RX:%lu E2:%lu N:%u/%u",
           (unsigned long)rxPackets, (unsigned long)er2Packets, (unsigned)colonyOnlineCount, (unsigned)colonyKnownCount);
-  cPrintf(8, 18, colorDim(), rgb565(2,3,8), 1, "tap cards  bat:%d%% br:%u%% drop:%lu", M5.Power.getBatteryLevel(), (unsigned)((coreBrightness * 100) / 255), (unsigned long)rxDropped);
-  cPrintf(240, 18, wifiOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "W:%s", wifiOk ? "OK" : "--");
-  cPrintf(278, 18, espnowOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "N:%s", espnowOk ? "OK" : "--");
+  drawCoreBatteryGauge(282, 4);
+  cPrintf(8, 18, colorDim(), rgb565(2,3,8), 1, "tap cards  br:%u%% drop:%lu", (unsigned)((coreBrightness * 100) / 255), (unsigned long)rxDropped);
+  cPrintf(226, 18, wifiOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "W:%s", wifiOk ? "OK" : "--");
+  cPrintf(260, 18, espnowOk ? colorGood() : colorBad(), rgb565(2,3,8), 1, "N:%s", espnowOk ? "OK" : "--");
 }
 
 void drawAirPanelHome() {
@@ -7282,8 +11424,8 @@ void drawCard(int x, int y, int w, int h, const char* title, bool online, uint16
 void drawNodeGridHome() {
   bool eyeOn = eye.refresh();
   bool beaconOn = beacon.refresh();
-  bool buzzOn = buzz.refresh();
-  bool audOn = audioNode.refresh();
+  bool buzzOn = core2BuzzUiFresh();
+  bool audOn = core2AudioUiFresh();
   bool swarmOn = swarm.refresh();
   bool stickOn = stick.refresh();
 
@@ -7310,7 +11452,9 @@ void drawNodeGridHome() {
   universalRecountNodes();
   drawCard(242, 178, 70, 48, "MESH", colonyOnlineCount > 0, colorBlue());
   cPrintf(250, 198, colorText(), colorPanel(), 1, "N %u/%u", (unsigned)colonyOnlineCount, (unsigned)colonyKnownCount);
-  cPrintf(250, 211, colorText(), colorPanel(), 1, "NEW %lu", (unsigned long)colonyNewNodeEvents);
+  if (core2BlackStarFresh(millis())) cPrintf(250, 211, colorText(), colorPanel(), 1, "BH %02d/%02d", (int)(clipf(core2BlackStarLensing,0,1)*100.0f), (int)(clipf(core2BlackStarStudy,0,1)*100.0f));
+  else if (core2AnchorRadarFresh()) cPrintf(250, 211, colorText(), colorPanel(), 1, "RF %.1f/%.1f", core2AnchorPresence, core2AnchorMotion);
+  else cPrintf(250, 211, colorText(), colorPanel(), 1, "NEW %lu", (unsigned long)colonyNewNodeEvents);
 }
 
 void drawFooter() {
@@ -7363,10 +11507,13 @@ void drawAirDetail() {
   cPrintf(18, y, colorText(), colorBg(), 1, "%s", trendExplain()); y += 12;
   cPrintf(18, y, colorDim(), colorBg(), 1, "SGP30: eCO2 ne real CO2, eto ocenki po VOC/zapaham."); y += 12;
   cPrintf(18, y, colorDim(), colorBg(), 1, "raw H2:%u  Ethanol:%u  score:%.2f", rawH2, rawEthanol, airScore); y += 12;
+  cPrintf(18, y, colorDim(), colorBg(), 1, "same:%lu ok:%lu fail:%lu base:%s", (unsigned long)sgpSameCount, (unsigned long)sgpReadOk, (unsigned long)sgpReadFail, sgpBaselineLoaded ? "loaded" : "learn"); y += 12;
+  cPrintf(18, y, (eco2 >= 50000U || tvoc >= 50000U) ? colorBad() : colorDim(), colorBg(), 1, "sat:%lu AH:%lu airRows:%lu", (unsigned long)sgpSaturationCount, (unsigned long)sgpHumidityApplied, (unsigned long)core2AirArchiveRows); y += 12;
   cPrintf(18, y, colorDim(), colorBg(), 1, "porogi: OK <900ppm/<220ppb, vent >1500/>600");
 
   drawButton(18, 207, 120, 20, "WEATHER", accent, true);
-  drawButton(150, 207, 142, 20, sgpReady ? "SGP30 OK" : "SGP30 WARM", sgpReady ? colorGood() : colorWarn(), true);
+  uint16_t autoCol = (sgpSaturationCount > 0 || sgpReadFail > 0) ? colorWarn() : colorGood();
+  drawButton(150, 207, 142, 20, sgpBaselineLoaded ? "AUTO BASE OK" : "AUTO LEARNING", autoCol, false);
 
   drawFooter();
 }
@@ -7445,11 +11592,20 @@ void drawEyeDetail() {
   cPrintf(214, 134, colorText(), colorPanel2(), 1, "ACT %.0f", eye.v5);
   cPrintf(214, 147, colorText(), colorPanel2(), 1, "LOSS %.3f", eye.loss);
   cPrintf(214, 160, colorDim(), colorPanel2(), 1, "EC:%s", janusEyeVisionSentState ? "ON" : "--");
+  bool ebFresh = core2EyeBatteryLastMs && millis() - core2EyeBatteryLastMs < 20000UL;
+  uint16_t ebCol = !ebFresh ? colorDim() : ((core2EyeBatteryFlags & 0x20) ? colorCyan() : ((core2EyeBatteryPct <= 15 || (core2EyeBatteryFlags & 0x08)) ? colorBad() : ((core2EyeBatteryPct <= 35) ? colorWarn() : colorGood())));
+  cPrintf(214, 171, ebCol, colorPanel2(), 1, "%s:%s%u%%", (core2EyeBatteryFlags & 0x20) ? "CHG" : "BAT", ebFresh ? "" : "?", (unsigned)core2EyeBatteryPct);
+  drawSmallBatteryPctBar(260, 170, 42, 8, ebFresh ? core2EyeBatteryPct : 0, ebCol);
 
   canvas.fillRoundRect(10, 176, 300, 28, 8, colorPanel());
   canvas.drawRoundRect(10, 176, 300, 28, 8, colorCyan());
   cPrintf(18, 184, colorText(), colorPanel(), 1, "%s", janusEyeVisionStatusLine);
-  cPrintf(18, 196, colorDim(), colorPanel(), 1, "HOME stops EC; outside page only metrics, no vision load");
+  bool mbFresh = core2EyeMotionBaseLastMs && millis() - core2EyeMotionBaseLastMs < 24000UL;
+  cPrintf(18, 196, mbFresh ? (core2EyeMotionBaseReady ? colorGood() : colorWarn()) : colorDim(), colorPanel(), 1, "%s", mbFresh ? core2EyeMotionBaseLine : "ATOMIC BASE: wait K2/E-B from BlindEye");
+  if (core2EyeBatteryLastMs && millis() - core2EyeBatteryLastMs < 20000UL) {
+    uint16_t ebCol2 = (core2EyeBatteryFlags & 0x20) ? colorCyan() : ((core2EyeBatteryPct <= 15 || (core2EyeBatteryFlags & 0x08)) ? colorBad() : ((core2EyeBatteryPct <= 35) ? colorWarn() : colorGood()));
+    cPrintf(198, 184, ebCol2, colorPanel(), 1, "%s %u%% %umV", (core2EyeBatteryFlags & 0x20) ? "CHG" : "BATT", (unsigned)core2EyeBatteryPct, (unsigned)core2EyeBatteryMv);
+  }
 
   drawButton(18, 210, 106, 22, janusEyeVisionUserEnabled ? "EYE ON" : "EYE OFF", colorCyan(), true);
   drawButton(134, 210, 86, 22, "MESH", colorBlue(), true);
@@ -7619,8 +11775,8 @@ void drawSwarmSpaceMap(int x, int y, int w, int h) {
 
   // Stable node positions learned by the spatial layer. RSSI controls radial depth;
   // StickS3 can also move its marker using its own tilt vector.
-  const char* labs[JANUS_SPACE_NODE_SLOTS] = { "EYE", "BCN", "BUZ", "MIC", "SW", "STK", "UNK" };
-  uint16_t cols[JANUS_SPACE_NODE_SLOTS] = { colorCyan(), colorGood(), colorWarn(), colorPurple(), colorBlue(), colorBlue(), colorDim() };
+  const char* labs[JANUS_SPACE_NODE_SLOTS] = { "EYE", "BCN", "BUZ", "MIC", "SW", "STK", "UNK", "BH" };
+  uint16_t cols[JANUS_SPACE_NODE_SLOTS] = { colorCyan(), colorGood(), colorWarn(), colorPurple(), colorBlue(), colorBlue(), colorDim(), rgb565(255, 150, 70) };
   for (int i = 0; i < JANUS_SPACE_NODE_SLOTS; i++) {
     bool on = (spaceNodeMask & (1 << i)) != 0;
     if (!on && spaceNodeConf[i] < 0.03f) continue;
@@ -7669,7 +11825,7 @@ void drawLegacySpaceScene(int x, int y, int w, int h) {
 }
 
 void drawBuzzDetail() {
-  bool on = buzz.refresh();
+  bool on = core2BuzzUiFresh();
   drawBackHeader("BUZZ CONTROL", "camp mirror + music", colorWarn());
   updateBuzzCurrent(false);
 
@@ -7699,9 +11855,12 @@ void drawSpaceDetail() {
 }
 
 void drawAudioDetail() {
-  bool on = audioNode.refresh();
+  uint32_t now = millis();
+  bool realAudio = audioNode.refresh() || core2AudioNodePresenceFresh(now);
+  bool bhAudioLink = !realAudio && core2BlackStarFresh(now);
+  bool on = realAudio || bhAudioLink;
   bool liveWant = janusAudioShouldListen();
-  bool liveFresh = liveWant && janusAudioLastFrameMs && millis() - janusAudioLastFrameMs < JANUS_AUDIO_IDLE_TIMEOUT_MS;
+  bool liveFresh = liveWant && janusAudioLastFrameMs && now - janusAudioLastFrameMs < JANUS_AUDIO_IDLE_TIMEOUT_MS;
   drawBackHeader("SWARM / AUDIO RADIO", "EchoBase mic u-law/ADPCM speech monitor", colorPurple());
 
   int y = 38;
@@ -7720,15 +11879,26 @@ void drawAudioDetail() {
           janusAudioLastRssi, (unsigned long)(janusAudioLastFrameMs ? millis() - janusAudioLastFrameMs : 0));
   y += 52;
 
-  cPrintf(18, y, on ? colorPurple() : colorDim(), colorBg(), 1, "node:%s age:%lu ms RSSI:%d", on ? "online" : "offline", (unsigned long)audioNode.age(), audioNode.rssi); y += 15;
+  cPrintf(18, y, on ? colorPurple() : colorDim(), colorBg(), 1, "node:%s age:%lu ms RSSI:%d",
+          bhAudioLink ? "BH link" : (on ? "online" : "offline"),
+          (unsigned long)(bhAudioLink ? (now - core2BlackStarLastMs) : audioNode.age()),
+          bhAudioLink ? core2BlackStarRssi : audioNode.rssi); y += 15;
   cPrintf(18, y, colorText(), colorBg(), 1, "samples:%u rate:%u  queue:%.0f", (unsigned)janusAudioLastSamples, (unsigned)janusAudioLastRate, audioNode.v6); y += 15;
-  cPrintf(18, y, colorDim(), colorBg(), 1, "v6.35: u-law 20ms, speech buffer, SD mirror off."); y += 15;
+#if JANUS_AUDIO_OUTPUT_ENABLE
+  cPrintf(18, y, colorDim(), colorBg(), 1, "u-law monitor enabled. Use only when TRON stream is stable."); y += 15;
+#else
+  cPrintf(18, y, colorWarn(), colorBg(), 1, "CORE AUDIO QUARANTINE: telemetry only, speaker muted."); y += 15;
+#endif
   cPrintf(18, y, colorDim(), colorBg(), 1, "vol:%u  chunk:%u smp  sd:%luK", (unsigned)janusAudioPlayVolume, (unsigned)janusAudioPlayChunkLen, (unsigned long)(janusAudioSdCaptureBytes / 1024UL)); y += 17;
 
   drawButton(18, 166, 56, 28, "V-", colorPurple(), true);
   canvas.fillRoundRect(84, 166, 132, 28, 7, janusAudioLiveUserEnabled ? colorPanel2() : colorPanel());
   canvas.drawRoundRect(84, 166, 132, 28, 7, janusAudioLiveUserEnabled ? colorGood() : colorDim());
+#if JANUS_AUDIO_OUTPUT_ENABLE
   cPrintf(103, 176, janusAudioLiveUserEnabled ? colorGood() : colorDim(), janusAudioLiveUserEnabled ? colorPanel2() : colorPanel(), 1, janusAudioLiveUserEnabled ? "LIVE AUTO" : "LIVE OFF");
+#else
+  cPrintf(103, 176, colorWarn(), colorPanel(), 1, "RX MUTED");
+#endif
   drawButton(226, 166, 56, 28, "V+", colorPurple(), true);
 
   cPrintf(18, 205, colorDim(), colorBg(), 1, "Touch V-/V+ volume. BtnB LIVE. BtnC sends AC pulse.");
@@ -7769,6 +11939,7 @@ void drawMeshNodeRow(int row, int idx, int y, uint32_t now) {
   else if (n.semanticSlot == 3 && on) col = colorPurple();
   else if (n.semanticSlot == 4 && on) col = colorBlue();
   else if (n.semanticSlot == 5 && on) col = colorGood();
+  else if (n.semanticSlot == 7 && on) col = rgb565(255, 150, 70);
 
   char macShort[16];
   formatMacShort(n.mac, macShort, sizeof(macShort));
@@ -7782,9 +11953,23 @@ void drawMeshNodeRow(int row, int idx, int y, uint32_t now) {
   cPrintf(218, y + 2, rssiCol, panel, 1, "%ddB", n.rssi);
   cPrintf(260, y + 2, colorDim(), panel, 1, "%lus", (unsigned long)ageS);
 
-  cPrintf(16, y + 15, colorDim(), panel, 1, "H:%s best:%lu b:%u th:%02d jit:%u mac:%s",
-          compactU(n.hashRate).c_str(), (unsigned long)n.bestBits, (unsigned)n.aiBatch,
-          (int)n.v[0], (unsigned)n.v[3], macShort);
+  if (core2LooksLikeAnchorRadarNode(n.nodeId, n.role)) {
+    cPrintf(16, y + 15, colorDim(), panel, 1, "RF P:%.1f M:%.1f E:%.1f D:%.1f C:%u mac:%s",
+            n.v[0], n.v[1], n.v[2], n.v[3], (unsigned)(n.fit * 100.0f), macShort);
+  } else if (String(n.nodeId).indexOf("Gladius") >= 0 || String(n.role).indexOf("gex") >= 0) {
+    cPrintf(16, y + 15, colorDim(), panel, 1, "GEX a:%s top:%s x:%d C:%u W:%u",
+            core2GladiusLaneName((uint8_t)n.v[0]), core2GladiusLaneName((uint8_t)n.v[1]),
+            (int)n.v[2], (unsigned)n.v[3], (unsigned)n.v[4]);
+  } else if (n.semanticSlot == 7 || core2LooksLikeBlackStarNode(n.nodeId, n.role)) {
+    cPrintf(16, y + 15, colorDim(), panel, 1, "lens:%02d study:%02d H:%s best:%lu T:%.1f",
+            (int)(clipf(core2BlackStarLensing, 0.0f, 1.0f) * 100.0f),
+            (int)(clipf(core2BlackStarStudy, 0.0f, 1.0f) * 100.0f),
+            compactU(n.hashRate).c_str(), (unsigned long)n.bestBits, n.v[2]);
+  } else {
+    cPrintf(16, y + 15, colorDim(), panel, 1, "H:%s best:%lu b:%u th:%02d jit:%u mac:%s",
+            compactU(n.hashRate).c_str(), (unsigned long)n.bestBits, (unsigned)n.aiBatch,
+            (int)n.v[0], (unsigned)n.v[3], macShort);
+  }
 }
 
 void drawMeshDetail() {
@@ -7808,6 +11993,17 @@ void drawMeshDetail() {
   y += 13;
   cPrintf(14, y, colorDim(), colorBg(), 1, "top:%s scroll:%d/%d  tap RSSI for projection", colonyTopNode, meshScroll, maxScroll);
   y += 12;
+  if (core2AnchorRadarFresh()) {
+    cPrintf(14, y, colorCyan(), colorBg(), 1, "%s", core2AnchorRadarLine);
+    y += 12;
+  }
+  if (core2BlackStarFresh(millis())) {
+    cPrintf(14, y, rgb565(255, 150, 70), colorBg(), 1, "%s", core2BlackStarLine);
+    y += 12;
+  } else if (core2GladiusGexLastMs && millis() - core2GladiusGexLastMs < 30000UL) {
+    cPrintf(14, y, colorPurple(), colorBg(), 1, "%s", core2GladiusGexLine);
+    y += 12;
+  }
 
   if (total <= 0) {
     cPrint(18, y + 18, colorDim(), colorBg(), "No ESP-NOW workers yet. Buzz/Stick/ATOM/EYE appear here automatically.", 1);
@@ -7818,9 +12014,10 @@ void drawMeshDetail() {
     }
   }
 
-  drawButton(18, 204, 76, 23, "UP", colorBlue(), meshScroll > 0);
-  drawButton(104, 204, 76, 23, "DOWN", colorBlue(), meshScroll < maxScroll);
-  drawButton(190, 204, 112, 23, "RSSI MAP", colorCyan(), true);
+  drawButton(18, 204, 58, 23, "UP", colorBlue(), meshScroll > 0);
+  drawButton(82, 204, 58, 23, "DOWN", colorBlue(), meshScroll < maxScroll);
+  drawButton(146, 204, 78, 23, "ANCHOR", colorCyan(), true);
+  drawButton(230, 204, 72, 23, "RSSI", colorCyan(), true);
 
   drawFooter();
 }
@@ -7860,8 +12057,400 @@ void drawRssiMatrixDetail() {
 
   int y = 198;
   cPrintf(18, y, colorText(), colorBg(), 1, "nodes:%d  strong>-55  ok>-75  shadow<-88", total); y += 12;
-  cPrintf(18, y, colorDim(), colorBg(), 1, "Core2 view now; next Buzz/NAS will add pairwise edges.");
+  if (core2AnchorRadarFresh()) {
+    cPrintf(18, y, colorCyan(), colorBg(), 1, "Anchor RF: P%.2f M%.2f drift%.1f rssi%d",
+            core2AnchorPresence, core2AnchorMotion, core2AnchorDrift, (int)core2AnchorRadarRssi);
+  } else {
+    cPrintf(18, y, colorDim(), colorBg(), 1, "Core2 view now; next Buzz/NAS will add pairwise edges.");
+  }
+  drawButton(122, 204, 86, 23, "ANCHOR", colorCyan(), true);
   drawButton(214, 204, 86, 23, "MESH", colorBlue(), true);
+  drawFooter();
+}
+
+
+uint16_t anchorRadarColor() {
+  if (!core2AnchorRadarFresh()) return colorDim();
+  if (core2AnchorRadarConfidence > 72 || core2AnchorMotion > 2.5f) return colorGood();
+  if (core2AnchorPresence > 0.35f) return colorWarn();
+  return colorCyan();
+}
+
+
+void rfDomeProjectSpline3D(float u, float depth, float height, int& x, int& y, float& sc) {
+  u = clipf(u, 0.0f, 1.0f);
+  depth = clipf(depth, 0.0f, 1.0f);
+  height = clipf(height, 0.0f, 1.0f);
+  const float cx = 160.0f;
+  const float floorY = 178.0f;
+  const float horizonY = 52.0f;
+  float perspective = powf(depth, 1.28f);
+  float halfW = 132.0f - perspective * 74.0f;
+  sc = 1.0f - perspective * 0.46f;
+  x = (int)(cx + (u - 0.5f) * 2.0f * halfW + 0.5f);
+  y = (int)(floorY - perspective * (floorY - horizonY) - height * 82.0f * sc + 0.5f);
+}
+
+void rfDomeDrawBezier3D(float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, uint16_t col) {
+  int px = (int)x0;
+  int py = (int)y0;
+  for (int i = 1; i <= 18; i++) {
+    float t = (float)i / 18.0f;
+    float it = 1.0f - t;
+    float x = it*it*it*x0 + 3.0f*it*it*t*x1 + 3.0f*it*t*t*x2 + t*t*t*x3;
+    float y = it*it*it*y0 + 3.0f*it*it*t*y1 + 3.0f*it*t*t*y2 + t*t*t*y3;
+    canvas.drawLine(px, py, (int)x, (int)y, col);
+    px = (int)x;
+    py = (int)y;
+  }
+}
+
+void rfDomeDrawEchoColumn(int x, int yFloor, float energy, uint16_t col, const char* label, bool peak) {
+  energy = clipf(energy, 0.0f, 12.0f);
+  int h = 16 + (int)(energy * 6.5f);
+  int r = 4 + (int)clipf(energy * 1.15f, 0.0f, 12.0f);
+  uint16_t weak = dimColor(col, peak ? 0.42f : 0.24f);
+  uint16_t med  = dimColor(col, peak ? 0.78f : 0.50f);
+  // floor shadow / uncertainty footprint
+  canvas.drawEllipse(x, yFloor + 4, r + 10, 4 + r / 3, dimColor(col, 0.20f));
+  canvas.drawEllipse(x, yFloor + 4, r + 4, 2 + r / 4, dimColor(col, 0.28f));
+  // vertical echo pillar, like sonar return in a room volume
+  canvas.drawLine(x, yFloor, x, yFloor - h, weak);
+  canvas.drawLine(x - 2, yFloor - 2, x - 2, yFloor - h + 3, dimColor(col, 0.18f));
+  canvas.drawLine(x + 2, yFloor - 2, x + 2, yFloor - h + 3, dimColor(col, 0.18f));
+  for (int k = 0; k < 3; k++) {
+    int yy = yFloor - (h * (k + 1)) / 4;
+    int rr = max(2, r - k * 2);
+    canvas.drawRoundRect(x - rr, yy - 2, rr * 2, 4, 2, dimColor(col, 0.20f + 0.08f * k));
+  }
+  canvas.fillCircle(x, yFloor - h, r, med);
+  canvas.drawCircle(x, yFloor - h, r + 4, weak);
+  if (peak || energy > 3.2f) cPrintf(x - 18, yFloor - h - r - 11, col, rgb565(1,4,8), 1, "%s", label);
+}
+
+
+void core2UpdateImuPose() {
+  uint32_t now = millis();
+  float dt = 0.02f;
+  if (core2ImuPoseLastMs) {
+    dt = (float)(now - core2ImuPoseLastMs) / 1000.0f;
+    dt = clipf(dt, 0.001f, 0.20f);
+  }
+  core2ImuPoseLastMs = now;
+
+  if (!M5.Imu.isEnabled()) {
+    core2ImuPoseReady = false;
+    core2ImuMotion *= 0.92f;
+    snprintf(core2ImuPoseLine, sizeof(core2ImuPoseLine), "CORE2 POSE: IMU off, map locked");
+    return;
+  }
+
+  core2ImuPoseReady = true;
+  core2ImuPoseSamples++;
+  M5.Imu.getAccel(&core2ImuAx, &core2ImuAy, &core2ImuAz);
+  M5.Imu.getGyro(&core2ImuGx, &core2ImuGy, &core2ImuGz);
+
+  float aMag = sqrtf(core2ImuAx * core2ImuAx + core2ImuAy * core2ImuAy + core2ImuAz * core2ImuAz);
+  float rot = (fabsf(core2ImuGx) + fabsf(core2ImuGy) + fabsf(core2ImuGz)) / 260.0f;
+  float move = clipf(fabsf(aMag - 1.0f) * 2.8f + rot, 0.0f, 1.8f);
+  core2ImuMotion = core2ImuMotion * 0.86f + move * 0.14f;
+
+  // Gyro is normally deg/s in M5Unified. Convert to radians for a visual yaw cue.
+  core2PoseYaw += core2ImuGz * dt * 0.0174532925f;
+  if (core2PoseYaw > JANUS_TWO_PI) core2PoseYaw -= JANUS_TWO_PI;
+  if (core2PoseYaw < -JANUS_TWO_PI) core2PoseYaw += JANUS_TWO_PI;
+
+  // Crude carried-position cue. This is intentionally damped: we want the map to react
+  // to carrying Core2, not to pretend it has precise indoor coordinates.
+  float stepX = clipf(core2ImuAx * 0.018f + core2ImuGy * 0.00018f, -0.018f, 0.018f);
+  float stepY = clipf(core2ImuAy * 0.018f - core2ImuGx * 0.00018f, -0.018f, 0.018f);
+  if (core2ImuMotion > 0.035f) {
+    core2PoseX = clipf(core2PoseX + stepX, 0.06f, 0.46f);
+    core2PoseY = clipf(core2PoseY + stepY, 0.16f, 0.84f);
+    core2PoseDrift = clipf(core2PoseDrift * 0.93f + core2ImuMotion * 0.07f, 0.0f, 1.0f);
+  } else {
+    // When the device rests, slowly relax the visual offset instead of accumulating nonsense.
+    core2PoseX = core2PoseX * 0.996f + 0.18f * 0.004f;
+    core2PoseY = core2PoseY * 0.996f + 0.50f * 0.004f;
+    core2PoseDrift *= 0.985f;
+  }
+
+  snprintf(core2ImuPoseLine, sizeof(core2ImuPoseLine),
+           "POSE %s mot%.2f yaw%+d drift%.0f%%",
+           core2ImuMotion > 0.08f ? "CARRIED" : "LOCK",
+           core2ImuMotion,
+           (int)(core2PoseYaw * 57.2958f),
+           core2PoseDrift * 100.0f);
+}
+
+void rfDomeMapPoint(float u, float side, int& x, int& y) {
+  u = clipf(u, 0.0f, 1.0f);
+  side = clipf(side, -1.0f, 1.0f);
+  const float left = 18.0f;
+  const float top = 48.0f;
+  const float w = 284.0f;
+  const float h = 128.0f;
+  float coreX = left + core2PoseX * w;
+  float coreY = top + core2PoseY * h;
+  float ancX = left + 0.88f * w;
+  float ancY = top + 0.50f * h;
+  float vx = ancX - coreX;
+  float vy = ancY - coreY;
+  float len = sqrtf(vx * vx + vy * vy);
+  if (len < 1.0f) len = 1.0f;
+  float nx = -vy / len;
+  float ny =  vx / len;
+  float corridorHalf = 26.0f;
+  x = (int)clipf(coreX + vx * u + nx * side * corridorHalf, 12.0f, 308.0f);
+  y = (int)clipf(coreY + vy * u + ny * side * corridorHalf, 42.0f, 184.0f);
+}
+
+void drawRfDomeMiniBar(int x, int y, int w, int h, float v, uint16_t col) {
+  v = clipf(v, 0.0f, 1.0f);
+  canvas.drawRoundRect(x, y, w, h, 2, dimColor(col, 0.28f));
+  int fill = (int)((float)(w - 2) * v);
+  if (fill > 0) canvas.fillRoundRect(x + 1, y + 1, fill, h - 2, 2, dimColor(col, 0.72f));
+}
+
+float core2SwarmRadarBearingForNode(int idx) {
+  if (idx < 0 || idx >= CORE2_MAX_COLONY_NODES || !colonyNodes[idx].used) return 0.0f;
+  UniversalNode& n = colonyNodes[idx];
+  uint16_t h = janusHash16(n.nodeId);
+  float a = ((float)(h % 360U)) * 0.0174532925f;
+  a += ((float)n.semanticSlot - 3.0f) * 0.19f;
+  a -= core2PoseYaw * 0.48f;   // rotate view with carried Core2, visually only
+  while (a > JANUS_PI) a -= JANUS_TWO_PI;
+  while (a < -JANUS_PI) a += JANUS_TWO_PI;
+  return a;
+}
+
+void core2SwarmRadarUpdateNodeFilter(int idx) {
+  if (idx < 0 || idx >= CORE2_MAX_COLONY_NODES || !colonyNodes[idx].used) return;
+  UniversalNode& n = colonyNodes[idx];
+  float r = (float)n.rssi;
+  if (!core2RfSwarmSeeded[idx] || core2RfSwarmRssiBase[idx] < -120.0f || core2RfSwarmRssiBase[idx] > 20.0f) {
+    core2RfSwarmSeeded[idx] = true;
+    core2RfSwarmRssiBase[idx] = r;
+    core2RfSwarmRssiVar[idx] = 0.0f;
+    core2RfSwarmEnergy[idx] = 0.0f;
+    return;
+  }
+  float d = fabsf(r - core2RfSwarmRssiBase[idx]);
+  core2RfSwarmRssiBase[idx] = core2RfSwarmRssiBase[idx] * 0.955f + r * 0.045f;
+  core2RfSwarmRssiVar[idx] = core2RfSwarmRssiVar[idx] * 0.88f + d * 0.12f;
+
+  float rssiMotion = clipf(core2RfSwarmRssiVar[idx] / 13.0f, 0.0f, 1.0f);
+  float semanticMotion = clipf(fabsf(n.loss) * 0.14f + n.entropy * 0.22f + n.fit * 0.20f, 0.0f, 1.0f);
+  float strength = clipf(((float)n.rssi + 92.0f) / 58.0f, 0.0f, 1.0f);
+  float e = clipf(rssiMotion * 0.62f + semanticMotion * 0.27f + strength * 0.11f, 0.0f, 1.0f);
+  core2RfSwarmEnergy[idx] = core2RfSwarmEnergy[idx] * 0.82f + e * 0.18f;
+}
+
+void core2DrawSwarmRadarPing(int cx, int cy, int R, float angle, float range01, float energy, uint16_t col, const char* label, bool strong) {
+  energy = clipf(energy, 0.0f, 1.0f);
+  range01 = clipf(range01, 0.08f, 0.98f);
+  int rr = 12 + (int)((float)(R - 15) * range01);
+  int px = cx + (int)(cosf(angle) * rr);
+  int py = cy + (int)(sinf(angle) * rr);
+  int pr = 2 + (int)clipf(energy * 5.0f, 0.0f, 5.0f);
+  uint16_t weak = dimColor(col, 0.12f + energy * 0.28f);
+  uint16_t med  = dimColor(col, 0.34f + energy * 0.48f);
+  canvas.drawLine(cx, cy, px, py, dimColor(col, strong ? 0.34f : 0.12f));
+  canvas.drawCircle(px, py, pr + 3, weak);
+  canvas.drawCircle(px, py, pr + 7, dimColor(col, 0.10f + energy * 0.16f));
+  canvas.fillCircle(px, py, pr, med);
+  if (strong && label && label[0]) cPrintf(clipf((float)px - 14.0f, 14.0f, 288.0f), clipf((float)py + 6.0f, 42.0f, 178.0f), col, rgb565(1,4,8), 1, "%s", label);
+}
+
+void drawAnchorRadarDetail() {
+  bool fresh = core2RfDomeFresh();
+  bool anchorFallback = (!fresh && core2AnchorRadarFresh());
+
+  universalRecountNodes();
+  int order[CORE2_MAX_COLONY_NODES];
+  int total = meshBuildOrderedIndices(order, CORE2_MAX_COLONY_NODES);
+
+  float presenceProb = fresh ? core2RfDomePresence : core2AnchorPresence;
+  float motionProb   = fresh ? clipf(core2RfDomeMotion / 4.0f, 0.0f, 1.0f) : core2AnchorMotion;
+  float humanProb    = fresh ? core2RfDomeHuman : clipf(core2AnchorPresence * 0.72f + core2AnchorMotion * 0.18f, 0.0f, 1.0f);
+  float petProb      = fresh ? core2RfDomePet : clipf(core2AnchorMotion * 0.55f, 0.0f, 1.0f);
+  if (presenceProb > 1.5f) presenceProb *= 0.10f;
+  if (motionProb > 1.5f) motionProb *= 0.10f;
+  presenceProb = clipf(presenceProb, 0.0f, 1.0f);
+  motionProb = clipf(motionProb, 0.0f, 1.0f);
+  humanProb = clipf(humanProb, 0.0f, 1.0f);
+  petProb = clipf(petProb, 0.0f, 1.0f);
+
+  uint32_t now = millis();
+  float swarmPresence = 0.0f;
+  float swarmMotion = 0.0f;
+  int activeNodes = 0;
+  int strongNodes = 0;
+  int bestIdx = -1;
+  float bestEnergy = 0.0f;
+  for (int k = 0; k < total; k++) {
+    int idx = order[k];
+    if (idx < 0 || idx >= CORE2_MAX_COLONY_NODES || !colonyNodes[idx].used) continue;
+    UniversalNode& n = colonyNodes[idx];
+    if (!n.lastMs || now - n.lastMs > 28000UL) continue;
+    core2SwarmRadarUpdateNodeFilter(idx);
+    activeNodes++;
+    float e = core2RfSwarmEnergy[idx];
+    if (core2LooksLikeAnchorRadarNode(n.nodeId, n.role)) e = max(e, clipf(core2AnchorPresence * 0.35f + core2AnchorMotion * 0.16f + (float)core2AnchorRadarConfidence / 180.0f, 0.0f, 1.0f));
+    swarmPresence = max(swarmPresence, e);
+    swarmMotion += e * 0.10f;
+    if (e > 0.36f) strongNodes++;
+    if (e > bestEnergy) { bestEnergy = e; bestIdx = idx; }
+  }
+  swarmMotion = clipf(swarmMotion, 0.0f, 1.0f);
+  presenceProb = max(presenceProb, clipf(swarmPresence, 0.0f, 1.0f));
+  motionProb = max(motionProb, swarmMotion);
+
+  bool hasEcho = fresh || anchorFallback || activeNodes > 0 || presenceProb > 0.10f || motionProb > 0.10f;
+  uint8_t conf = fresh ? core2RfDomeConfidence : max(core2AnchorRadarConfidence, (uint8_t)clipf(presenceProb * 100.0f, 0.0f, 100.0f));
+  uint16_t accent = hasEcho ? ((conf > 70 || bestEnergy > 0.55f) ? colorGood() : ((presenceProb > 0.35f || motionProb > 0.28f) ? colorWarn() : colorCyan())) : colorDim();
+
+  drawBackHeader("RF SONAR", "360 swarm radar / Anchor=tether / zoom + -", accent);
+
+  const int cx = 160;
+  const int cy = 112;
+  const int R  = 76;
+  const int hudY = 194;
+  const float zoom = clipf(core2RfSonarZoom, 0.55f, 2.50f);
+
+  canvas.fillRoundRect(8, 34, 304, 158, 14, rgb565(1, 4, 8));
+  canvas.drawRoundRect(8, 34, 304, 158, 14, dimColor(accent, hasEcho ? 0.72f : 0.30f));
+
+  // Ordinary 360-degree radar around Core2. YOU are center. Anchor is just one reference spoke.
+  for (int r = 19; r <= R; r += 19) {
+    canvas.drawCircle(cx, cy, r, dimColor(colorCyan(), hasEcho ? 0.17f : 0.07f));
+  }
+  for (int a = 0; a < 360; a += 30) {
+    float aa = (float)a * 0.0174532925f;
+    int x2 = cx + (int)(cosf(aa) * R);
+    int y2 = cy + (int)(sinf(aa) * R);
+    canvas.drawLine(cx, cy, x2, y2, dimColor(colorCyan(), (a % 90 == 0) ? 0.18f : 0.055f));
+  }
+
+  // Sweep line is visual only, like a classic radar sweep.
+  float sweep = fmodf((float)(now % 4200UL) / 4200.0f * JANUS_TWO_PI, JANUS_TWO_PI);
+  int sx = cx + (int)(cosf(sweep) * R);
+  int sy = cy + (int)(sinf(sweep) * R);
+  canvas.drawLine(cx, cy, sx, sy, dimColor(colorGood(), hasEcho ? 0.34f : 0.12f));
+
+  // Anchor tether/reference direction. This is not the only scanning direction.
+  float tetherAngle = -JANUS_PI * 0.50f;
+  tetherAngle += core2PoseYaw * 0.38f;
+  tetherAngle += (core2PoseX - 0.18f) * 1.10f;
+  tetherAngle += (core2PoseY - 0.50f) * 0.82f;
+  while (tetherAngle > JANUS_PI) tetherAngle -= JANUS_TWO_PI;
+  while (tetherAngle < -JANUS_PI) tetherAngle += JANUS_TWO_PI;
+  int ax = cx + (int)(cosf(tetherAngle) * (R - 4));
+  int ay = cy + (int)(sinf(tetherAngle) * (R - 4));
+  canvas.drawLine(cx, cy, ax, ay, dimColor(colorCyan(), 0.38f));
+  canvas.drawCircle(ax, ay, 4, dimColor(colorCyan(), 0.85f));
+  canvas.fillCircle(ax, ay, 1, colorCyan());
+  cPrint(ax - 10, clipf((float)ay + 7.0f, 42.0f, 178.0f), colorCyan(), rgb565(1,4,8), "A", 1);
+
+  // Draw all fresh swarm witnesses around Core2. Their bearing is a stable pseudo-bearing
+  // from node identity + IMU yaw until we have calibrated pairwise ranging.
+  int drawn = 0;
+  for (int k = 0; k < total && drawn < 13; k++) {
+    int idx = order[k];
+    if (idx < 0 || idx >= CORE2_MAX_COLONY_NODES || !colonyNodes[idx].used) continue;
+    UniversalNode& n = colonyNodes[idx];
+    if (!n.lastMs || now - n.lastMs > 28000UL) continue;
+    bool isAnchor = core2LooksLikeAnchorRadarNode(n.nodeId, n.role);
+    float strength = clipf(((float)n.rssi + 94.0f) / 62.0f, 0.0f, 1.0f);
+    float range01 = clipf((0.18f + (1.0f - strength) * 0.78f) * zoom, 0.10f, 0.98f);
+    float angle = isAnchor ? tetherAngle : core2SwarmRadarBearingForNode(idx);
+    float e = core2RfSwarmEnergy[idx];
+    if (isAnchor) e = max(e, clipf(core2AnchorPresence * 0.34f + core2AnchorMotion * 0.12f + (float)core2AnchorRadarConfidence / 210.0f, 0.0f, 1.0f));
+    uint16_t col = colorDim();
+    if (isAnchor) col = colorCyan();
+    else if (n.semanticSlot == 0) col = colorGood();       // BlindEye / sensor
+    else if (n.semanticSlot == 2) col = colorWarn();       // Buzz / main worker
+    else if (n.semanticSlot == 5) col = colorPurple();     // Stick / pilot
+    else if (n.semanticSlot == 1) col = colorBlue();       // Beacon/env
+    else if (n.semanticSlot == 7) col = rgb565(255, 150, 70); // BlackStar / BH
+    else col = rgb565(135, 210, 220);
+
+    bool strong = (e > 0.34f) || isAnchor || drawn < 3;
+    const char* lab = isAnchor ? "A" : semanticSlotName(n.semanticSlot);
+    core2DrawSwarmRadarPing(cx, cy, R, angle, range01, max(0.10f, e), col, lab, strong);
+
+    // If RF disturbance is high, draw an extra probable-presence ripple in that sector.
+    if (e > 0.40f) {
+      int rr = 10 + (int)((float)(R - 18) * range01);
+      int px = cx + (int)(cosf(angle) * rr);
+      int py = cy + (int)(sinf(angle) * rr);
+      canvas.drawCircle(px, py, 8 + (int)(e * 8.0f), dimColor(colorGood(), 0.18f + e * 0.22f));
+      cPrint(clipf((float)px - 7.0f, 18.0f, 292.0f), clipf((float)py - 8.0f, 42.0f, 178.0f), colorGood(), rgb565(1,4,8), "P?", 1);
+    }
+    drawn++;
+  }
+
+  // RF DOME packet from Anchor still adds a directional probability fan, but no longer owns the whole radar.
+  if (fresh || anchorFallback) {
+    uint16_t echoCol = (humanProb >= petProb) ? colorGood() : colorWarn();
+    if (motionProb > 0.60f && humanProb < 0.30f) echoCol = colorCyan();
+    float zoneRange = fresh ? clipf((float)core2RfDomeZonePct / 100.0f, 0.0f, 1.0f) : 0.50f;
+    float distRange = zoneRange;
+    if (fresh && core2RfDomeLengthCm > 20) distRange = clipf((float)core2RfDomeDistanceCm / (float)core2RfDomeLengthCm, 0.0f, 1.0f);
+    float range01 = clipf((zoneRange * 0.72f + distRange * 0.28f) * zoom, 0.06f, 0.98f);
+    float mainAngle = tetherAngle + ((float)((int)core2RfZonePeak - 2)) * 0.11f;
+    if (core2RfDomeUnresolvedMulti) mainAngle += 0.08f * sinf((float)now * 0.0025f);
+    float fan = 0.22f + presenceProb * 0.38f + (core2RfDomeUnresolvedMulti ? 0.20f : 0.0f);
+    int bands = 3 + (int)clipf(presenceProb * 5.0f, 0.0f, 5.0f);
+    for (int b = 0; b < bands; b++) {
+      float u = clipf(range01 * (0.45f + 0.12f * b), 0.10f, 0.98f);
+      int rr = 10 + (int)((float)(R - 16) * u);
+      int steps = 5 + b * 2;
+      for (int s = -steps; s <= steps; s++) {
+        float aa = mainAngle + (fan * (float)s / (float)max(1, steps));
+        int px = cx + (int)(cosf(aa) * rr);
+        int py = cy + (int)(sinf(aa) * rr);
+        float fade = 0.08f + presenceProb * 0.10f + (float)b * 0.015f;
+        canvas.drawPixel(px, py, dimColor(echoCol, fade));
+        if ((s & 1) == 0) canvas.drawPixel(px, py + 1, dimColor(echoCol, fade * 0.70f));
+      }
+    }
+    int labelR = 16 + (int)((float)(R - 28) * range01);
+    int lx = cx + (int)(cosf(mainAngle) * labelR);
+    int ly = cy + (int)(sinf(mainAngle) * labelR);
+    const char* kind = (core2RfDomeUnresolvedMulti || core2RfDomeOccEstimate >= 2 || strongNodes >= 2) ? "MULTI?" : (humanProb > petProb ? "HUM?" : (petProb > 0.25f ? "PET?" : "PRES?"));
+    cPrint(clipf((float)lx - 18.0f, 18.0f, 278.0f), clipf((float)ly + 9.0f, 42.0f, 178.0f), echoCol, rgb565(1,4,8), kind, 1);
+  }
+
+  // YOU marker above echoes.
+  canvas.fillCircle(cx, cy, 5, colorWarn());
+  canvas.drawCircle(cx, cy, 10, dimColor(colorWarn(), core2ImuMotion > 0.08f ? 0.72f : 0.32f));
+  cPrint(cx - 10, cy + 12, colorWarn(), rgb565(1,4,8), "YOU", 1);
+
+  if (!hasEcho) {
+    cPrint(88, 92, colorDim(), rgb565(1,4,8), "NO SWARM RF", 2);
+    cPrint(34, 118, colorDim(), rgb565(1,4,8), "wait ESP-NOW nodes / Anchor R/S", 1);
+  }
+
+  // Clean side metrics.
+  canvas.fillRoundRect(12, 39, 96, 32, 6, rgb565(2, 8, 13));
+  cPrintf(18, 44, colorText(), rgb565(2,8,13), 1, "RF %s", fresh ? "DOME" : (activeNodes ? "SWARM" : (anchorFallback ? "AUX" : "WAIT")));
+  cPrintf(18, 57, colorDim(), rgb565(2,8,13), 1, "nodes%d hot%d", activeNodes, strongNodes);
+  canvas.fillRoundRect(214, 39, 92, 32, 6, rgb565(2, 8, 13));
+  cPrintf(220, 44, colorText(), rgb565(2,8,13), 1, "PRES %.0f%%", presenceProb * 100.0f);
+  cPrintf(220, 57, colorDim(), rgb565(2,8,13), 1, "Z%.1fx %s", zoom, core2RfDomeOccupancyText());
+
+  // Zoom controls and readable HUD. These are controls, not training buttons.
+  canvas.fillRoundRect(10, hudY, 300, 34, 8, rgb565(1, 5, 9));
+  drawButton(16, hudY + 5, 38, 22, "Z-", colorCyan(), true);
+  drawButton(58, hudY + 5, 46, 22, "Z+", colorCyan(), true);
+  const char* bestName = (bestIdx >= 0) ? semanticSlotName(colonyNodes[bestIdx].semanticSlot) : "-";
+  cPrintf(112, hudY + 4, accent, rgb565(1,5,9), 1, "%s best:%s %.0f%% ML:%s %.0f%%",
+          hasEcho ? "360 SCAN" : "SCAN",
+          bestName, bestEnergy * 100.0f,
+          core2RfTinyLabelName(core2RfTinyPredLabel),
+          core2RfTinyPredConf * 100.0f);
+  cPrintf(112, hudY + 16, colorDim(), rgb565(1,5,9), 1, "%s", core2ImuPoseLine);
   drawFooter();
 }
 
@@ -7873,10 +12462,12 @@ void drawSystemDetail() {
   cPrintf(18, y, colorText(), colorBg(), 1, "ESP-NOW:%s peerCh:%u worker:%u", espnowOk ? "OK" : "OFF", colonyPeerChannel, colonyWorkerId); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "RX:%lu ER2:%lu HB:%lu DROP:%lu", (unsigned long)rxPackets, (unsigned long)er2Packets, (unsigned long)heartbeatPackets, (unsigned long)rxDropped); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "SS tx:%lu rx:%lu fail:%lu bad:%lu jit:%uus", (unsigned long)core2SwarmSenseTx, (unsigned long)core2SwarmSenseRx, (unsigned long)core2SwarmSenseTxFail, (unsigned long)core2SwarmSenseBad, (unsigned)core2LoopJitterUs); y += 16;
-  cPrintf(18, y, colorText(), colorBg(), 1, "SGP30:%s eCO2:%u TVOC:%u", sgpReady ? "OK" : "OFF", eco2, tvoc); y += 16;
+  cPrintf(18, y, colorText(), colorBg(), 1, "SGP30:%s eCO2:%u TVOC:%u", sgpReady ? "OK" : "OFF", eco2, tvoc); y += 12;
+  cPrintf(18, y, colorDim(), colorBg(), 1, "%s", sgpStatusLine); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "battery:%d%% mute:%s bright:%u%%", M5.Power.getBatteryLevel(), speakerMuted ? "on" : "off", (unsigned)((coreBrightness * 100) / 255)); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "heap:%lu psram:%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram()); y += 16;
-  cPrintf(18, y, colorText(), colorBg(), 1, "SD:%s archiveRows:%lu pilot:S%02u svc:S%02u", core2SdArchiveOk ? "OK" : "OFF", (unsigned long)core2SdArchiveRows, galaxy.universePilotSector, galaxy.universeServiceSector); y += 16;
+  cPrintf(18, y, colorText(), colorBg(), 1, "SD:%s uni:%lu air:%lu dome:%lu ml:%lu", core2SdArchiveOk ? "OK" : "OFF", (unsigned long)core2SdArchiveRows, (unsigned long)core2AirArchiveRows, (unsigned long)core2RfDomeArchiveRows, (unsigned long)core2RfTinyArchiveRows); y += 12;
+  cPrintf(18, y, colorDim(), colorBg(), 1, "pilot:S%02u svc:S%02u  Anchor:%s", galaxy.universePilotSector, galaxy.universeServiceSector, core2AnchorRadarFresh() ? "fresh" : "wait"); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "slime:%s conf:%.0f%% risk:%.0f%%", slimeFace(), spaceConfidence * 100.0f, spaceRisk * 100.0f); y += 16;
   cPrintf(18, y, colorText(), colorBg(), 1, "miner job:%s H:%s best:%lu shares:%lu", coreJobText, compactU(coreRemoteHashrate).c_str(), (unsigned long)coreBestBits, (unsigned long)coreSharesSent); y += 18;
 
@@ -7922,7 +12513,7 @@ void drawWeatherDetail() {
 void drawScreen() {
   eye.refresh();
   beacon.refresh();
-  buzz.refresh();
+  core2BuzzUiFresh();
   audioNode.refresh();
   swarm.refresh();
   stick.refresh();
@@ -7941,6 +12532,7 @@ void drawScreen() {
     case PAGE_SPACE: drawSpaceDetail(); break;
     case PAGE_AUDIO: drawAudioDetail(); break;
     case PAGE_MESH: drawMeshDetail(); break;
+    case PAGE_ANCHOR: drawAnchorRadarDetail(); break;
     case PAGE_RSSI: drawRssiMatrixDetail(); break;
     case PAGE_SYSTEM: drawSystemDetail(); break;
     case PAGE_WEATHER: drawWeatherDetail(); break;
@@ -8016,6 +12608,8 @@ void touchAir(int x, int y) {
     eventLine = "weather detail";
     return;
   }
+  // Baseline reset is now automatic/service-only. The right AIR card is a status indicator,
+  // not a touch action: the user should not babysit SGP30 calibration during normal use.
 }
 
 void touchWeather(int x, int y) {
@@ -8097,17 +12691,22 @@ void touchMesh(int x, int y) {
   int order[CORE2_MAX_COLONY_NODES];
   int total = meshBuildOrderedIndices(order, CORE2_MAX_COLONY_NODES);
   int maxScroll = max(0, total - 4);
-  if (inRect(x, y, 18, 204, 76, 26)) {
+  if (inRect(x, y, 18, 204, 58, 26)) {
     if (meshScroll > 0) meshScroll--;
     eventLine = "mesh scroll up";
     return;
   }
-  if (inRect(x, y, 104, 204, 76, 26)) {
+  if (inRect(x, y, 82, 204, 58, 26)) {
     if (meshScroll < maxScroll) meshScroll++;
     eventLine = "mesh scroll down";
     return;
   }
-  if (inRect(x, y, 190, 204, 112, 26)) {
+  if (inRect(x, y, 146, 204, 78, 26)) {
+    page = PAGE_ANCHOR;
+    eventLine = "RF Dome sonar";
+    return;
+  }
+  if (inRect(x, y, 230, 204, 72, 26)) {
     page = PAGE_RSSI;
     eventLine = "RSSI projection";
     return;
@@ -8115,9 +12714,39 @@ void touchMesh(int x, int y) {
 }
 
 void touchRssiMatrix(int x, int y) {
+  if (inRect(x, y, 122, 204, 86, 26)) {
+    page = PAGE_ANCHOR;
+    eventLine = "RF Dome sonar";
+    return;
+  }
   if (inRect(x, y, 214, 204, 86, 26)) {
     page = PAGE_MESH;
     eventLine = "mesh roster";
+    return;
+  }
+}
+
+void touchAnchorRadar(int x, int y) {
+  // v6.42C4I: RF SONAR screen is a scanner, not a manual labeling panel.
+  // Bottom controls are only zoom +/- for better reading of near/far echo fields.
+  if (inRect(x, y, 16, 199, 38, 24)) {
+    core2RfSonarZoom = clipf(core2RfSonarZoom - 0.25f, 0.55f, 2.50f);
+    char b[48];
+    snprintf(b, sizeof(b), "RF sonar zoom %.2fx", core2RfSonarZoom);
+    eventLine = b;
+    return;
+  }
+  if (inRect(x, y, 58, 199, 46, 24)) {
+    core2RfSonarZoom = clipf(core2RfSonarZoom + 0.25f, 0.55f, 2.50f);
+    char b[48];
+    snprintf(b, sizeof(b), "RF sonar zoom %.2fx", core2RfSonarZoom);
+    eventLine = b;
+    return;
+  }
+  // Tap the radar center to reset the view to default zoom.
+  if (inRect(x, y, 122, 78, 76, 76)) {
+    core2RfSonarZoom = 1.00f;
+    eventLine = "RF sonar zoom reset";
     return;
   }
 }
@@ -8152,6 +12781,7 @@ void handleTouch() {
   else if (page == PAGE_SPACE) touchSpace(x, y);
   else if (page == PAGE_AUDIO) touchAudio(x, y);
   else if (page == PAGE_MESH) touchMesh(x, y);
+  else if (page == PAGE_ANCHOR) touchAnchorRadar(x, y);
   else if (page == PAGE_RSSI) touchRssiMatrix(x, y);
   else if (page == PAGE_SYSTEM) touchSystem(x, y);
   else if (page == PAGE_WEATHER) touchWeather(x, y);
@@ -8225,6 +12855,7 @@ void setup() {
   auto cfg = M5.config();
   cfg.serial_baudrate = 115200;
   M5.begin(cfg);
+  M5.Imu.init();
   M5.Power.setVibration(0);
   Serial.begin(115200);
 
@@ -8234,7 +12865,7 @@ void setup() {
   M5.Display.setTextSize(1);
   M5.Display.setTextColor(0xFFFF, TFT_BLACK);
   M5.Display.setCursor(8, 8);
-  M5.Display.println("[JANUS] Core2 v6.40 TP KENSHI");
+  M5.Display.println("[JANUS] Core2 v6.42C4G MAP");
 
   canvas.setColorDepth(16);
   if (canvas.createSprite(320, 240) != nullptr) {
@@ -8254,6 +12885,7 @@ void setup() {
   if (janusAudioPlayVolume < 160) janusAudioPlayVolume = JANUS_AUDIO_PLAY_VOLUME;
   setCoreBrightness(coreBrightness, false);
   initCore2SdArchive();
+  core2RfTinySlimeInit();
   spaceInit();
   galaxy.begin();
 
@@ -8263,10 +12895,11 @@ void setup() {
   M5.Speaker.setVolume(janusAudioPlayVolume);
   speakerMuted = true;
 
-  Serial.println("[JANUS] Core2 v6.40B KENSHI TACHYON PROPHECY + RAMA THETA");
+  Serial.println("[JANUS] Core2 v6.42C4K RF SONAR 360 SWARM RADAR + GALAXY MAP TRACE + ZOOM + TINYSLIME + BLINDEYE CHARGE + SGP30 AUTO AIR + SD");
   Serial.println("[CORE2/RAMA] theta notebook active: phi/psi/euler/mock finite scheduler, SHA target exact");
   Serial.println("[CORE2/TP] prophecy bus active: RX/answer T,P + K,2 for BlindEye/Swarm predictors");
-  eventLine = "Core2 v6.40 TP Kenshi Rama";
+  Serial.println("[BLACKBOARD] home cortex active: EventBus + Semantic Memory + Sensor Fusion + Policy broadcast");
+  eventLine = "Core2 v6.42C4I RF sonar probability radar + zoom";
   updateBuzzCurrent(true);
   updateWeather(true);
   drawScreen();
@@ -8284,12 +12917,14 @@ void loop() {
   uint32_t now = millis();
 
   handleInput();
+  core2UpdateImuPose();
   updateCore2SpaceGate();
   hapticTick();
   processRxFrames();
   janusAudioLiveTick();
   janusEyeVisionTick();
   core2TachyonProphecyTick();
+  janusBlackboardTick();
 
   if (now - lastSgpAt >= SGP30_INTERVAL_MS) {
     lastSgpAt = now;
@@ -8316,6 +12951,9 @@ void loop() {
   }
 
   ensureColonyPeer();
+  sendCore2NasBrainReport(false);
+  sendCore2RfDomePing(false);
+  core2RfTinySlimeSaveIfNeeded(false);
 
   if (now - colonyLastHeartbeatMs >= COLONY_HEARTBEAT_MS) {
     colonyLastHeartbeatMs = now;

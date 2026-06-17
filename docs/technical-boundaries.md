@@ -4,7 +4,7 @@ This document defines the claims made by the public LastSwarm firmware repositor
 
 ## Firmware Scope
 
-The public main branch contains only the eight current LastSwarm sketches plus supporting documentation, config examples, audits, and a lightweight secret marker check.
+The public main branch contains current active LastSwarm sketches, compatibility firmware, supporting documentation, config examples, audits, and a lightweight secret marker check.
 
 It does not include non-firmware side projects, raw logs, runtime dumps, databases, older broad archives, or unrelated experiments.
 

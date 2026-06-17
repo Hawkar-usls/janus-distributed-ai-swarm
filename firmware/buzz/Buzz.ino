@@ -1,6 +1,79 @@
-/*
-  JANUS_BUZZ_v10_11N3D_SAFE_CHARGE_WIFI_GUARD_FINAL.ino
+﻿/*
+  JANUS_BUZZ_v10_11N3F3A_OXYTOKIN_COMPILEFIX_ENZYME_SWARM_MARKER.ino
 
+  v10.11N3F3 OXYTOKIN ENZYME SWARM MARKER:
+    - Adds O/X Oxytokin Enzyme packet: own/foreign swarm marker + oxytocin/dopamine/stress/trust telemetry.
+    - O/X is sent beside A/R rewards and periodic node enzyme pulses; old workers safely ignore unknown magic.
+    - Keeps A/R reward ABI, J/B -> S/2 mining wire, share validation and Gladius G/M observe-only bridge frozen.
+
+  v10.11N3F3A MINIMAL PA IDLE MUTE:
+    - Restored from the last known-good Buzz audio path.
+    - Only mutes the physical PA after boot and when audio is explicitly paused/stopped.
+    - Does not change play, next/prev, Audio.h pinout, stream reconnect, SHA, Stratum or colony wire.
+
+  v10.11N3F3B AUDIO-FIRST PSRAM GUARD:
+    - Restores the old feel where music takes priority and the miner yields hard during stream start/playback.
+    - Blocks false PA kicks when the current Audio.h library cannot see PSRAM.
+    - Verifies Audio.h connect/run state before declaring playback active.
+    - Keeps SHA/target/share verification and J/B -> S/2 wire unchanged.
+
+  v10.11N3F3C NAS TRANCEPTION PULL:
+    - Pulls janus_tranception_lite hints from nas_brain as observer-only pacing input.
+    - Applies only conservative colonyAiBatch nudges; lane/strategy/sector are logged as context.
+    - Never changes SHA header, target, S/2 validity, submit pressure or worker nonce ownership.
+
+  v10.11N3F2 GLADIUS GEX BRIDGE:
+    - Adds Gladius G/M TailGEX memory intake; Buzz keeps J/B -> S/2 mining wire frozen.
+    - G/M only affects observe/diagnostic colony pressure, never share validity.
+    - Keeps v10.11N3F1F FARM BLACKOUT RECOVERY:
+    - Fixes the critical Buzz state: Wi-Fi/pool drops to WAIT/WIFI, H=0, and colonyMasterJob is cleared, so the swarm stops receiving jobs.
+    - Adds farm blackout watchdog for Wi-Fi/pool/auth/job starvation, not only the previous connected+authorized zero-hash case.
+    - Performs staged recovery: soft pool reconnect, hard Wi-Fi/ESP-NOW reset, then guarded ESP restart only after a very long blackout.
+    - Preserves Stratum correctness: no fake/stale colony jobs are broadcast while the pool job is invalid.
+    - Keeps F1E Tobi audio-reactive fix, audio/hash coexist, SD farm memory and verified remote shares.
+
+  v10.11N3F1E TOBI AUDIO-REACTIVE FIX:
+    - Restores Tobi/Spider visual motion while Audio.h is actively playing.
+    - F1D kept audio/hash coexist stable, but loop() still skipped drawTobiTurboOverlay() whenever audioRealtime was true.
+    - Tobi now runs on a safer 20 FPS cadence during music, while idle/non-audio mode keeps the existing 30 FPS overlay.
+    - Visual activity now uses wanted && playing && !softPaused && !audioUserPaused consistently for EQ, LED and Tobi.
+    - Keeps F1D hash-safe pause/resume, pool watchdogs, ESP-NOW ABI, SHA/target verification and farm memory unchanged.
+
+  v10.11N3F1D AUDIO/HASH COEXIST:
+    - Reverts the too-aggressive F1C behavior that fully skipped mining during Audio.h critical windows.
+    - Audio startup now only throttles the mining batch instead of forcing H=0, so SHA keeps making progress.
+    - Soft pause is now hash-safe: Audio.h stream is stopped while paused, audioCritical is cleared, and mining returns to full rate.
+    - Resume after pause opens a fresh stream instead of keeping the HTTP decoder alive in the background.
+    - Keeps pool progress watchdog, ESP-NOW ABI, SHA/target/share verification and farm memory unchanged.
+
+  v10.11N3F1C POOL PROGRESS WATCHDOG:
+    - Adds total-hash progress watchdog: if Stratum/job/auth are alive but minerTotalHashes does not advance for too long, Buzz soft-reconnects the pool.
+    - Keeps audio, ESP-NOW ABI, SHA/target/share verification and farm memory unchanged.
+
+
+  v10.11N3F1B POOL ZERO-HASH WATCHDOG:
+    - Adds a Stratum pool fuse: if Buzz is connected/authorized/job-ready but pool H/s stays 0 too long,
+      it closes the pool socket, clears stale job state, waits a short cooldown and reconnects.
+    - Also reconnects if authorized Stratum stays without a mining.notify job for too long.
+    - Does not reboot ESP32, does not touch SHA target/share verification, ESP-NOW ABI, Audio.h or SD farm memory.
+
+  v10.11N3F1A WORLDSTATE TICKFIX:
+    - Gates janusBBUpdateWorldState() by JANUS_BLACKBOARD_WORLD_MS so Buzz fatigue/health do not drift every loop.
+    - Keeps ESP-NOW, Audio.h, ES8311, Stratum, farm memory and blackboard packet ABI unchanged.
+
+  v10.11N3F1 BLACKBOARD BUZZ WORLDSTATE COMPILEFIX:
+    - Adds BuzzWorldState: cortexOnline, dangerActive, workersNeeded, localStress, fatigue, health and Core trust.
+    - Adds active JE_TASK_NEED / JE_TASK_DONE emission so Buzz can ask the swarm for workers, relay help or quiet.
+    - Treats J/P quietUntilMs as a duration from policy RX time, not as a foreign absolute millis().
+    - Replaces outgoing eventHash with a deterministic FNV-style packet fingerprint while accepting legacy peer hashes.
+    - Adds persistent /janus/state/blackboard_buzz.csv digest for continuity of blackboard mirror/world state.
+    - Keeps Audio.h, ES8311, Stratum, safe-charge, farm memory and remote share verification unchanged.
+
+  v10.11N3E BLACKBOARD BUZZ MIRROR:
+    - Adds J/E semantic blackboard event TX/RX compatible with Core2/TRON/Blind Eye.
+    - Adds J/P policy RX from Home Cortex with safe mining/audio-first budget shaping.
+    - Adds local blackboard memory mirror with dedup, attention score and SD audit logs.
+    - Emits Buzz heartbeat/hash/audio/thermal/accept/reject events without touching SHA/Stratum correctness.
 
   v10.11N3D SAFE-CHARGE WIFI-GUARD:
     - Adds thermal safe-charge guard for always-on charger operation.
@@ -189,8 +262,8 @@ size_t getArduinoLoopTaskStackSize(void) {
 #endif
 
 // ---------- НАСТРОЙКИ СЕТИ И АУДИО ----------
-const char* WIFI_SSID = "YOUR_WIFI";
-const char* WIFI_PASS = "YOUR_PASSWORD";
+const char* WIFI_SSID = "JANUS_WIFI_PLACEHOLDER";
+const char* WIFI_PASS = "JANUS_NET_PLACEHOLDER";
 
 const char* STREAM_URL  = "http://192.168.1.92:8095/api/music/stream";
 // Raw PCM endpoint kept on NAS, but v37 uses proven MP3 Audio.h stream.
@@ -209,6 +282,20 @@ const uint16_t POOL_PORT = 3333;   // Public Pool current TCP Stratum port; TLS 
 // Keep only a light local floor to avoid absurdly weak spam if the pool sends a broken diff.
 #define JANUS_NERDMINER_MERKLE_MIN_SHARE_BITS 16
 #define JANUS_FORCE_DIFF1_TICKETS 0
+#define JANUS_POOL_ZERO_HASH_WATCHDOG_MS       90000UL   // connected+authorized+jobReady but pool H/s stays 0
+#define JANUS_POOL_NO_JOB_WATCHDOG_MS          60000UL   // authorized but no mining.notify/job
+#define JANUS_POOL_NO_PROGRESS_WATCHDOG_MS     75000UL   // job/auth alive but minerTotalHashes does not advance
+#define JANUS_POOL_WATCHDOG_MIN_UPTIME_MS      45000UL   // grace period after socket connect
+#define JANUS_POOL_WATCHDOG_COOLDOWN_MS        15000UL   // soft Stratum reconnect backoff
+// v10.11N3F1F: farm blackout fuse. The previous watchdog only worked while
+// socket+auth+job still looked alive. If Wi-Fi gets stuck in 4WAY_HANDSHAKE_TIMEOUT,
+// Buzz enters WAIT/WIFI, clears colonyMasterJob and stops feeding workers.
+#define JANUS_POOL_AUTH_WATCHDOG_MS            45000UL   // connected but auth/subauth does not complete
+#define JANUS_FARM_BLACKOUT_WIFI_MS            45000UL   // Wi-Fi down + H=0 after Buzz had live farm state
+#define JANUS_FARM_BLACKOUT_POOL_MS            90000UL   // pool/auth/job missing + H=0 after live farm state
+#define JANUS_FARM_BLACKOUT_RECOVERY_MS        20000UL   // minimum delay between recovery kicks
+#define JANUS_FARM_BLACKOUT_HARD_RESET_AFTER   3         // hard Wi-Fi/ESP-NOW reset after repeated soft kicks
+#define JANUS_FARM_BLACKOUT_RESTART_MS         600000UL  // final safety restart after 10 min starvation
 const char* BTC_WALLET = "1F1Y6CdkApZboDF6g1DYrQ8Dke2E5gWiP1";
 char BTC_WORKER[32] = "BuzzLighter";
 char MINER_USER[96] = "";
@@ -342,6 +429,17 @@ bool audioHadStableRun = false;
 uint32_t audioStableSinceMs = 0;
 uint32_t audioSoftPauseAtMs = 0;
 uint8_t audioShuffleHopsMax = 9;
+
+#define JANUS_AUDIO_FIRST_START_MS       16000UL
+#define JANUS_AUDIO_FAIL_COOLDOWN_MS     22000UL
+#define JANUS_AUDIO_START_BATCH_CAP      48
+#define JANUS_AUDIO_STALL_BATCH_CAP      96
+#define JANUS_AUDIO_PLAY_BATCH_CAP       180
+#define JANUS_AUDIO_COOLDOWN_BATCH_CAP   220
+uint32_t janusAudioFailCooldownUntilMs = 0;
+uint32_t janusAudioLastStartFailMs = 0;
+uint8_t janusAudioStartFailStreak = 0;
+
 // v10.11N2: NAS /stream can start from its default pointer if boot-time /next happens too early.
 // Keep a one-shot random jump pending and apply it immediately before the first real stream connect.
 bool janusFirstPlayRandomPending = true;
@@ -383,7 +481,12 @@ void janusShareLedFlare(uint8_t kind) {
 // Heavy raw-LCD widgets stay ~20 FPS; Tobi alone runs 60 FPS.
 // For experimental 120 FPS set TOBI_TURBO_MS to 8, but 60 FPS is safer with Wi-Fi+Audio+Miner.
 constexpr uint16_t TOBI_TURBO_MS = 33;  // v37.1 smooth UI: 30 FPS overlay, no 100 FPS flicker/tearing
+constexpr uint16_t TOBI_AUDIO_SAFE_MS = 50;  // v10.11N3F1E: 20 FPS Tobi while Audio.h is realtime, safe for I2S/hash coexist
 constexpr uint16_t HEAVY_UI_MS = 50;  // v37.1 smooth UI: 20 FPS heavy scene, less LCD blink
+
+static inline bool janusMusicVisualActive() {
+  return wanted && playing && !softPaused && !audioUserPaused;
+}
 
 // ---------- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ HUD/POPUPS ----------
 uint32_t popupTimer = 0;
@@ -504,6 +607,21 @@ uint32_t connectedAtMs = 0;
 uint32_t lastWifiKickMs = 0;
 uint32_t poolReconnectHoldUntilMs = 0;
 uint8_t poolReconnectFails = 0;
+volatile uint32_t minerPoolZeroHashWatchdogs = 0;
+volatile uint32_t minerPoolNoJobWatchdogs = 0;
+volatile uint32_t minerPoolNoProgressWatchdogs = 0;
+volatile uint32_t minerPoolLastHashProgressMs = 0;
+volatile uint32_t minerPoolLastTotalProgressMs = 0;
+volatile uint64_t minerPoolLastTotalHashSnap = 0;
+volatile uint32_t minerPoolLastWatchdogMs = 0;
+// v10.11N3F1F: global diagnostics for the farm blackout fuse.
+volatile uint32_t minerFarmBlackoutWatchdogs = 0;
+volatile uint32_t minerFarmBlackoutHardResets = 0;
+volatile uint32_t minerFarmBlackoutRestarts = 0;
+volatile uint32_t minerFarmBlackoutSinceMs = 0;
+volatile uint32_t minerFarmLastRecoveryMs = 0;
+volatile uint32_t minerPoolLastJobReadyMs = 0;
+volatile uint32_t minerPoolAuthWatchdogs = 0;
 
 // v10.11N3D safe-charge / Wi-Fi storm state.
 volatile bool janusThermalStop = false;
@@ -561,6 +679,56 @@ uint32_t janusSdLastRetentionMs = 0;
 uint32_t janusSdRetentionRotations = 0;
 uint32_t janusSdRetentionDeletes = 0;
 uint64_t janusSdJanusBytes = 0;
+uint32_t janusSdFaults = 0;
+uint32_t janusSdSuspendedUntilMs = 0;
+uint32_t janusSdLastFaultPrintMs = 0;
+uint32_t janusSdLastBlackboardRxLogMs = 0;
+
+#define JANUS_SD_MIN_FREE_HEAP 90000UL
+#define JANUS_SD_FAULT_LIMIT 3
+#define JANUS_SD_SUSPEND_MS 120000UL
+
+void janusSdFault(const char* op) {
+#if JANUS_SD_ENABLE
+  uint32_t now = millis();
+  janusSdFaults++;
+  if (janusSdFaults >= JANUS_SD_FAULT_LIMIT) {
+    janusSdSuspendedUntilMs = now + JANUS_SD_SUSPEND_MS;
+  }
+  if (now - janusSdLastFaultPrintMs >= 5000UL) {
+    janusSdLastFaultPrintMs = now;
+    Serial.printf("[SD/GUARD] fault op=%s n=%lu heap=%lu suspend=%lums\n",
+                  op ? op : "-",
+                  (unsigned long)janusSdFaults,
+                  (unsigned long)ESP.getFreeHeap(),
+                  (unsigned long)((janusSdSuspendedUntilMs > now) ? (janusSdSuspendedUntilMs - now) : 0UL));
+  }
+#else
+  (void)op;
+#endif
+}
+
+bool janusSdCanTouch(const char* op) {
+#if JANUS_SD_ENABLE
+  if (!janusSdReady) return false;
+  uint32_t now = millis();
+  if (janusSdSuspendedUntilMs && (int32_t)(janusSdSuspendedUntilMs - now) > 0) return false;
+  if (ESP.getFreeHeap() < JANUS_SD_MIN_FREE_HEAP) {
+    janusSdFault(op ? op : "low-heap");
+    return false;
+  }
+  return true;
+#else
+  (void)op;
+  return false;
+#endif
+}
+
+void janusSdSuccess() {
+#if JANUS_SD_ENABLE
+  if (janusSdFaults > 0) janusSdFaults--;
+#endif
+}
 
 bool janusSdLock(uint32_t waitMs = 15) {
   if (!janusSdMutex) return true;
@@ -595,6 +763,9 @@ const char* janusSdHeaderForLogPath(const char* path) {
   }
   if (strcmp(path, JANUS_SD_ROOT "/logs/agent_rewards.csv") == 0) {
     return "ms,node,mac,rewardLevel,aiHint,rewardPoints,targetBatch,entropySeed,score,predHash,predErr,deltaShares";
+  }
+  if (strcmp(path, JANUS_SD_ROOT "/logs/oxytokin.csv") == 0) {
+    return "ms,node,mac,swarmHash,nodeHash,enzyme,oxy,dopamine,stress,trust,affinity,rewardLevel,aiHint,targetBatch,score,predErr,deltaShares,crc";
   }
   if (strcmp(path, JANUS_SD_ROOT "/logs/agent_predictions.csv") == 0) {
     return "ms,node,hashrate,shares,bestBits,emaHash,predHash,predBest,predErr,rewardPoints,rewards,aiHint";
@@ -856,13 +1027,18 @@ void janusSdRetentionTick(bool force = false) {
 void janusSdAppendLine(const char* path, const char* line) {
 #if JANUS_SD_ENABLE
   if (!janusSdReady || !path || !line) return;
+  if (!janusSdCanTouch("append")) return;
   if (!janusSdLock(20)) return;
   janusSdRotateLogIfNeededUnlocked(path);
   janusSdEnsureLogHeaderUnlocked(path);
   File f = SD_MMC.open(path, FILE_APPEND);
   if (f) {
-    f.println(line);
+    size_t n = f.println(line);
     f.close();
+    if (n == 0) janusSdFault("append-write");
+    else janusSdSuccess();
+  } else {
+    janusSdFault("append-open");
   }
   janusSdUnlock();
 #endif
@@ -1091,6 +1267,12 @@ void janusWebTick() {
 void janusSdLogf(const char* tag, const char* fmt, ...) {
 #if JANUS_SD_ENABLE
   if (!janusSdReady) return;
+  uint32_t now = millis();
+  if (tag && strcmp(tag, "BLACKBOARD_RX") == 0) {
+    if (now - janusSdLastBlackboardRxLogMs < 3000UL) return;
+    janusSdLastBlackboardRxLogMs = now;
+  }
+  if (!janusSdCanTouch(tag ? tag : "log")) return;
   char msg[192];
   va_list ap;
   va_start(ap, fmt);
@@ -1098,7 +1280,7 @@ void janusSdLogf(const char* tag, const char* fmt, ...) {
   va_end(ap);
 
   char line[256];
-  snprintf(line, sizeof(line), "%lu,%s,%s", (unsigned long)millis(), tag ? tag : "-", msg);
+  snprintf(line, sizeof(line), "%lu,%s,%s", (unsigned long)now, tag ? tag : "-", msg);
   janusSdAppendLine(JANUS_SD_ROOT "/logs/buzz.csv", line);
 #endif
 }
@@ -1421,6 +1603,13 @@ void janusSdWriteBootReadme() {
       pf.close();
     }
   }
+  if (!SD_MMC.exists(JANUS_SD_ROOT "/logs/oxytokin.csv")) {
+    File of = SD_MMC.open(JANUS_SD_ROOT "/logs/oxytokin.csv", FILE_WRITE);
+    if (of) {
+      of.println("ms,node,mac,swarmHash,nodeHash,enzyme,oxy,dopamine,stress,trust,affinity,rewardLevel,aiHint,targetBatch,score,predErr,deltaShares,crc");
+      of.close();
+    }
+  }
   janusSdUnlock();
 #endif
 }
@@ -1723,6 +1912,19 @@ bool hashMeetsShareTarget(const uint8_t hashBE[32]) {
 #define JANUS_SWARMSENSE_SKIP_WHILE_AUDIO 1
 #define JANUS_SWARMSENSE_RESET_QUEUE_ON_AUDIO_START 1
 
+// v10.11N3F3C: Tranception stays on NAS; Buzz only pulls compact, safe hints.
+// Allowed influence: conservative batch pacing. Forbidden: SHA header, target,
+// S/2 validity, submit pressure and nonce ownership.
+#define JANUS_TRANCEPTION_PULL_ENABLE 1
+#define JANUS_TRANCEPTION_URL "http://192.168.1.92:5000/api/swarm/tranception"
+#define JANUS_TRANCEPTION_PULL_MS 20000UL
+#define JANUS_TRANCEPTION_HTTP_TIMEOUT_MS 220
+#define JANUS_TRANCEPTION_FAIL_STREAK_LIMIT 3
+#define JANUS_TRANCEPTION_FAIL_COOLDOWN_MS 120000UL
+#define JANUS_TRANCEPTION_MIN_CONF 0.05f
+#define JANUS_TRANCEPTION_BATCH_MIN 48
+#define JANUS_TRANCEPTION_BATCH_MAX 900
+
 // v10.11N3D: Buzz can stay on charger 24/7. Protect the board from heat,
 // Wi-Fi reconnect storms and dead NAS HTTP loops. The built-in ESP32-S3
 // temperature sensor measures chip temperature, not the USB-C connector itself.
@@ -1766,6 +1968,17 @@ bool hashMeetsShareTarget(const uint8_t hashBE[32]) {
 #define JANUS_AGENT_LOG_MS 10000UL
 #define JANUS_AGENT_SCORE_DECAY 0.72f
 #define JANUS_AGENT_EMA_ALPHA 0.18f
+
+// v10.11N3F3: Oxytokin Enzyme layer.
+// This is the swarm "own/foreign" scent marker. It is deliberately separate from
+// Stratum/share validity: O/X changes trust/coordination/motivation only, never
+// header bytes, target comparison or pool submit rules.
+#define JANUS_OXYTOKIN_ENABLE 1
+#define JANUS_OXYTOKIN_BEACON_MIN_MS 30000UL
+#define JANUS_OXYTOKIN_SWARM_NAME "TOY_CASTLE_JANUS"
+#define JANUS_OXYTOKIN_SOURCE "BuzzOxy"
+#define JANUS_OXYTOKIN_SECRET 0x4A414E55UL  // lightweight marker salt: 'JANU'
+#define JANUS_OXYTOKIN_FOREIGN_STRESS_BOOST 18
 
 struct __attribute__((packed)) JanusColonyPacket {
   char magic[6];
@@ -1811,6 +2024,58 @@ struct __attribute__((packed)) ShareResponseV2 {
   uint32_t total_hashes_l32;
   uint8_t hash_tail[4];   // last 4 bytes of display-order share hash for debugging duplicate/stale shares
 };
+
+// Gladius v1.12 -> Buzz/Core TailGEX memory. Observe-only: never used as proof/share.
+struct __attribute__((packed)) GladiusMemoryPacket {
+  uint8_t magic[2];      // 'G','M'
+  uint8_t version;
+  uint8_t nodeRole;
+  uint16_t nodeId;
+  uint32_t uptimeMs;
+  uint32_t seq;
+  uint32_t jobId;
+  uint32_t totalHashes;
+  uint32_t shares;
+  uint32_t jobsSeen;
+  uint8_t bestZ;
+  uint8_t targetBits;
+  uint8_t activeLane;
+  uint8_t gexTopLane;
+  int16_t gexTailX100;
+  uint8_t gexConfidenceX100;
+  uint8_t gexWeightPct;
+  uint8_t gexEntropyFloorPct;
+  uint32_t memoryEpoch;
+  uint16_t flags;        // 1 periodic, 2 save, 4 share, 8 job, 16 high-tail
+  uint32_t crc;
+};
+
+const char* buzzGladiusLaneName(uint8_t lane) {
+  switch (lane) {
+    case 0: return "linear";
+    case 1: return "zim_reverse";
+    case 2: return "zim_bandit";
+    case 3: return "janus_center";
+    case 4: return "knight";
+    case 5: return "bitrev";
+    case 6: return "random";
+    default: return "unknown";
+  }
+}
+
+uint32_t colonyGladiusMemoryReports = 0;
+uint32_t colonyGladiusMemoryLastMs = 0;
+uint32_t colonyGladiusMemoryEpoch = 0;
+uint32_t colonyGladiusLastJobId = 0;
+uint16_t colonyGladiusFlags = 0;
+uint8_t colonyGladiusActiveLane = 0;
+uint8_t colonyGladiusTopLane = 0;
+int16_t colonyGladiusTailX100 = 0;
+uint8_t colonyGladiusConfidence = 0;
+uint8_t colonyGladiusWeightPct = 0;
+uint8_t colonyGladiusBestZ = 0;
+uint8_t colonyGladiusTargetBits = 0;
+char colonyGladiusLine[96] = "GLADIUS GEX WAIT";
 
 struct __attribute__((packed)) EntropyReport {
   uint8_t magic[2];       // 'E','R'
@@ -1892,6 +2157,174 @@ struct __attribute__((packed)) SwarmSensePacket {
   uint16_t job_age_s;
   uint16_t nonce_remaining_l16;
   uint16_t flags;
+};
+
+
+
+// v10.11N3F1: Compilefix for Arduino core 3.3.x/GCC14: no custom struct in auto-prototypes, volatile-safe clamps.
+// v10.11N3F: JANUS Blackboard semantic bus + BuzzWorldState.
+// Core2 is policy authority. Buzz mirrors/relays meaning while keeping audio + Stratum safe.
+#ifndef JANUS_BLACKBOARD_ENABLE
+#define JANUS_BLACKBOARD_ENABLE 1
+#endif
+#define JANUS_BLACKBOARD_EVENT_TTL_MS       16000UL
+#define JANUS_BLACKBOARD_HEARTBEAT_MS       3000UL
+#define JANUS_BLACKBOARD_HASH_MS            6000UL
+#define JANUS_BLACKBOARD_MEMORY_MS          15000UL
+#define JANUS_BLACKBOARD_POLICY_TIMEOUT_MS  22000UL
+#define JANUS_BLACKBOARD_MIRROR_SLOTS       16
+#define JANUS_BLACKBOARD_WORLD_MS           5000UL
+#define JANUS_BLACKBOARD_TASK_NEED_MS       15000UL
+#define JANUS_BLACKBOARD_TASK_DONE_MS       20000UL
+#define JANUS_BLACKBOARD_DIGEST_SAVE_MS     60000UL
+#define JANUS_BLACKBOARD_QUIET_MAX_MS       60000UL
+#define JANUS_BLACKBOARD_DIGEST_FILE        JANUS_SD_ROOT "/state/blackboard_buzz.csv"
+
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0,
+  JR_CORE    = 1,
+  JR_ZIM     = 2,
+  JR_BUZZ    = 3,
+  JR_BEACON  = 4,
+  JR_TRON    = 5,
+  JR_BLIND   = 6,
+  JR_AUDIO   = 7,
+  JR_PYRAMID = 8,
+  JR_SENSOR  = 9,
+  JR_RELAY   = 10
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE        = 0,
+  JE_BOOT        = 1,
+  JE_HEARTBEAT   = 2,
+  JE_ENV         = 3,
+  JE_MOTION      = 4,
+  JE_PRESENCE    = 5,
+  JE_SOUND       = 6,
+  JE_WIFI_WEAK   = 7,
+  JE_LOW_HEAP    = 8,
+  JE_HASH        = 9,
+  JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11,
+  JE_TASK_NEED   = 12,
+  JE_TASK_DONE   = 13,
+  JE_DANGER      = 14,
+  JE_SAFE        = 15,
+  JE_POLICY      = 16,
+  JE_AI_MEMORY   = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE    = 0,
+  JM_QUIET   = 1,
+  JM_ALERT   = 2,
+  JM_EXPLORE = 3,
+  JM_GUARD   = 4,
+  JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP     = 0x0001,
+  JC_HUM      = 0x0002,
+  JC_PRESS    = 0x0004,
+  JC_IMU      = 0x0008,
+  JC_MIC      = 0x0010,
+  JC_TMOS     = 0x0020,
+  JC_AIR      = 0x0040,
+  JC_HASH     = 0x0080,
+  JC_AUDIO    = 0x0100,
+  JC_VISION   = 0x0200,
+  JC_TOUCH    = 0x0400,
+  JC_RELAY    = 0x0800,
+  JC_MEMORY   = 0x1000,
+  JC_AI       = 0x2000,
+  JC_BATTERY  = 0x4000,
+  JC_RF       = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];        // 'J','E'
+  uint8_t version;         // 1
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;      // 0..100
+  uint8_t urgency;         // 0..100
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];        // 'J','P'
+  uint8_t version;         // 1
+  uint8_t swarmMood;
+  uint8_t radioRate;       // 0 low, 1 normal, 2 high
+  uint8_t buzzBudget;      // 0 hold, 1 lazy, 2 normal, 3 boost
+  uint8_t sensorRate;      // 0 low, 1 normal, 2 high
+  uint8_t confidence;      // 0..100
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
+struct JanusBlackboardMirrorSlot {
+  bool used;
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;
+  uint8_t urgency;
+  int8_t rssi;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t lastMs;
+  uint32_t ttlMs;
+  uint32_t eventHash;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+};
+
+struct BuzzWorldState {
+  bool cortexOnline;
+  bool dangerActive;
+  bool motionNearby;
+  bool audioAlert;
+  bool workersNeeded;
+  bool relayPressure;
+  uint8_t swarmTrust;
+  uint8_t localStress;
+  uint8_t fatigue;
+  uint8_t health;
+  uint8_t mirrorActive;
+  uint8_t mirrorDanger;
+  uint8_t mirrorMotion;
+  uint8_t mirrorSound;
+  uint32_t lastCoreMs;
+  uint32_t lastDangerMs;
+  uint32_t lastTaskNeedMs;
+  uint32_t lastTaskDoneMs;
+  uint32_t lastDigestSaveMs;
+  uint32_t digestSaves;
 };
 
 struct SwarmSenseQueueItem {
@@ -1976,6 +2409,33 @@ struct __attribute__((packed)) JanusAgentRewardPacket {
   float predictedHashRate;
   float predictionError;
   uint32_t deltaShares;
+  uint32_t uptime_ms;
+};
+
+// v10.11N3F3: Oxytokin / Enzyme marker.
+// Magic 'O','X' is intentionally new; old nodes ignore it. New nodes can use
+// swarmHash+enzyme as a lightweight "our hive" pheromone, and use the social
+// chemistry fields to shape behavior without touching mining correctness.
+struct __attribute__((packed)) JanusOxytokinPacket {
+  uint8_t magic[2];        // 'O','X'
+  uint8_t version;         // 1
+  char source[16];         // BuzzOxy
+  char targetNode[24];
+  uint32_t seq;
+  uint32_t swarmHash;      // stable hash of JANUS_OXYTOKIN_SWARM_NAME + secret
+  uint32_t nodeHash;       // stable hash of target node name/MAC scent
+  uint32_t enzyme;         // own/foreign pheromone marker derived from swarm+node
+  uint8_t oxytocin;        // social bond / "свой" warmth 0..100
+  uint8_t dopamine;        // work reward / excitement 0..100
+  uint8_t stress;          // caution / pressure 0..100
+  uint8_t trust;           // Buzz trust in this node 0..100
+  uint8_t affinity;        // how strongly this node belongs to JANUS_WIFI_PLACEHOLDER hive
+  uint8_t roleFlags;       // bit0 worker, bit1 sensor, bit2 audio, bit3 gladius, bit4 cortex, bit5 rf
+  uint8_t rewardLevel;
+  uint8_t aiHint;
+  uint16_t targetBatch;
+  uint32_t entropySeed;
+  uint32_t crc;            // lightweight packet fingerprint, not security
   uint32_t uptime_ms;
 };
 
@@ -2069,6 +2529,12 @@ struct ColonyNodeSlot {
   uint32_t lastDeltaRejects;
   uint8_t rewardLevel;
   uint8_t entropyBoost;
+  uint32_t lastOxytokinMs;
+  uint8_t oxytocin;
+  uint8_t dopamine;
+  uint8_t stressChem;
+  uint8_t trustChem;
+  uint32_t enzyme;
 };
 
 ColonyNodeSlot colonyNodes[JANUS_COLONY_MAX_NODES];
@@ -2093,6 +2559,13 @@ volatile uint32_t colonyAgentRewardPointsTotal = 0;
 volatile float colonyAgentPredictionErrorAvg = 0.0f;
 char colonyAgentTopNode[24] = "-";
 
+// v10.11N3F3 Oxytokin/Enzyme counters.
+volatile uint32_t colonyOxytokinSent = 0;
+volatile uint32_t colonyOxytokinRx = 0;
+volatile uint32_t colonyOxytokinForeignRx = 0;
+volatile uint32_t colonyOxytokinSwarmHash = 0;
+volatile uint32_t colonyOxytokinLastEnzyme = 0;
+
 QueueHandle_t colonyRemoteShareQueue = nullptr;
 QueueHandle_t colonyRxQueue = nullptr;
 #if JANUS_SWARMSENSE_ENABLE
@@ -2105,6 +2578,48 @@ volatile uint32_t colonySwarmSenseDropped = 0;
 volatile uint32_t colonySwarmSensePostOk = 0;
 volatile uint32_t colonySwarmSensePostFail = 0;
 uint32_t colonySwarmSenseLastPostMs = 0;
+#if JANUS_TRANCEPTION_PULL_ENABLE
+uint32_t colonyTranceptionLastPullMs = 0;
+uint32_t colonyTranceptionHoldUntilMs = 0;
+uint32_t colonyTranceptionOk = 0;
+uint32_t colonyTranceptionFail = 0;
+uint8_t colonyTranceptionFailStreak = 0;
+char colonyTranceptionLane[16] = "-";
+char colonyTranceptionStrategy[20] = "-";
+uint16_t colonyTranceptionBatchHint = 0;
+uint8_t colonyTranceptionSectorHint = 0;
+float colonyTranceptionConfidence = 0.0f;
+uint32_t colonyTranceptionAppliedMs = 0;
+#endif
+#endif
+
+
+#if JANUS_BLACKBOARD_ENABLE
+volatile uint32_t janusBlackboardEventSeq = 0;
+volatile uint32_t janusBlackboardEventTx = 0;
+volatile uint32_t janusBlackboardEventFail = 0;
+volatile uint32_t janusBlackboardEventRx = 0;
+volatile uint32_t janusBlackboardEventMerged = 0;
+volatile uint32_t janusBlackboardEventDropped = 0;
+volatile uint8_t  janusBlackboardLastAttention = 0;
+volatile uint32_t janusBlackboardPolicyRx = 0;
+volatile uint32_t janusBlackboardLastPolicyMs = 0;
+volatile uint32_t janusBlackboardQuietUntilMs = 0;
+volatile uint32_t janusBlackboardLastHeartbeatMs = 0;
+volatile uint32_t janusBlackboardLastHashMs = 0;
+volatile uint32_t janusBlackboardLastMemoryMs = 0;
+volatile uint32_t janusBlackboardLastWorldMs = 0;
+volatile uint8_t  janusBlackboardMood = JM_IDLE;
+volatile uint8_t  janusBlackboardRadioRate = 1;
+volatile uint8_t  janusBlackboardBuzzBudget = 2;
+volatile uint8_t  janusBlackboardSensorRate = 1;
+volatile uint8_t  janusBlackboardPolicyConfidence = 0;
+volatile uint16_t janusBlackboardDangerX100 = 0;
+char janusBlackboardOrder[40] = "-";
+JanusBlackboardMirrorSlot janusBlackboardMirror[JANUS_BLACKBOARD_MIRROR_SLOTS];
+BuzzWorldState janusBuzzWorld{};
+volatile uint32_t janusBlackboardEventCrcWeak = 0;
+portMUX_TYPE janusBlackboardMux = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 // Current pool job mirrored for voluntary workers.
@@ -2341,6 +2856,187 @@ uint16_t janusAgentBatchFromScore(float score, uint8_t hint) {
   return 900;
 }
 
+uint8_t janusOxyClampU8(int v) {
+  if (v < 0) return 0;
+  if (v > 100) return 100;
+  return (uint8_t)v;
+}
+
+uint32_t janusOxyHashBytes(const uint8_t* data, size_t len, uint32_t seed = 2166136261UL) {
+  uint32_t h = seed ? seed : 2166136261UL;
+  for (size_t i = 0; i < len; ++i) {
+    h ^= (uint32_t)data[i];
+    h *= 16777619UL;
+  }
+  return h ? h : 0xA5A5A5A5UL;
+}
+
+uint32_t janusOxyHashText(const char* s, uint32_t seed = 2166136261UL) {
+  if (!s) s = "";
+  return janusOxyHashBytes((const uint8_t*)s, strlen(s), seed);
+}
+
+uint32_t janusOxySwarmHash() {
+  uint32_t h = janusOxyHashText(JANUS_OXYTOKIN_SWARM_NAME);
+  const uint32_t secret = JANUS_OXYTOKIN_SECRET;
+  h = janusOxyHashBytes((const uint8_t*)&secret, sizeof(secret), h);
+  return h;
+}
+
+uint32_t janusOxyNodeHash(const char* nodeId, const uint8_t mac[6]) {
+  uint32_t h = janusOxyHashText(nodeId && nodeId[0] ? nodeId : "unknown");
+  if (mac) h = janusOxyHashBytes(mac, 6, h);
+  return h;
+}
+
+uint32_t janusOxyEnzymeFor(uint32_t swarmHash, uint32_t nodeHash) {
+  uint32_t h = janusOxyHashBytes((const uint8_t*)&swarmHash, sizeof(swarmHash));
+  h = janusOxyHashBytes((const uint8_t*)&nodeHash, sizeof(nodeHash), h);
+  const uint32_t secret = JANUS_OXYTOKIN_SECRET;
+  h = janusOxyHashBytes((const uint8_t*)&secret, sizeof(secret), h);
+  return h;
+}
+
+uint8_t janusOxyRoleFlags(const char* nodeId) {
+  uint8_t f = 0x01; // any node receiving O/X is a colony worker/sensor candidate
+  if (!nodeId) return f;
+  if (strstr(nodeId, "Blind") || strstr(nodeId, "Eye") || strstr(nodeId, "Anchor") || strstr(nodeId, "Beacon")) f |= 0x02;
+  if (strstr(nodeId, "Echo") || strstr(nodeId, "Mic")) f |= 0x04;
+  if (strstr(nodeId, "Gladius") || strstr(nodeId, "GLAD")) f |= 0x08;
+  if (strstr(nodeId, "Core")) f |= 0x10;
+  if (strstr(nodeId, "RF") || strstr(nodeId, "Anchor")) f |= 0x20;
+  return f;
+}
+
+uint32_t janusOxyPacketCrc(const void* oxPtr) {
+  // Arduino .ino auto-prototype fix: keep JanusOxytokinPacket out of the
+  // function signature, otherwise Arduino may emit a prototype before the
+  // struct declaration and fail with: JanusOxytokinPacket does not name a type.
+  if (!oxPtr) return 0;
+  const JanusOxytokinPacket* ox = (const JanusOxytokinPacket*)oxPtr;
+  uint32_t h = janusOxyHashBytes((const uint8_t*)ox->source, sizeof(ox->source));
+  h = janusOxyHashBytes((const uint8_t*)ox->targetNode, sizeof(ox->targetNode), h);
+  h = janusOxyHashBytes((const uint8_t*)&ox->seq, sizeof(ox->seq), h);
+  h = janusOxyHashBytes((const uint8_t*)&ox->swarmHash, sizeof(ox->swarmHash), h);
+  h = janusOxyHashBytes((const uint8_t*)&ox->nodeHash, sizeof(ox->nodeHash), h);
+  h = janusOxyHashBytes((const uint8_t*)&ox->enzyme, sizeof(ox->enzyme), h);
+  h = janusOxyHashBytes(&ox->oxytocin, 1, h);
+  h = janusOxyHashBytes(&ox->dopamine, 1, h);
+  h = janusOxyHashBytes(&ox->stress, 1, h);
+  h = janusOxyHashBytes(&ox->trust, 1, h);
+  h = janusOxyHashBytes(&ox->affinity, 1, h);
+  const uint32_t secret = JANUS_OXYTOKIN_SECRET;
+  h = janusOxyHashBytes((const uint8_t*)&secret, sizeof(secret), h);
+  return h;
+}
+
+void colonySendOxytokinEnzyme(const uint8_t mac[6],
+                              const char* nodeId,
+                              uint8_t rewardLevel,
+                              uint8_t aiHint,
+                              uint16_t rewardPoints,
+                              uint16_t targetBatch,
+                              uint32_t entropySeed,
+                              float score,
+                              float predictedHashRate,
+                              float predictionError,
+                              uint32_t deltaShares) {
+#if JANUS_COLONY_ENABLE
+#if JANUS_OXYTOKIN_ENABLE
+  (void)predictedHashRate;
+  if (!colonyMacLooksValid(mac) || !nodeId || !nodeId[0]) return;
+  ensureColonyUnicastPeer(mac);
+
+  uint32_t swarmHash = janusOxySwarmHash();
+  uint32_t nodeHash = janusOxyNodeHash(nodeId, mac);
+  uint32_t enzyme = janusOxyEnzymeFor(swarmHash, nodeHash);
+
+  int stressI = (int)(predictionError * 22.0f) + (int)(janusBuzzWorld.localStress / 2);
+  if (rewardLevel == 0) stressI += 6;
+  uint8_t stress = janusOxyClampU8(stressI);
+
+  uint8_t dopamine = janusOxyClampU8((int)rewardLevel * 22 + (int)((deltaShares * 18UL > 50UL) ? 50UL : deltaShares * 18UL) + (int)(score / 260.0f));
+  uint8_t oxytocin = janusOxyClampU8(30 + (int)(rewardPoints / 900U) + (int)(score / 160.0f) + (deltaShares ? 16 : 0) - (int)stress / 3);
+  uint8_t trust = janusOxyClampU8(38 + (int)(rewardPoints / 1100U) + (int)(score / 110.0f) - (int)stress / 4);
+  uint8_t affinity = janusOxyClampU8(55 + (int)rewardLevel * 9 + (strstr(nodeId, "Gladius") ? 7 : 0) + (strstr(nodeId, "Anchor") ? 5 : 0));
+
+  JanusOxytokinPacket ox{};
+  ox.magic[0] = 'O';
+  ox.magic[1] = 'X';
+  ox.version = 1;
+  strlcpy(ox.source, JANUS_OXYTOKIN_SOURCE, sizeof(ox.source));
+  strlcpy(ox.targetNode, nodeId, sizeof(ox.targetNode));
+  ox.seq = ++colonyOxytokinSent;
+  ox.swarmHash = swarmHash;
+  ox.nodeHash = nodeHash;
+  ox.enzyme = enzyme;
+  ox.oxytocin = oxytocin;
+  ox.dopamine = dopamine;
+  ox.stress = stress;
+  ox.trust = trust;
+  ox.affinity = affinity;
+  ox.roleFlags = janusOxyRoleFlags(nodeId);
+  ox.rewardLevel = rewardLevel;
+  ox.aiHint = aiHint;
+  ox.targetBatch = targetBatch;
+  ox.entropySeed = entropySeed;
+  ox.uptime_ms = millis();
+  ox.crc = janusOxyPacketCrc(&ox);
+  colonyOxytokinSwarmHash = swarmHash;
+  colonyOxytokinLastEnzyme = enzyme;
+
+  esp_now_send(mac, (uint8_t*)&ox, sizeof(ox));
+
+  char macText[18];
+  colonyMacToText(mac, macText, sizeof(macText));
+  Serial.printf("[OXY] tx node=%s mac=%s enzyme=%08lX oxy=%u dop=%u stress=%u trust=%u aff=%u lvl=%u hint=%u batch=%u crc=%08lX\n",
+                nodeId, macText, (unsigned long)enzyme,
+                (unsigned)oxytocin, (unsigned)dopamine, (unsigned)stress,
+                (unsigned)trust, (unsigned)affinity, (unsigned)rewardLevel,
+                (unsigned)aiHint, (unsigned)targetBatch, (unsigned long)ox.crc);
+
+  if (janusSdReady) {
+    char line[360];
+    snprintf(line, sizeof(line),
+             "%lu,%s,%s,%08lX,%08lX,%08lX,%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%.4f,%lu,%08lX",
+             (unsigned long)millis(), nodeId, macText,
+             (unsigned long)swarmHash, (unsigned long)nodeHash, (unsigned long)enzyme,
+             (unsigned)oxytocin, (unsigned)dopamine, (unsigned)stress,
+             (unsigned)trust, (unsigned)affinity, (unsigned)rewardLevel,
+             (unsigned)aiHint, (unsigned)targetBatch,
+             score, predictionError, (unsigned long)deltaShares, (unsigned long)ox.crc);
+    janusSdAppendLine(JANUS_SD_ROOT "/logs/oxytokin.csv", line);
+  }
+#endif
+#endif
+}
+
+void colonyHandleOxytokinRaw(const uint8_t* srcMac, int8_t rssi, const uint8_t* data, int len) {
+#if JANUS_OXYTOKIN_ENABLE
+  if (!data || len != (int)sizeof(JanusOxytokinPacket)) return;
+  JanusOxytokinPacket ox{};
+  memcpy(&ox, data, sizeof(ox));
+  if (ox.magic[0] != 'O' || ox.magic[1] != 'X' || ox.version != 1) return;
+  uint32_t localSwarm = janusOxySwarmHash();
+  uint32_t expectedEnzyme = janusOxyEnzymeFor(ox.swarmHash, ox.nodeHash);
+  uint32_t expectedCrc = janusOxyPacketCrc(&ox);
+  bool own = (ox.swarmHash == localSwarm) && (ox.enzyme == expectedEnzyme) && (ox.crc == expectedCrc);
+  colonyOxytokinRx++;
+  if (!own) colonyOxytokinForeignRx++;
+  if (!own || (colonyOxytokinRx % 16UL) == 1UL) {
+    char macText[18];
+    colonyMacToText(srcMac, macText, sizeof(macText));
+    Serial.printf("[OXY] rx %s node=%s mac=%s enzyme=%08lX oxy=%u dop=%u stress=%u trust=%u rssi=%d crc=%s\n",
+                  own ? "OWN" : "FOREIGN", ox.targetNode, macText,
+                  (unsigned long)ox.enzyme, (unsigned)ox.oxytocin,
+                  (unsigned)ox.dopamine, (unsigned)ox.stress, (unsigned)ox.trust,
+                  (int)rssi, (expectedCrc == ox.crc) ? "ok" : "bad");
+  }
+#else
+  (void)srcMac; (void)rssi; (void)data; (void)len;
+#endif
+}
+
 void colonySendAgentReward(const uint8_t mac[6],
                            const char* nodeId,
                            uint8_t rewardLevel,
@@ -2377,6 +3073,10 @@ void colonySendAgentReward(const uint8_t mac[6],
   ar.uptime_ms = millis();
 
   esp_now_send(mac, (uint8_t*)&ar, sizeof(ar));
+  // v10.11N3F3: A/R is the old reward hormone; O/X is the new enzyme scent.
+  // Send them together when work was good, so new workers learn both motivation and ownership.
+  colonySendOxytokinEnzyme(mac, nodeId, rewardLevel, aiHint, rewardPoints, targetBatch,
+                           entropySeed, score, predictedHashRate, predictionError, deltaShares);
 
   char macText[18];
   colonyMacToText(mac, macText, sizeof(macText));
@@ -2413,6 +3113,7 @@ void colonyRememberNode(const uint8_t mac[6], const void* pktPtr, int8_t rssi) {
   uint32_t deltaRejects = 0;
   bool isNew = false;
   bool rewardNow = false;
+  bool oxytokinNow = false;
   uint8_t rewardLevel = 0;
   uint8_t rewardHint = 1;
   uint16_t rewardPoints = 0;
@@ -2519,6 +3220,17 @@ void colonyRememberNode(const uint8_t mac[6], const void* pktPtr, int8_t rssi) {
     rewardNow = true;
   }
 
+  bool enzymePulse = isNew || shareReward || (now - colonyNodes[idx].lastOxytokinMs >= JANUS_OXYTOKIN_BEACON_MIN_MS);
+  if (enzymePulse) {
+    colonyNodes[idx].lastOxytokinMs = now;
+    colonyNodes[idx].enzyme = janusOxyEnzymeFor(janusOxySwarmHash(), janusOxyNodeHash(pkt.nodeId, mac));
+    colonyNodes[idx].stressChem = janusOxyClampU8((int)(predErr * 22.0f) + (int)(janusBuzzWorld.localStress / 2));
+    colonyNodes[idx].dopamine = janusOxyClampU8((int)rewardLevel * 22 + (int)((deltaShares * 18UL > 50UL) ? 50UL : deltaShares * 18UL) + (int)(score / 260.0f));
+    colonyNodes[idx].oxytocin = janusOxyClampU8(30 + (int)(colonyNodes[idx].rewardPoints / 900U) + (int)(score / 160.0f) + (deltaShares ? 16 : 0) - (int)colonyNodes[idx].stressChem / 3);
+    colonyNodes[idx].trustChem = janusOxyClampU8(38 + (int)(colonyNodes[idx].rewardPoints / 1100U) + (int)(score / 110.0f) - (int)colonyNodes[idx].stressChem / 4);
+    oxytokinNow = true;
+  }
+
   colonyNodes[idx].lastDeltaShares = deltaShares;
   colonyNodes[idx].lastDeltaRejects = deltaRejects;
   colonyNodes[idx].lastSharesForAgent = pkt.shares;
@@ -2559,6 +3271,9 @@ void colonyRememberNode(const uint8_t mac[6], const void* pktPtr, int8_t rssi) {
   if (rewardNow) {
     colonySendAgentReward(mac, pkt.nodeId, rewardLevel, rewardHint, rewardPoints, targetBatch,
                           entropySeed, score, predictedHash, predErr, deltaShares);
+  } else if (oxytokinNow) {
+    colonySendOxytokinEnzyme(mac, pkt.nodeId, rewardLevel, rewardHint, rewardPoints, targetBatch,
+                             entropySeed, score, predictedHash, predErr, deltaShares);
   }
 
   if (isNew) {
@@ -2739,6 +3454,7 @@ bool janusAudioNeedsRealtimeNow() {
   uint32_t now = millis();
   if (audioBusySwitching) return true;
   if (now < audioCriticalUntilMs) return true;
+  if (now < janusAudioFailCooldownUntilMs) return true;
   if (wanted && playing && !softPaused && !audioUserPaused) return true;
   return false;
 }
@@ -2822,6 +3538,146 @@ void swarmSenseTick() {
     }
   }
 }
+
+#if JANUS_TRANCEPTION_PULL_ENABLE
+uint16_t janusClampTranceptionBatch(int raw) {
+  if (raw <= 0) return 0;
+  if (raw < JANUS_TRANCEPTION_BATCH_MIN) return JANUS_TRANCEPTION_BATCH_MIN;
+  if (raw > JANUS_TRANCEPTION_BATCH_MAX) return JANUS_TRANCEPTION_BATCH_MAX;
+  return (uint16_t)raw;
+}
+
+bool janusApplyTranceptionDirective(JsonObject dir, float topConf, const char* modelName) {
+  if (dir.isNull()) return false;
+
+  const char* submitPressure = dir["submit_pressure"] | "do_not_increase";
+  if (strcmp(submitPressure, "do_not_increase") != 0) {
+    Serial.printf("[TRANCEPTION] ignored submit_pressure=%s rule=frozen-wire\n",
+                  submitPressure ? submitPressure : "-");
+    return false;
+  }
+
+  const char* lane = dir["lane_hint"] | "-";
+  const char* strategy = dir["strategy_hint"] | "-";
+  const char* intent = dir["intent"] | "observe";
+  int sector = dir["sector_hint"] | -1;
+  int batchRaw = dir["batch_hint"] | 0;
+  float conf = dir["confidence"] | topConf;
+  uint16_t batchHint = janusClampTranceptionBatch(batchRaw);
+
+  strlcpy(colonyTranceptionLane, lane ? lane : "-", sizeof(colonyTranceptionLane));
+  strlcpy(colonyTranceptionStrategy, strategy ? strategy : "-", sizeof(colonyTranceptionStrategy));
+  colonyTranceptionBatchHint = batchHint;
+  colonyTranceptionSectorHint = (sector >= 0 && sector <= 255) ? (uint8_t)sector : 0;
+  colonyTranceptionConfidence = conf;
+
+  bool applied = false;
+  uint16_t before = colonyAiBatch;
+  uint16_t after = before;
+  if (batchHint > 0 && conf >= JANUS_TRANCEPTION_MIN_CONF) {
+    if (batchHint < before) {
+      after = (uint16_t)((before + batchHint) / 2);
+    } else {
+      after = (uint16_t)((before * 3UL + batchHint + 3UL) / 4UL);
+    }
+    if (after < JANUS_TRANCEPTION_BATCH_MIN) after = JANUS_TRANCEPTION_BATCH_MIN;
+    if (after > 1800) after = 1800;
+    colonyAiBatch = after;
+    colonyTranceptionAppliedMs = millis();
+    applied = (after != before);
+  }
+
+  Serial.printf("[TRANCEPTION] ok model=%s intent=%s lane=%s strat=%s sector=%d batch=%u conf=%.2f aiBatch=%u->%u apply=%u\n",
+                modelName ? modelName : "-",
+                intent ? intent : "-",
+                colonyTranceptionLane,
+                colonyTranceptionStrategy,
+                sector,
+                (unsigned)batchHint,
+                conf,
+                (unsigned)before,
+                (unsigned)colonyAiBatch,
+                applied ? 1 : 0);
+  janusSdLogf("TRANCEPTION", "model=%s intent=%s lane=%s strat=%s sector=%d batch=%u conf=%.3f aiBatch=%u apply=%u",
+              modelName ? modelName : "-",
+              intent ? intent : "-",
+              colonyTranceptionLane,
+              colonyTranceptionStrategy,
+              sector,
+              (unsigned)batchHint,
+              conf,
+              (unsigned)colonyAiBatch,
+              applied ? 1 : 0);
+  return applied;
+}
+
+void janusTranceptionFail(int code, const char* reason) {
+  colonyTranceptionFail++;
+  colonyTranceptionFailStreak++;
+  if (colonyTranceptionFailStreak == 1 || colonyTranceptionFailStreak >= JANUS_TRANCEPTION_FAIL_STREAK_LIMIT) {
+    Serial.printf("[TRANCEPTION] NAS FAIL code=%d reason=%s streak=%u ok=%lu fail=%lu\n",
+                  code,
+                  reason ? reason : "-",
+                  (unsigned)colonyTranceptionFailStreak,
+                  (unsigned long)colonyTranceptionOk,
+                  (unsigned long)colonyTranceptionFail);
+  }
+  if (colonyTranceptionFailStreak >= JANUS_TRANCEPTION_FAIL_STREAK_LIMIT) {
+    colonyTranceptionHoldUntilMs = millis() + JANUS_TRANCEPTION_FAIL_COOLDOWN_MS;
+    Serial.printf("[TRANCEPTION] NAS circuit open cooldown=%lums\n",
+                  (unsigned long)JANUS_TRANCEPTION_FAIL_COOLDOWN_MS);
+  }
+}
+
+void tranceptionPullTick() {
+  uint32_t now = millis();
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (janusAudioNeedsRealtimeNow()) return;
+  if (janusThermalStop) return;
+  if (colonyTranceptionHoldUntilMs && now < colonyTranceptionHoldUntilMs) return;
+  if (now - colonyTranceptionLastPullMs < JANUS_TRANCEPTION_PULL_MS) return;
+  colonyTranceptionLastPullMs = now;
+
+  String url = String(JANUS_TRANCEPTION_URL) + "?node_id=" + String(BTC_WORKER) + "&limit=2";
+  HTTPClient http;
+  http.setConnectTimeout(JANUS_TRANCEPTION_HTTP_TIMEOUT_MS);
+  http.setTimeout(JANUS_TRANCEPTION_HTTP_TIMEOUT_MS);
+  if (!http.begin(url)) {
+    janusTranceptionFail(-1000, "begin");
+    return;
+  }
+
+  int code = http.GET();
+  String response = http.getString();
+  http.end();
+
+  if (code < 200 || code >= 300) {
+    janusTranceptionFail(code, "http");
+    return;
+  }
+
+  DynamicJsonDocument doc(4096);
+  DeserializationError err = deserializeJson(doc, response);
+  if (err) {
+    janusTranceptionFail(-1001, err.c_str());
+    return;
+  }
+
+  bool ok = doc["ok"] | false;
+  if (!ok) {
+    janusTranceptionFail(-1002, "json-ok-false");
+    return;
+  }
+
+  const char* modelName = doc["model"] | "janus_tranception_lite";
+  float topConf = doc["confidence"] | 0.0f;
+  JsonObject dir = doc["directive"].as<JsonObject>();
+  janusApplyTranceptionDirective(dir, topConf, modelName);
+  colonyTranceptionOk++;
+  colonyTranceptionFailStreak = 0;
+  colonyTranceptionHoldUntilMs = 0;
+}
+#endif
 #endif
 
 void colonyLogNodesToSd() {
@@ -2914,15 +3770,32 @@ uint16_t effectiveMiningBatch() {
   if (b < 260) b = 260;
   if (b > 1800) b = 1800;
 
-  // Audio first: keep the speaker alive during stream startup and normal playback.
-  if (millis() < audioCriticalUntilMs) {
-    if (b > 140) b = 140;
-  } else if (playing && !softPaused) {
-    if (b > 1050) b = 1050;
+  // Audio first, but never kill SHA completely.
+  // v10.11N3F3B: music must feel like the foreground task again. Buzz keeps a tiny
+  // honest SHA heartbeat, but stream startup/playback gets the CPU/Wi-Fi budget.
+  uint32_t audioNow = millis();
+  if (audioNow < audioCriticalUntilMs) {
+    uint32_t criticalLeft = audioCriticalUntilMs - audioNow;
+    uint16_t cap = (criticalLeft > 8000UL) ? JANUS_AUDIO_START_BATCH_CAP : JANUS_AUDIO_STALL_BATCH_CAP;
+    if (b > cap) b = cap;
+  } else if (audioNow < janusAudioFailCooldownUntilMs) {
+    if (b > JANUS_AUDIO_COOLDOWN_BATCH_CAP) b = JANUS_AUDIO_COOLDOWN_BATCH_CAP;
+  } else if (playing && !softPaused && !audioUserPaused) {
+    if (b > JANUS_AUDIO_PLAY_BATCH_CAP) b = JANUS_AUDIO_PLAY_BATCH_CAP;
   }
 
   // Weak Wi-Fi means Stratum needs more breathing room.
   if (WiFi.status() == WL_CONNECTED && WiFi.RSSI() < -75 && b > 700) b = 700;
+
+#if JANUS_BLACKBOARD_ENABLE
+  // Home Cortex policy is a pacing hint only. Never changes target/share validity.
+  uint32_t now = millis();
+  if (janusBBPolicyFresh(now)) {
+    if (janusBlackboardBuzzBudget == 0 && b > 760) b = 760;
+    else if (janusBlackboardBuzzBudget == 1 && b > 1000) b = 1000;
+    else if (janusBlackboardBuzzBudget >= 3 && b < 1200 && !janusAudioNeedsRealtimeNow()) b = 1200;
+  }
+#endif
   return b;
 }
 
@@ -3015,6 +3888,26 @@ void colonyProcessRxPacket(const uint8_t* srcMac, int8_t rssi, const uint8_t* da
     return;
   }
 
+  if (len == sizeof(JanusOxytokinPacket) && data[0] == 'O' && data[1] == 'X') {
+    colonyHandleOxytokinRaw(safeMac, rssi, data, len);
+    colonyRxCount++;
+    return;
+  }
+
+#if JANUS_BLACKBOARD_ENABLE
+  if (len == sizeof(JanusPolicyPacket) && data[0] == 'J' && data[1] == 'P') {
+    janusBBHandlePolicyRaw(data, rssi);
+    colonyRxCount++;
+    return;
+  }
+
+  if (len == sizeof(JanusEventPacket) && data[0] == 'J' && data[1] == 'E') {
+    janusBBRememberEventRaw(data, rssi);
+    colonyRxCount++;
+    return;
+  }
+
+#endif
   if (len == sizeof(JanusColonyPacket)) {
     JanusColonyPacket pkt{};
     memcpy(&pkt, data, sizeof(pkt));
@@ -3106,6 +3999,57 @@ void colonyProcessRxPacket(const uint8_t* srcMac, int8_t rssi, const uint8_t* da
     } else {
       colonyRemoteSharesDropped++;
     }
+    return;
+  }
+
+  if (len == sizeof(GladiusMemoryPacket) && data[0] == 'G' && data[1] == 'M') {
+    GladiusMemoryPacket gm{};
+    memcpy(&gm, data, sizeof(gm));
+    if (gm.version != 1) return;
+
+    colonyGladiusMemoryReports++;
+    colonyGladiusMemoryLastMs = receivedAt ? receivedAt : millis();
+    colonyGladiusMemoryEpoch = gm.memoryEpoch;
+    colonyGladiusLastJobId = gm.jobId;
+    colonyGladiusFlags = gm.flags;
+    colonyGladiusActiveLane = gm.activeLane;
+    colonyGladiusTopLane = gm.gexTopLane;
+    colonyGladiusTailX100 = gm.gexTailX100;
+    colonyGladiusConfidence = gm.gexConfidenceX100;
+    colonyGladiusWeightPct = gm.gexWeightPct;
+    colonyGladiusBestZ = gm.bestZ;
+    colonyGladiusTargetBits = gm.targetBits;
+
+    snprintf(colonyGladiusLine, sizeof(colonyGladiusLine),
+             "GLAD GEX %s top:%s x%.2f C%u W%u B%u",
+             buzzGladiusLaneName(gm.activeLane),
+             buzzGladiusLaneName(gm.gexTopLane),
+             (double)((float)gm.gexTailX100 / 100.0f),
+             (unsigned)gm.gexConfidenceX100,
+             (unsigned)gm.gexWeightPct,
+             (unsigned)gm.bestZ);
+
+    // Observe-only colony pressure. This never changes header/target/share validity.
+    if (gm.gexConfidenceX100 >= 60 && gm.gexTailX100 > 0 && colonyAiBatch < 1800) {
+      colonyAiBatch += 20;
+    } else if (gm.gexTailX100 < -50 && colonyAiBatch > 420) {
+      colonyAiBatch -= 20;
+    }
+
+    if ((colonyGladiusMemoryReports % 8UL) == 1UL || (gm.flags & 0x0014)) {
+      Serial.printf("[GLADIUS/GEX] node=%04X job=%08lX active=%s top=%s gex=%d conf=%u weight=%u best=%u flags=0x%04X\n",
+                    (unsigned)gm.nodeId,
+                    (unsigned long)gm.jobId,
+                    buzzGladiusLaneName(gm.activeLane),
+                    buzzGladiusLaneName(gm.gexTopLane),
+                    (int)gm.gexTailX100,
+                    (unsigned)gm.gexConfidenceX100,
+                    (unsigned)gm.gexWeightPct,
+                    (unsigned)gm.bestZ,
+                    (unsigned)gm.flags);
+    }
+
+    colonyRxCount++;
     return;
   }
 
@@ -3277,6 +4221,549 @@ void ensureColonyPeerChannel() {
 #endif
 }
 
+
+#if JANUS_BLACKBOARD_ENABLE
+uint8_t janusBBClampU8(int v) {
+  if (v < 0) return 0;
+  if (v > 100) return 100;
+  return (uint8_t)v;
+}
+
+uint16_t janusBBHash16(const char* s) {
+  uint32_t h = 2166136261UL;
+  if (!s) s = "";
+  while (*s) {
+    h ^= (uint8_t)(*s++);
+    h *= 16777619UL;
+  }
+  h ^= h >> 16;
+  return (uint16_t)(h & 0xFFFF);
+}
+
+const char* janusBBMoodName(uint8_t m) {
+  switch (m) {
+    case JM_QUIET: return "QUIET";
+    case JM_ALERT: return "ALERT";
+    case JM_EXPLORE: return "EXPLORE";
+    case JM_GUARD: return "GUARD";
+    case JM_RECOVER: return "RECOVER";
+    case JM_IDLE:
+    default: return "IDLE";
+  }
+}
+
+bool janusBBPolicyFresh(uint32_t now) {
+  return janusBlackboardLastPolicyMs && (now - janusBlackboardLastPolicyMs <= JANUS_BLACKBOARD_POLICY_TIMEOUT_MS);
+}
+
+uint8_t janusBBAttentionScore(uint8_t eventType, uint8_t confidence, uint8_t urgency) {
+  uint16_t score = (uint16_t)confidence / 2U + (uint16_t)urgency / 2U;
+  if (eventType == JE_DANGER || eventType == JE_SOLO_ACCEPT || eventType == JE_TASK_NEED) score += 35;
+  else if (eventType == JE_WIFI_WEAK || eventType == JE_LOW_HEAP || eventType == JE_SOLO_REJECT) score += 24;
+  else if (eventType == JE_HASH || eventType == JE_AI_MEMORY || eventType == JE_TASK_DONE) score += 10;
+  if (score > 100) score = 100;
+  return (uint8_t)score;
+}
+
+uint32_t janusBBFnvMix32(uint32_t h, const void* data, size_t len) {
+  const uint8_t* p = (const uint8_t*)data;
+  while (len--) {
+    h ^= *p++;
+    h *= 16777619UL;
+  }
+  return h;
+}
+
+static inline int16_t janusBBClampI16U32(uint32_t v) {
+  return (int16_t)((v > 32767UL) ? 32767 : v);
+}
+
+// Arduino .ino auto-prototype generator can place function prototypes before
+// JanusEventPacket is declared. Keep the public signature void* only.
+uint32_t janusBBEventFingerprintRaw(const void* rawPtr) {
+  if (!rawPtr) return 0xB00A1138UL;
+  const JanusEventPacket& ev = *(const JanusEventPacket*)rawPtr;
+  uint32_t h = 2166136261UL;
+  h = janusBBFnvMix32(h, &ev.version, sizeof(ev.version));
+  h = janusBBFnvMix32(h, &ev.eventType, sizeof(ev.eventType));
+  h = janusBBFnvMix32(h, &ev.nodeRole, sizeof(ev.nodeRole));
+  h = janusBBFnvMix32(h, &ev.confidence, sizeof(ev.confidence));
+  h = janusBBFnvMix32(h, &ev.urgency, sizeof(ev.urgency));
+  h = janusBBFnvMix32(h, ev.nodeId, sizeof(ev.nodeId));
+  h = janusBBFnvMix32(h, ev.kind, sizeof(ev.kind));
+  h = janusBBFnvMix32(h, &ev.seq, sizeof(ev.seq));
+  h = janusBBFnvMix32(h, &ev.uptimeMs, sizeof(ev.uptimeMs));
+  h = janusBBFnvMix32(h, &ev.topicHash, sizeof(ev.topicHash));
+  h = janusBBFnvMix32(h, &ev.objectHash, sizeof(ev.objectHash));
+  h = janusBBFnvMix32(h, &ev.capabilities, sizeof(ev.capabilities));
+  h = janusBBFnvMix32(h, &ev.valueA_x10, sizeof(ev.valueA_x10));
+  h = janusBBFnvMix32(h, &ev.valueB_x10, sizeof(ev.valueB_x10));
+  h = janusBBFnvMix32(h, &ev.valueC_x10, sizeof(ev.valueC_x10));
+  h = janusBBFnvMix32(h, &ev.valueD_x10, sizeof(ev.valueD_x10));
+  h = janusBBFnvMix32(h, &ev.ttlMs, sizeof(ev.ttlMs));
+  h ^= h >> 16;
+  return h ? h : 0xB00A1138UL;
+}
+
+void janusBBUpdateWorldState(uint32_t now) {
+  uint8_t active = 0, danger = 0, motion = 0, sound = 0;
+  uint32_t lastDanger = 0;
+
+  portENTER_CRITICAL(&janusBlackboardMux);
+  for (uint8_t i = 0; i < JANUS_BLACKBOARD_MIRROR_SLOTS; i++) {
+    JanusBlackboardMirrorSlot& s = janusBlackboardMirror[i];
+    if (!s.used) continue;
+    active++;
+    if (s.nodeRole == JR_CORE && s.lastMs > janusBuzzWorld.lastCoreMs) janusBuzzWorld.lastCoreMs = s.lastMs;
+    if (s.eventType == JE_DANGER || s.urgency >= 88) { danger++; if (s.lastMs > lastDanger) lastDanger = s.lastMs; }
+    if (s.eventType == JE_MOTION || s.eventType == JE_PRESENCE) motion++;
+    if (s.eventType == JE_SOUND) sound++;
+  }
+  portEXIT_CRITICAL(&janusBlackboardMux);
+
+  uint32_t freeHeap = ESP.getFreeHeap();
+  int rssi = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+  bool policyFresh = janusBBPolicyFresh(now);
+  bool remoteBacklog = colonyRemoteShareQueue && uxQueueMessagesWaiting(colonyRemoteShareQueue) >= 4;
+  bool noWorkers = stratumConnected && colonyOnlineNodeCount() == 0;
+  bool weakRadio = (WiFi.status() != WL_CONNECTED) || (rssi < -76) || janusWifiFailLevel >= 2;
+  bool heapLow = freeHeap < 80000UL;
+  bool thermalWarn = janusThermalStop || (!isnan(janusChipTempC) && janusChipTempC >= JANUS_THERMAL_WARN_C);
+
+  uint16_t stress = 0;
+  if (weakRadio) stress += 24;
+  if (heapLow) stress += 18;
+  if (remoteBacklog) stress += 16;
+  if (noWorkers) stress += 14;
+  if (thermalWarn) stress += 32;
+  if (!policyFresh) stress += 10;
+  if (janusBlackboardDangerX100 > 60) stress += 10;
+  if (stress > 100) stress = 100;
+
+  uint8_t oldFatigue = janusBuzzWorld.fatigue;
+  if (stress > 45 || janusAudioNeedsRealtimeNow()) {
+    uint8_t add = (stress > 80) ? 3 : 1;
+    janusBuzzWorld.fatigue = (uint8_t)min(100, (int)janusBuzzWorld.fatigue + add);
+  } else if (janusBuzzWorld.fatigue > 0) {
+    janusBuzzWorld.fatigue--;
+  }
+  (void)oldFatigue;
+
+  janusBuzzWorld.cortexOnline = policyFresh || (janusBuzzWorld.lastCoreMs && now - janusBuzzWorld.lastCoreMs < 45000UL);
+  janusBuzzWorld.dangerActive = janusThermalStop || danger > 0 || janusBlackboardDangerX100 >= 70;
+  janusBuzzWorld.motionNearby = motion > 0;
+  janusBuzzWorld.audioAlert = sound > 0;
+  janusBuzzWorld.workersNeeded = noWorkers || weakRadio || heapLow || remoteBacklog || janusThermalStop || (!policyFresh && stratumConnected);
+  janusBuzzWorld.relayPressure = remoteBacklog || (colonyKnownNodes > 0 && colonyOnlineNodes == 0);
+  janusBuzzWorld.swarmTrust = janusBBClampU8((int)(policyFresh ? janusBlackboardPolicyConfidence : 30) - (weakRadio ? 18 : 0) - (!policyFresh ? 22 : 0));
+  janusBuzzWorld.localStress = (uint8_t)stress;
+  janusBuzzWorld.health = janusBBClampU8(100 - (int)stress / 2 - (int)janusBuzzWorld.fatigue / 3 - (thermalWarn ? 20 : 0));
+  janusBuzzWorld.mirrorActive = active;
+  janusBuzzWorld.mirrorDanger = danger;
+  janusBuzzWorld.mirrorMotion = motion;
+  janusBuzzWorld.mirrorSound = sound;
+  if (lastDanger) janusBuzzWorld.lastDangerMs = lastDanger;
+}
+
+void janusBBSaveMirrorDigest(bool force) {
+#if JANUS_SD_ENABLE
+  if (!janusSdReady) return;
+  uint32_t now = millis();
+  if (!force && now - janusBuzzWorld.lastDigestSaveMs < JANUS_BLACKBOARD_DIGEST_SAVE_MS) return;
+  if (!force && janusAudioNeedsRealtimeNow()) return;
+  janusBuzzWorld.lastDigestSaveMs = now;
+  if (!janusSdLock(force ? 140 : 35)) return;
+  File f = SD_MMC.open(JANUS_BLACKBOARD_DIGEST_FILE, FILE_WRITE);
+  if (f) {
+    f.println("version,updated_ms,cortex,danger,motion,sound,workers_needed,stress,fatigue,health,trust,mirror,policy_rx,event_tx,event_rx,event_drop,last_order");
+    f.printf("1,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%lu,%s\n",
+             (unsigned long)now,
+             janusBuzzWorld.cortexOnline ? 1 : 0,
+             janusBuzzWorld.dangerActive ? 1 : 0,
+             janusBuzzWorld.motionNearby ? 1 : 0,
+             janusBuzzWorld.audioAlert ? 1 : 0,
+             janusBuzzWorld.workersNeeded ? 1 : 0,
+             (unsigned)janusBuzzWorld.localStress,
+             (unsigned)janusBuzzWorld.fatigue,
+             (unsigned)janusBuzzWorld.health,
+             (unsigned)janusBuzzWorld.swarmTrust,
+             (unsigned)janusBuzzWorld.mirrorActive,
+             (unsigned long)janusBlackboardPolicyRx,
+             (unsigned long)janusBlackboardEventTx,
+             (unsigned long)janusBlackboardEventRx,
+             (unsigned long)janusBlackboardEventDropped,
+             janusBlackboardOrder);
+    f.close();
+    janusBuzzWorld.digestSaves++;
+  }
+  janusSdUnlock();
+#else
+  (void)force;
+#endif
+}
+
+void janusBBRememberEventRaw(const void* rawPtr, int8_t rxRssi) {
+  if (!rawPtr) return;
+  const JanusEventPacket& ev = *(const JanusEventPacket*)rawPtr;
+  if (ev.magic[0] != 'J' || ev.magic[1] != 'E' || ev.version != 1) return;
+  if (!ev.nodeId[0] || !strncmp(ev.nodeId, BTC_WORKER, sizeof(ev.nodeId))) return;
+
+  uint32_t now = millis();
+  uint32_t computedHash = janusBBEventFingerprintRaw(&ev);
+  uint32_t canonicalHash = ev.eventHash ? ev.eventHash : computedHash;
+  if (ev.eventHash && ev.eventHash != computedHash) janusBlackboardEventCrcWeak++;
+  uint8_t slot = 0;
+  bool found = false;
+  uint32_t oldestMs = 0xFFFFFFFFUL;
+
+  portENTER_CRITICAL(&janusBlackboardMux);
+  for (uint8_t i = 0; i < JANUS_BLACKBOARD_MIRROR_SLOTS; i++) {
+    JanusBlackboardMirrorSlot& s = janusBlackboardMirror[i];
+    if (s.used && s.eventHash == canonicalHash && s.seq == ev.seq && !strncmp(s.nodeId, ev.nodeId, sizeof(s.nodeId))) {
+      slot = i;
+      found = true;
+      break;
+    }
+    if (!s.used) {
+      slot = i;
+      oldestMs = 0;
+      found = false;
+      break;
+    }
+    if (s.lastMs < oldestMs) {
+      oldestMs = s.lastMs;
+      slot = i;
+    }
+  }
+
+  JanusBlackboardMirrorSlot& dst = janusBlackboardMirror[slot];
+  bool duplicate = dst.used && dst.eventHash == canonicalHash && dst.seq == ev.seq && !strncmp(dst.nodeId, ev.nodeId, sizeof(dst.nodeId));
+  if (!duplicate) {
+    dst.used = true;
+    dst.eventType = ev.eventType;
+    dst.nodeRole = ev.nodeRole;
+    dst.confidence = ev.confidence;
+    dst.urgency = ev.urgency;
+    dst.rssi = rxRssi;
+    strlcpy(dst.nodeId, ev.nodeId, sizeof(dst.nodeId));
+    strlcpy(dst.kind, ev.kind, sizeof(dst.kind));
+    dst.seq = ev.seq;
+    dst.lastMs = now;
+    dst.ttlMs = ev.ttlMs ? ev.ttlMs : JANUS_BLACKBOARD_EVENT_TTL_MS;
+    dst.eventHash = canonicalHash;
+    dst.topicHash = ev.topicHash;
+    dst.objectHash = ev.objectHash;
+    dst.capabilities = ev.capabilities;
+    dst.valueA_x10 = ev.valueA_x10;
+    dst.valueB_x10 = ev.valueB_x10;
+    dst.valueC_x10 = ev.valueC_x10;
+    dst.valueD_x10 = ev.valueD_x10;
+    janusBlackboardEventMerged++;
+  }
+  portEXIT_CRITICAL(&janusBlackboardMux);
+
+  janusBlackboardEventRx++;
+  if (!duplicate && (ev.eventType == JE_DANGER || ev.eventType == JE_SOLO_ACCEPT || ev.eventType == JE_LOW_HEAP || ev.urgency >= 80)) {
+    Serial.printf("[BLACKBOARD/BUZZ] mirror node=%s kind=%s type=%u conf=%u urg=%u a=%d b=%d c=%d rssi=%d rx=%lu\n",
+                  ev.nodeId, ev.kind, (unsigned)ev.eventType, (unsigned)ev.confidence, (unsigned)ev.urgency,
+                  (int)ev.valueA_x10, (int)ev.valueB_x10, (int)ev.valueC_x10, (int)rxRssi,
+                  (unsigned long)janusBlackboardEventRx);
+    janusSdLogf("BLACKBOARD_RX", "node=%s kind=%s type=%u conf=%u urg=%u a=%d b=%d c=%d rssi=%d",
+                ev.nodeId, ev.kind, (unsigned)ev.eventType, (unsigned)ev.confidence, (unsigned)ev.urgency,
+                (int)ev.valueA_x10, (int)ev.valueB_x10, (int)ev.valueC_x10, (int)rxRssi);
+  }
+}
+
+void janusBBHandlePolicyRaw(const void* rawPtr, int8_t rxRssi) {
+  if (!rawPtr) return;
+  const JanusPolicyPacket& jp = *(const JanusPolicyPacket*)rawPtr;
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+
+  uint32_t now = millis();
+  janusBlackboardPolicyRx++;
+  janusBlackboardLastPolicyMs = now;
+  janusBlackboardMood = jp.swarmMood;
+  janusBlackboardRadioRate = jp.radioRate;
+  janusBlackboardBuzzBudget = jp.buzzBudget;
+  janusBlackboardSensorRate = jp.sensorRate;
+  janusBlackboardPolicyConfidence = jp.confidence;
+  janusBlackboardDangerX100 = jp.danger_x100;
+  // v10.11N3F: Core2/Buzz millis() domains are different. Treat quietUntilMs as a duration.
+  if (jp.quietUntilMs) janusBlackboardQuietUntilMs = now + min((uint32_t)jp.quietUntilMs, (uint32_t)JANUS_BLACKBOARD_QUIET_MAX_MS);
+  else janusBlackboardQuietUntilMs = 0;
+  janusBuzzWorld.lastCoreMs = now;
+  strlcpy(janusBlackboardOrder, jp.order, sizeof(janusBlackboardOrder));
+
+  // Policy shapes pacing only. It never weakens Stratum target verification.
+  if (jp.buzzBudget == 0 && colonyAiBatch > 760) colonyAiBatch = 760;
+  else if (jp.buzzBudget == 1 && colonyAiBatch > 1000) colonyAiBatch = 1000;
+  else if (jp.buzzBudget >= 3 && colonyAiBatch < 1200) colonyAiBatch = 1200;
+
+  Serial.printf("[BLACKBOARD/BUZZ] policy rx=%lu mood=%s radio=%u buzz=%u sensor=%u conf=%u danger=%.2f quietFor=%lu rssi=%d order=%s\n",
+                (unsigned long)janusBlackboardPolicyRx,
+                janusBBMoodName(jp.swarmMood),
+                (unsigned)jp.radioRate,
+                (unsigned)jp.buzzBudget,
+                (unsigned)jp.sensorRate,
+                (unsigned)jp.confidence,
+                (float)jp.danger_x100 / 100.0f,
+                (unsigned long)(janusBlackboardQuietUntilMs > now ? janusBlackboardQuietUntilMs - now : 0),
+                (int)rxRssi,
+                janusBlackboardOrder);
+}
+
+bool janusBBEmitEvent(uint8_t eventType,
+                      const char* kind,
+                      uint8_t confidence,
+                      uint8_t urgency,
+                      uint16_t topicHash,
+                      uint16_t objectHash,
+                      int16_t a,
+                      int16_t b,
+                      int16_t c,
+                      int16_t d,
+                      uint32_t ttlMs,
+                      bool force) {
+  if (!janusColonyEspNowActive || WiFi.status() != WL_CONNECTED) return false;
+
+  uint32_t now = millis();
+  uint8_t att = janusBBAttentionScore(eventType, confidence, urgency);
+  janusBlackboardLastAttention = att;
+
+  if (!force && janusBBPolicyFresh(now)) {
+    if (janusBlackboardQuietUntilMs && now < janusBlackboardQuietUntilMs && att < 85) {
+      janusBlackboardEventDropped++;
+      return false;
+    }
+    if (janusBlackboardRadioRate == 0 && att < 60) {
+      janusBlackboardEventDropped++;
+      return false;
+    }
+  }
+
+  ensureColonyPeerChannel();
+
+  JanusEventPacket ev{};
+  ev.magic[0] = 'J'; ev.magic[1] = 'E';
+  ev.version = 1;
+  ev.eventType = eventType;
+  ev.nodeRole = JR_BUZZ;
+  ev.confidence = confidence;
+  ev.urgency = urgency;
+  strlcpy(ev.nodeId, BTC_WORKER, sizeof(ev.nodeId));
+  strlcpy(ev.kind, kind ? kind : "buzz_master", sizeof(ev.kind));
+  ev.seq = ++janusBlackboardEventSeq;
+  ev.uptimeMs = now;
+  ev.topicHash = topicHash;
+  ev.objectHash = objectHash;
+  ev.capabilities = JC_HASH | JC_AUDIO | JC_RELAY | JC_MEMORY | JC_RF | JC_AI;
+  ev.valueA_x10 = a;
+  ev.valueB_x10 = b;
+  ev.valueC_x10 = c;
+  ev.valueD_x10 = d;
+  ev.ttlMs = ttlMs ? ttlMs : JANUS_BLACKBOARD_EVENT_TTL_MS;
+  ev.eventHash = janusBBEventFingerprintRaw(&ev);
+
+  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&ev, sizeof(ev));
+  if (err == ESP_OK) {
+    janusBlackboardEventTx++;
+    if (force || eventType == JE_SOLO_ACCEPT || eventType == JE_SOLO_REJECT || eventType == JE_LOW_HEAP || eventType == JE_DANGER) {
+      Serial.printf("[BLACKBOARD/BUZZ] tx=%lu type=%u att=%u conf=%u urg=%u H=%lu best=%lu shares=%lu policy=%s/%u\n",
+                    (unsigned long)janusBlackboardEventTx,
+                    (unsigned)eventType,
+                    (unsigned)att,
+                    (unsigned)confidence,
+                    (unsigned)urgency,
+                    (unsigned long)minerRealHashrate,
+                    (unsigned long)minerBestBits,
+                    (unsigned long)minerShares,
+                    janusBBMoodName(janusBlackboardMood),
+                    (unsigned)janusBlackboardBuzzBudget);
+    }
+    return true;
+  }
+
+  janusBlackboardEventFail++;
+  return false;
+}
+
+void janusBBExpireMirror(uint32_t now) {
+  portENTER_CRITICAL(&janusBlackboardMux);
+  for (uint8_t i = 0; i < JANUS_BLACKBOARD_MIRROR_SLOTS; i++) {
+    JanusBlackboardMirrorSlot& s = janusBlackboardMirror[i];
+    if (s.used && now - s.lastMs > (s.ttlMs ? s.ttlMs : JANUS_BLACKBOARD_EVENT_TTL_MS)) {
+      s.used = false;
+    }
+  }
+  portEXIT_CRITICAL(&janusBlackboardMux);
+}
+
+void janusBlackboardTick() {
+  uint32_t now = millis();
+  janusBBExpireMirror(now);
+
+  // v10.11N3F1A: world-state/metabolism must tick on its own cadence.
+  // Do not call janusBBUpdateWorldState() every loop; otherwise fatigue/health
+  // can drift too fast during audio realtime or high-stress radio periods.
+  if (!janusBlackboardLastWorldMs ||
+      now - janusBlackboardLastWorldMs >= JANUS_BLACKBOARD_WORLD_MS) {
+    janusBlackboardLastWorldMs = now;
+    janusBBUpdateWorldState(now);
+  }
+
+  uint32_t totalH = minerRealHashrate + minerLocalHashrate;
+  uint32_t freeKb = ESP.getFreeHeap() / 1024UL;
+  uint8_t policyFresh = janusBBPolicyFresh(now) ? 1 : 0;
+  int rssiNow = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+
+  if (now - janusBlackboardLastHeartbeatMs >= JANUS_BLACKBOARD_HEARTBEAT_MS) {
+    janusBlackboardLastHeartbeatMs = now;
+    uint8_t conf = stratumConnected ? 84 : (WiFi.status() == WL_CONNECTED ? 58 : 25);
+    uint8_t urg = (janusThermalStop || WiFi.status() != WL_CONNECTED || janusBuzzWorld.localStress > 70) ? 82 : 24;
+    janusBBEmitEvent(JE_HEARTBEAT, "buzz_audio_hash_master", conf, urg,
+                     janusBBHash16("buzz-heartbeat"), janusBBHash16(BTC_WORKER),
+                     janusBBClampI16U32((uint32_t)(totalH / 10UL)),
+                     janusBBClampI16U32((uint32_t)minerBestBits),
+                     janusBBClampI16U32((uint32_t)minerShares),
+                     janusBBClampI16U32((uint32_t)freeKb),
+                     JANUS_BLACKBOARD_EVENT_TTL_MS, false);
+  }
+
+  if (now - janusBlackboardLastHashMs >= JANUS_BLACKBOARD_HASH_MS) {
+    janusBlackboardLastHashMs = now;
+    uint8_t conf = (uint8_t)min(100UL, (uint32_t)55 + min(45UL, totalH / 500UL));
+    uint8_t urg = (minerShareTargetBits > 0 && minerBestBits >= minerShareTargetBits) ? 90 : 38;
+    janusBBEmitEvent(JE_HASH, "buzz_stratum_colony", conf, urg,
+                     janusBBHash16("hash"), janusBBHash16(minerStatus),
+                     janusBBClampI16U32((uint32_t)(totalH / 10UL)),
+                     janusBBClampI16U32((uint32_t)minerBestBits),
+                     janusBBClampI16U32((uint32_t)minerShareTargetBits),
+                     janusBBClampI16U32((uint32_t)colonyBestPeerBits),
+                     JANUS_BLACKBOARD_EVENT_TTL_MS, false);
+  }
+
+  if (WiFi.status() == WL_CONNECTED && WiFi.RSSI() < -74) {
+    static uint32_t lastWeakMs = 0;
+    if (now - lastWeakMs > 12000UL) {
+      lastWeakMs = now;
+      janusBBEmitEvent(JE_WIFI_WEAK, "buzz_radio", 78, 68,
+                       janusBBHash16("wifi"), janusBBHash16("rssi"),
+                       (int16_t)WiFi.RSSI(), (int16_t)currentWifiChannel(), (int16_t)janusWifiFailLevel, 0,
+                       22000UL, false);
+    }
+  }
+
+  if (ESP.getFreeHeap() < 70000UL) {
+    static uint32_t lastHeapMs = 0;
+    if (now - lastHeapMs > 12000UL) {
+      lastHeapMs = now;
+      janusBBEmitEvent(JE_LOW_HEAP, "buzz_memory", 86, 82,
+                       janusBBHash16("heap"), janusBBHash16("buzz"),
+                       (int16_t)freeKb, (int16_t)(ESP.getMinFreeHeap() / 1024UL), 0, 0,
+                       30000UL, true);
+    }
+  }
+
+  if (janusThermalStop) {
+    static uint32_t lastThermalMs = 0;
+    if (now - lastThermalMs > 7000UL) {
+      lastThermalMs = now;
+      janusBBEmitEvent(JE_DANGER, "buzz_thermal_guard", 95, 96,
+                       janusBBHash16("thermal"), janusBBHash16("buzz"),
+                       (int16_t)(janusChipTempC * 10.0f), (int16_t)janusPortTempRaw,
+                       (int16_t)ledBright, 0, 16000UL, true);
+    }
+  }
+
+  // v10.11N3F: Buzz is now an active organ. It can ask the cortex/swarm for help.
+  if (janusBuzzWorld.workersNeeded && now - janusBuzzWorld.lastTaskNeedMs >= JANUS_BLACKBOARD_TASK_NEED_MS) {
+    janusBuzzWorld.lastTaskNeedMs = now;
+    const char* needKind = "buzz_needs_quiet";
+    uint16_t objectHash = janusBBHash16("quiet");
+    uint8_t needUrg = 70;
+    if (janusThermalStop) { needKind = "buzz_needs_cooling"; objectHash = janusBBHash16("cooling"); needUrg = 96; }
+    else if (stratumConnected && colonyOnlineNodeCount() == 0) { needKind = "buzz_needs_workers"; objectHash = janusBBHash16("workers"); needUrg = 72; }
+    else if (WiFi.status() != WL_CONNECTED || rssiNow < -76 || janusWifiFailLevel >= 2) { needKind = "buzz_needs_relay"; objectHash = janusBBHash16("relay"); needUrg = 76; }
+    else if (ESP.getFreeHeap() < 80000UL) { needKind = "buzz_needs_memory"; objectHash = janusBBHash16("memory"); needUrg = 78; }
+    else if (!policyFresh && stratumConnected) { needKind = "buzz_needs_cortex"; objectHash = janusBBHash16("cortex"); needUrg = 74; }
+
+    janusBBEmitEvent(JE_TASK_NEED, needKind,
+                     janusBuzzWorld.health > 50 ? 82 : 92,
+                     needUrg,
+                     janusBBHash16("task-need"), objectHash,
+                     (int16_t)janusBuzzWorld.localStress,
+                     (int16_t)janusBuzzWorld.health,
+                     (int16_t)rssiNow,
+                     (int16_t)((colonyOnlineNodes << 8) | colonyKnownNodes),
+                     22000UL, janusThermalStop || needUrg >= 90);
+  }
+
+  if (!janusBuzzWorld.workersNeeded && stratumConnected && janusBuzzWorld.localStress < 36 &&
+      now - janusBuzzWorld.lastTaskDoneMs >= JANUS_BLACKBOARD_TASK_DONE_MS) {
+    janusBuzzWorld.lastTaskDoneMs = now;
+    janusBBEmitEvent(JE_TASK_DONE, "buzz_world_stable", 78, 34,
+                     janusBBHash16("task-done"), janusBBHash16("stable"),
+                     (int16_t)janusBuzzWorld.localStress,
+                     (int16_t)janusBuzzWorld.health,
+                     (int16_t)colonyOnlineNodes,
+                     (int16_t)policyFresh,
+                     22000UL, false);
+  }
+
+  if (now - janusBlackboardLastMemoryMs >= JANUS_BLACKBOARD_MEMORY_MS) {
+    janusBlackboardLastMemoryMs = now;
+    uint8_t mirrorActive = janusBuzzWorld.mirrorActive;
+
+    janusBBEmitEvent(JE_AI_MEMORY, "buzz_memory_mirror", 72, 34,
+                     janusBBHash16("memory"), janusBBHash16("mirror"),
+                     (int16_t)mirrorActive,
+                     (int16_t)colonyKnownNodes,
+                     (int16_t)colonyOnlineNodes,
+                     (int16_t)policyFresh,
+                     30000UL, false);
+
+    janusBBSaveMirrorDigest(false);
+
+    Serial.printf("[BLACKBOARD/BUZZ] stat tx=%lu rx=%lu merge=%lu drop=%lu fail=%lu crcWeak=%lu mirror=%u pol=%lu mood=%s budget=%u att=%u stress=%u fatigue=%u health=%u trust=%u need=%u danger=%u digest=%lu order=%s\n",
+                  (unsigned long)janusBlackboardEventTx,
+                  (unsigned long)janusBlackboardEventRx,
+                  (unsigned long)janusBlackboardEventMerged,
+                  (unsigned long)janusBlackboardEventDropped,
+                  (unsigned long)janusBlackboardEventFail,
+                  (unsigned long)janusBlackboardEventCrcWeak,
+                  (unsigned)mirrorActive,
+                  (unsigned long)janusBlackboardPolicyRx,
+                  janusBBMoodName(janusBlackboardMood),
+                  (unsigned)janusBlackboardBuzzBudget,
+                  (unsigned)janusBlackboardLastAttention,
+                  (unsigned)janusBuzzWorld.localStress,
+                  (unsigned)janusBuzzWorld.fatigue,
+                  (unsigned)janusBuzzWorld.health,
+                  (unsigned)janusBuzzWorld.swarmTrust,
+                  janusBuzzWorld.workersNeeded ? 1U : 0U,
+                  janusBuzzWorld.dangerActive ? 1U : 0U,
+                  (unsigned long)janusBuzzWorld.digestSaves,
+                  janusBlackboardOrder);
+  }
+}
+
+#else
+uint16_t janusBBHash16(const char* s) { (void)s; return 0; }
+const char* janusBBMoodName(uint8_t m) { (void)m; return "-"; }
+bool janusBBPolicyFresh(uint32_t now) { (void)now; return false; }
+bool janusBBEmitEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                      uint16_t topicHash, uint16_t objectHash, int16_t a, int16_t b, int16_t c, int16_t d,
+                      uint32_t ttlMs, bool force) {
+  (void)eventType; (void)kind; (void)confidence; (void)urgency; (void)topicHash; (void)objectHash;
+  (void)a; (void)b; (void)c; (void)d; (void)ttlMs; (void)force;
+  return false;
+}
+void janusBBHandlePolicyRaw(const void* rawPtr, int8_t rxRssi) { (void)rawPtr; (void)rxRssi; }
+void janusBBRememberEventRaw(const void* rawPtr, int8_t rxRssi) { (void)rawPtr; (void)rxRssi; }
+void janusBlackboardTick() {}
+#endif
+
+
 void initColonyNow() {
 #if JANUS_COLONY_ENABLE
   if (!xColonyJobLock) xColonyJobLock = xSemaphoreCreateMutex();
@@ -3307,6 +4794,10 @@ void initColonyNow() {
 #if JANUS_SWARMSENSE_ENABLE
   Serial.printf("[SWARMSENSE] observe bridge ready: queue=%u nas=%s apply=0\n",
                 (unsigned)JANUS_SWARMSENSE_QUEUE, JANUS_SWARMSENSE_NAS_URL);
+#if JANUS_TRANCEPTION_PULL_ENABLE
+  Serial.printf("[TRANCEPTION] pull ready: url=%s node=%s apply=batch-only\n",
+                JANUS_TRANCEPTION_URL, BTC_WORKER);
+#endif
 #endif
 #endif
 }
@@ -3549,6 +5040,10 @@ void colonyTick() {
   // agent reward, SD logging, control commands, and share snapshot work are allowed.
   colonyDrainRxQueue(janusAudioNeedsRealtimeNow() ? 2 : 8);
   swarmSenseTick();
+#if JANUS_SWARMSENSE_ENABLE && JANUS_TRANCEPTION_PULL_ENABLE
+  tranceptionPullTick();
+#endif
+  janusBlackboardTick();
 
   if (colonyMasterClearPending) {
     colonyClearMasterJob("pending-clear");
@@ -3585,6 +5080,78 @@ void minerClassifyReject(const char* errText) {
   }
 }
 
+// v10.11N3F1F: deep radio reset used only by the farm blackout fuse.
+// It is intentionally separate from janusWifiKickGuarded(): the normal guard may
+// sit in a long cooldown while the farm has H=0 and no colony job to distribute.
+void janusFarmBlackoutHardWifiReset(const char* reason) {
+  uint32_t now = millis();
+  minerFarmBlackoutHardResets++;
+  Serial.printf("[MINER] FARM BLACKOUT HARD WIFI RESET #%lu reason=%s wifi=%d ch=%u H=%lu pool=%d status=%s\n",
+                (unsigned long)minerFarmBlackoutHardResets,
+                reason ? reason : "-",
+                (int)WiFi.status(),
+                (unsigned)currentWifiChannel(),
+                (unsigned long)minerRealHashrate,
+                stratumConnected ? 1 : 0,
+                minerStatus);
+  janusSdLogf("FARM_BLACKOUT", "hard_wifi_reset n=%lu reason=%s wifi=%d ch=%u H=%lu pool=%d status=%s",
+              (unsigned long)minerFarmBlackoutHardResets,
+              reason ? reason : "-",
+              (int)WiFi.status(),
+              (unsigned)currentWifiChannel(),
+              (unsigned long)minerRealHashrate,
+              stratumConnected ? 1 : 0,
+              minerStatus);
+
+#if JANUS_COLONY_ENABLE
+  if (janusColonyEspNowActive) {
+    esp_now_deinit();
+    janusColonyEspNowActive = false;
+  }
+  colonyPeerChannel = 0;
+  colonyLastChannelFixMs = 0;
+#endif
+
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+  delay(250);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  minerWifiReconnects++;
+  janusWifiStormCount = 0;
+  janusWifiStormSinceMs = now;
+  janusWifiFailLevel = 1;
+  janusWifiNextKickMs = millis() + 15000UL;
+  strlcpy(minerStatus, "WIFI_RST", sizeof(minerStatus));
+}
+
+bool janusFarmHadLiveWork() {
+  return (minerPoolLastJobReadyMs != 0) || (minerLastJobMs != 0) || (minerTotalHashes > janusFarmBootHashes) || (minerShares > janusFarmBootShares);
+}
+
+void janusFarmBlackoutMaybeRestart(uint32_t now, uint32_t blackoutMs, const char* reason) {
+  if (blackoutMs < JANUS_FARM_BLACKOUT_RESTART_MS) return;
+  minerFarmBlackoutRestarts++;
+  Serial.printf("[MINER] FARM BLACKOUT FINAL RESTART n=%lu blackout=%lums reason=%s H=%lu pool=%d status=%s\n",
+                (unsigned long)minerFarmBlackoutRestarts,
+                (unsigned long)blackoutMs,
+                reason ? reason : "-",
+                (unsigned long)minerRealHashrate,
+                stratumConnected ? 1 : 0,
+                minerStatus);
+  janusSdLogf("FARM_BLACKOUT", "final_restart n=%lu blackoutMs=%lu reason=%s H=%lu pool=%d status=%s",
+              (unsigned long)minerFarmBlackoutRestarts,
+              (unsigned long)blackoutMs,
+              reason ? reason : "-",
+              (unsigned long)minerRealHashrate,
+              stratumConnected ? 1 : 0,
+              minerStatus);
+  janusFarmSaveState(true);
+  delay(120);
+  ESP.restart();
+}
+
 
 void microMinerTask(void *pvParameters) {
   WiFiClient client;
@@ -3609,13 +5176,28 @@ void microMinerTask(void *pvParameters) {
   bool authorized = false;
   uint8_t stratumDebugLines = 0;
 
+  // v10.11N3F1B: local Stratum liveness fuse.
+  // These timers live inside the miner task because client/jobReady/authorized are local.
+  uint32_t poolLastHashProgressMs = millis();
+  uint32_t poolLastTotalProgressMs = poolLastHashProgressMs;
+  uint64_t poolLastTotalHashSnap = minerTotalHashes;
+  uint32_t poolLastWatchdogMs = 0;
+  uint32_t farmBlackoutSinceMs = 0;
+  uint32_t farmLastRecoveryMs = 0;
+  uint8_t farmBlackoutEscalation = 0;
+  minerPoolLastHashProgressMs = poolLastHashProgressMs;
+  minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+  minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
+
   setShareTargetFromDifficulty(1.0f);
 
   while(true) {
-    // Give Audio.h exclusive breathing room during codec/stream startup.
+    // Audio.h startup gets priority, but SHA must keep ticking.
+    // v10.11N3F3B: yield harder here so the audio task, Wi-Fi and heap cleanup
+    // get a real runway instead of fighting a full miner batch.
     if (millis() < audioCriticalUntilMs) {
-      vTaskDelay(pdMS_TO_TICKS(25));
-      continue;
+      if (stratumConnected && authorized && jobReady) strlcpy(minerStatus, "AUDIO", sizeof(minerStatus));
+      vTaskDelay(pdMS_TO_TICKS(6));
     }
 
     if (janusThermalStop) {
@@ -3641,6 +5223,43 @@ void microMinerTask(void *pvParameters) {
       minerRealHashrate = 0;
       minerLocalHashrate = 0;
       strlcpy(minerStatus, "WIFI", sizeof(minerStatus));
+
+      uint32_t nowWifi = millis();
+      if (janusFarmHadLiveWork()) {
+        if (!farmBlackoutSinceMs) farmBlackoutSinceMs = nowWifi;
+        minerFarmBlackoutSinceMs = farmBlackoutSinceMs;
+        uint32_t blackoutMs = nowWifi - farmBlackoutSinceMs;
+        if (blackoutMs >= JANUS_FARM_BLACKOUT_WIFI_MS &&
+            nowWifi - farmLastRecoveryMs >= JANUS_FARM_BLACKOUT_RECOVERY_MS) {
+          farmLastRecoveryMs = nowWifi;
+          minerFarmLastRecoveryMs = nowWifi;
+          minerFarmBlackoutWatchdogs++;
+          farmBlackoutEscalation++;
+          Serial.printf("[MINER] FARM BLACKOUT WIFI watchdog=%lu blackout=%lums esc=%u H=0 workers=%u/%u status=%s -> recovery\n",
+                        (unsigned long)minerFarmBlackoutWatchdogs,
+                        (unsigned long)blackoutMs,
+                        (unsigned)farmBlackoutEscalation,
+                        (unsigned)colonyOnlineNodeCount(),
+                        (unsigned)colonyKnownNodes,
+                        minerStatus);
+          janusSdLogf("FARM_BLACKOUT", "wifi blackoutMs=%lu esc=%u workers=%u/%u status=%s",
+                      (unsigned long)blackoutMs,
+                      (unsigned)farmBlackoutEscalation,
+                      (unsigned)colonyOnlineNodeCount(),
+                      (unsigned)colonyKnownNodes,
+                      minerStatus);
+          poolReconnectHoldUntilMs = nowWifi + 2000UL;
+          janusWifiNextKickMs = 0;
+          if (farmBlackoutEscalation >= JANUS_FARM_BLACKOUT_HARD_RESET_AFTER) {
+            janusFarmBlackoutHardWifiReset("wifi-starvation");
+            farmBlackoutEscalation = 0;
+          } else {
+            janusWifiKickGuarded("farm-blackout-wifi");
+          }
+          janusFarmBlackoutMaybeRestart(nowWifi, blackoutMs, "wifi-starvation");
+        }
+      }
+
       lastWifiKickMs = millis();
       janusWifiKickGuarded("miner-wifi-lost");
       vTaskDelay(pdMS_TO_TICKS(500));
@@ -3655,9 +5274,48 @@ void microMinerTask(void *pvParameters) {
       colonyClearMasterJob("pool-disconnect");
       authorized = false;
       minerLocalFallback = false;
+      poolLastHashProgressMs = millis();
+      poolLastTotalProgressMs = poolLastHashProgressMs;
+      poolLastTotalHashSnap = minerTotalHashes;
+      minerPoolLastHashProgressMs = poolLastHashProgressMs;
+      minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+      minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
       strlcpy(minerStatus, "POOL", sizeof(minerStatus));
 
       uint32_t nowPool = millis();
+      if (janusFarmHadLiveWork()) {
+        if (!farmBlackoutSinceMs) farmBlackoutSinceMs = nowPool;
+        minerFarmBlackoutSinceMs = farmBlackoutSinceMs;
+        uint32_t blackoutMs = nowPool - farmBlackoutSinceMs;
+        if (blackoutMs >= JANUS_FARM_BLACKOUT_POOL_MS &&
+            nowPool - farmLastRecoveryMs >= JANUS_FARM_BLACKOUT_RECOVERY_MS) {
+          farmLastRecoveryMs = nowPool;
+          minerFarmLastRecoveryMs = nowPool;
+          minerFarmBlackoutWatchdogs++;
+          farmBlackoutEscalation++;
+          poolReconnectFails++;
+          poolReconnectHoldUntilMs = nowPool + 2500UL;
+          Serial.printf("[MINER] FARM BLACKOUT POOL watchdog=%lu blackout=%lums esc=%u fails=%u H=0 workers=%u/%u -> pool reconnect\n",
+                        (unsigned long)minerFarmBlackoutWatchdogs,
+                        (unsigned long)blackoutMs,
+                        (unsigned)farmBlackoutEscalation,
+                        (unsigned)poolReconnectFails,
+                        (unsigned)colonyOnlineNodeCount(),
+                        (unsigned)colonyKnownNodes);
+          janusSdLogf("FARM_BLACKOUT", "pool blackoutMs=%lu esc=%u fails=%u workers=%u/%u",
+                      (unsigned long)blackoutMs,
+                      (unsigned)farmBlackoutEscalation,
+                      (unsigned)poolReconnectFails,
+                      (unsigned)colonyOnlineNodeCount(),
+                      (unsigned)colonyKnownNodes);
+          if (farmBlackoutEscalation >= JANUS_FARM_BLACKOUT_HARD_RESET_AFTER) {
+            janusFarmBlackoutHardWifiReset("pool-starvation");
+            farmBlackoutEscalation = 0;
+          }
+          janusFarmBlackoutMaybeRestart(nowPool, blackoutMs, "pool-starvation");
+        }
+      }
+
       if (poolReconnectHoldUntilMs && nowPool < poolReconnectHoldUntilMs) {
         vTaskDelay(pdMS_TO_TICKS(250));
         continue;
@@ -3665,8 +5323,16 @@ void microMinerTask(void *pvParameters) {
 
       if(client.connect(POOL_HOST, POOL_PORT)) {
         connectedAtMs = millis();
+        poolLastHashProgressMs = connectedAtMs;
+        poolLastTotalProgressMs = connectedAtMs;
+        poolLastTotalHashSnap = minerTotalHashes;
+        minerPoolLastHashProgressMs = poolLastHashProgressMs;
+        minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+        minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
         poolReconnectHoldUntilMs = 0;
         stratumConnected = true;
+        // Socket is back; keep blackout timer until mining.notify arrives, but lower escalation.
+        if (farmBlackoutEscalation > 0) farmBlackoutEscalation--;
         client.setTimeout(1000);
         client.setNoDelay(true);
         stratumDebugLines = 0;
@@ -3724,7 +5390,15 @@ void microMinerTask(void *pvParameters) {
 
       if (doc["id"] == 2) {
         authorized = (doc["result"] == true);
-        if (authorized) poolReconnectFails = 0;
+        if (authorized) {
+          poolReconnectFails = 0;
+          poolLastHashProgressMs = millis();
+          poolLastTotalProgressMs = poolLastHashProgressMs;
+          poolLastTotalHashSnap = minerTotalHashes;
+          minerPoolLastHashProgressMs = poolLastHashProgressMs;
+          minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+          minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
+        }
         Serial.println(authorized ? "[MINER] AUTH OK" : "[MINER] AUTH REJECT");
         janusSdLogf("AUTH", "authorized=%d", authorized ? 1 : 0);
         strlcpy(minerStatus, authorized ? "AUTHOK" : "AUTHBAD", sizeof(minerStatus));
@@ -3845,6 +5519,16 @@ void microMinerTask(void *pvParameters) {
         jobReady = true;
         minerLocalFallback = false;
         minerLastJobMs = millis();
+        minerPoolLastJobReadyMs = minerLastJobMs;
+        farmBlackoutSinceMs = 0;
+        minerFarmBlackoutSinceMs = 0;
+        farmBlackoutEscalation = 0;
+        poolLastHashProgressMs = minerLastJobMs;
+        poolLastTotalProgressMs = minerLastJobMs;
+        poolLastTotalHashSnap = minerTotalHashes;
+        minerPoolLastHashProgressMs = poolLastHashProgressMs;
+        minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+        minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
         strlcpy(minerStatus, "HASH", sizeof(minerStatus));
 
         // Mirror exact current pool work for JANUS colony workers.
@@ -3866,6 +5550,11 @@ void microMinerTask(void *pvParameters) {
           janusSdLogf("ACCEPT", "shares=%lu rejects=%lu nonce=%s", (unsigned long)minerShares, (unsigned long)minerSubmitRejects, minerLastSubmitNonce);
           Serial.printf("[MINER] ACCEPT shares=%lu rejects=%lu nonce=%s\n",
                         (unsigned long)minerShares, (unsigned long)minerSubmitRejects, minerLastSubmitNonce);
+          janusBBEmitEvent(JE_SOLO_ACCEPT, "buzz_pool_accept", 98, 100,
+                         janusBBHash16("pool-accept"), janusBBHash16(minerLastSubmitNonce),
+                         janusBBClampI16U32((uint32_t)minerShares), janusBBClampI16U32((uint32_t)minerBestBits),
+                         janusBBClampI16U32((uint32_t)minerShareTargetBits), janusBBClampI16U32((uint32_t)minerSubmitAttempts),
+                         30000UL, true);
         } else {
           minerSubmitRejects++;
           janusFarmMarkDirty();
@@ -3886,6 +5575,11 @@ void microMinerTask(void *pvParameters) {
                         (unsigned long)minerLowDiffRejects,
                         (unsigned long)minerStaleJobRejects,
                         (unsigned long)minerOtherRejects);
+          janusBBEmitEvent(JE_SOLO_REJECT, "buzz_pool_reject", 88, 86,
+                         janusBBHash16("pool-reject"), janusBBHash16(errText),
+                         janusBBClampI16U32((uint32_t)minerSubmitRejects), janusBBClampI16U32((uint32_t)minerLowDiffRejects),
+                         janusBBClampI16U32((uint32_t)minerStaleJobRejects), janusBBClampI16U32((uint32_t)minerOtherRejects),
+                         26000UL, true);
         }
       }
     }
@@ -4019,6 +5713,11 @@ void microMinerTask(void *pvParameters) {
                       remote.share.worker_id, n_hex, (unsigned)verifiedBits, (unsigned)remoteTargetBits,
                       remote.rssi, remote.jobIdText,
                       remote.hash_tail[0], remote.hash_tail[1], remote.hash_tail[2], remote.hash_tail[3]);
+        janusBBEmitEvent(JE_TASK_DONE, "buzz_remote_share_relay", 90, 78,
+                       janusBBHash16("remote-relay"), remote.share.worker_id,
+                       janusBBClampI16U32((uint32_t)verifiedBits), janusBBClampI16U32((uint32_t)remoteTargetBits),
+                       (int16_t)remote.rssi, janusBBClampI16U32((uint32_t)minerRemoteSubmitAttempts),
+                       22000UL, false);
       }
     }
 
@@ -4073,6 +5772,11 @@ void microMinerTask(void *pvParameters) {
           janusSdLogf("LOCAL_SUBMIT", "strictTarget localTickets=%lu submit=%lu nonce=%s bits=%u targetBits=%u H=%lu job=%s", (unsigned long)minerShareCandidates, (unsigned long)minerSubmitAttempts, minerLastSubmitNonce, (unsigned)bits, (unsigned)minerShareTargetBits, (unsigned long)minerRealHashrate, currentJobId.c_str());
           Serial.printf("[MINER] LOCAL_SUBMIT ticket=%lu submit=%lu nonce=%s bits=%u targetBits=%u H=%lu\n",
                         (unsigned long)minerShareCandidates, (unsigned long)minerSubmitAttempts, n_hex, bits, minerShareTargetBits, (unsigned long)minerRealHashrate);
+          janusBBEmitEvent(JE_TASK_DONE, "buzz_local_ticket", 86, 72,
+                         janusBBHash16("local-ticket"), janusBBHash16(n_hex),
+                         janusBBClampI16U32((uint32_t)bits), janusBBClampI16U32((uint32_t)minerShareTargetBits),
+                         janusBBClampI16U32((uint32_t)(minerRealHashrate / 10UL)), janusBBClampI16U32((uint32_t)minerShareCandidates),
+                         18000UL, false);
           break;
         }
       }
@@ -4090,11 +5794,108 @@ void microMinerTask(void *pvParameters) {
 
     uint32_t now = millis();
     if (now - lastHashTick >= 1000) {
+      uint64_t totalHashSnapNow = minerTotalHashes;
+      if (totalHashSnapNow != poolLastTotalHashSnap) {
+        poolLastTotalHashSnap = totalHashSnapNow;
+        poolLastTotalProgressMs = now;
+        minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+        minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
+      }
+
+      if (hashesThisSecond > 0) {
+        poolLastHashProgressMs = now;
+        minerPoolLastHashProgressMs = now;
+        farmBlackoutSinceMs = 0;
+        minerFarmBlackoutSinceMs = 0;
+        farmBlackoutEscalation = 0;
+      }
       minerRealHashrate = hashesThisSecond;
       minerLocalHashrate = 0;  // v10.11H: SELF/local fallback disabled
       hashesThisSecond = 0;
       localHashesThisSecond = 0;
       lastHashTick = now;
+    }
+
+    // v10.11N3F1B: Stratum liveness fuse.
+    // Fixes the rare state where socket/auth/job look alive but pool H/s stays 0
+    // until a manual Buzz reboot. We only reset the pool socket, not the ESP32.
+    if (client.connected() && stratumConnected &&
+        WiFi.status() == WL_CONNECTED &&
+        connectedAtMs && (now - connectedAtMs >= JANUS_POOL_WATCHDOG_MIN_UPTIME_MS) &&
+        (now - poolLastWatchdogMs >= JANUS_POOL_WATCHDOG_COOLDOWN_MS)) {
+
+      bool noAuthTooLong = (!authorized && (now - connectedAtMs >= JANUS_POOL_AUTH_WATCHDOG_MS));
+      bool noJobTooLong = (authorized && !jobReady && (now - connectedAtMs >= JANUS_POOL_NO_JOB_WATCHDOG_MS));
+      bool zeroHashTooLong = (jobReady &&
+                              minerRealHashrate == 0 &&
+                              hashesThisSecond == 0 &&
+                              poolLastHashProgressMs &&
+                              (now - poolLastHashProgressMs >= JANUS_POOL_ZERO_HASH_WATCHDOG_MS));
+      bool noProgressTooLong = (jobReady &&
+                                poolLastTotalProgressMs &&
+                                (now - poolLastTotalProgressMs >= JANUS_POOL_NO_PROGRESS_WATCHDOG_MS));
+
+      if (noAuthTooLong || noJobTooLong || zeroHashTooLong || noProgressTooLong) {
+        poolLastWatchdogMs = now;
+        minerPoolLastWatchdogMs = now;
+        if (noAuthTooLong) minerPoolAuthWatchdogs++;
+        if (zeroHashTooLong) minerPoolZeroHashWatchdogs++;
+        if (noJobTooLong) minerPoolNoJobWatchdogs++;
+        if (noProgressTooLong) minerPoolNoProgressWatchdogs++;
+
+        const char* wdReason = noProgressTooLong ? "NO_PROGRESS" : (zeroHashTooLong ? "ZERO_HASH" : (noJobTooLong ? "NO_JOB" : "NO_AUTH"));
+        uint32_t silenceMs = noProgressTooLong ? (now - poolLastTotalProgressMs) :
+                             (zeroHashTooLong ? (now - poolLastHashProgressMs) : (now - connectedAtMs));
+        poolReconnectFails++;
+        poolReconnectHoldUntilMs = now + JANUS_POOL_WATCHDOG_COOLDOWN_MS;
+
+        Serial.printf("[MINER] POOL WATCHDOG %s: silence=%lums H=%lu hNow=%lu total=%llu job=%d auth=%d connAge=%lums fail=%u -> soft reconnect\n",
+                      wdReason,
+                      (unsigned long)silenceMs,
+                      (unsigned long)minerRealHashrate,
+                      (unsigned long)hashesThisSecond,
+                      (unsigned long long)minerTotalHashes,
+                      jobReady ? 1 : 0,
+                      authorized ? 1 : 0,
+                      (unsigned long)(now - connectedAtMs),
+                      (unsigned)poolReconnectFails);
+        janusSdLogf("POOL_WATCHDOG", "reason=%s silenceMs=%lu H=%lu hNow=%lu total=%llu job=%d auth=%d connAge=%lu zero=%lu nojob=%lu noprog=%lu fail=%u",
+                    wdReason,
+                    (unsigned long)silenceMs,
+                    (unsigned long)minerRealHashrate,
+                    (unsigned long)hashesThisSecond,
+                    (unsigned long long)minerTotalHashes,
+                    jobReady ? 1 : 0,
+                    authorized ? 1 : 0,
+                    (unsigned long)(now - connectedAtMs),
+                    (unsigned long)minerPoolZeroHashWatchdogs,
+                    (unsigned long)minerPoolNoJobWatchdogs,
+                    (unsigned long)minerPoolNoProgressWatchdogs,
+                    (unsigned)poolReconnectFails);
+
+        strlcpy(minerStatus, noProgressTooLong ? "NOPROG" : (zeroHashTooLong ? "H0FIX" : (noJobTooLong ? "NOJOB" : "NOAUTH")), sizeof(minerStatus));
+        client.stop();
+        stratumConnected = false;
+        jobReady = false;
+        authorized = false;
+        minerRealHashrate = 0;
+        minerLocalHashrate = 0;
+        minerLocalFallback = false;
+        hashesThisSecond = 0;
+        localHashesThisSecond = 0;
+        extranonce1 = "";
+        extranonce2 = 0;
+        poolLastHashProgressMs = now;
+        poolLastTotalProgressMs = now;
+        poolLastTotalHashSnap = minerTotalHashes;
+        minerPoolLastHashProgressMs = poolLastHashProgressMs;
+        minerPoolLastTotalProgressMs = poolLastTotalProgressMs;
+        minerPoolLastTotalHashSnap = poolLastTotalHashSnap;
+        colonyClearMasterJob(noProgressTooLong ? "pool-no-progress-watchdog" : (zeroHashTooLong ? "pool-zero-hash-watchdog" : (noJobTooLong ? "pool-no-job-watchdog" : "pool-no-auth-watchdog")));
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+        continue;
+      }
     }
 
     vTaskDelay(pdMS_TO_TICKS(1));
@@ -4300,6 +6101,10 @@ void janusEnterThermalStop(const char* reason) {
                   reason ? reason : "-", janusChipTempC, janusPortTempRaw);
     janusSdLogf("THERMAL", "STOP reason=%s chip=%.1f portRaw=%d",
                 reason ? reason : "-", janusChipTempC, janusPortTempRaw);
+    janusBBEmitEvent(JE_DANGER, "buzz_thermal_guard", 96, 98,
+                   janusBBHash16("thermal-stop"), janusBBHash16(reason ? reason : "thermal"),
+                   (int16_t)(janusChipTempC * 10.0f), (int16_t)janusPortTempRaw,
+                   (int16_t)ledBright, 0, 30000UL, true);
   }
 
   strlcpy(minerStatus, "THERMAL", sizeof(minerStatus));
@@ -4337,6 +6142,10 @@ void janusExitThermalStop() {
   strlcpy(minerStatus, "COOL", sizeof(minerStatus));
   Serial.printf("[THERMAL] RESUME chip=%.1fC portRaw=%d\n", janusChipTempC, janusPortTempRaw);
   janusSdLogf("THERMAL", "RESUME chip=%.1f portRaw=%d", janusChipTempC, janusPortTempRaw);
+  janusBBEmitEvent(JE_SAFE, "buzz_thermal_guard", 86, 52,
+                 janusBBHash16("thermal-resume"), janusBBHash16("buzz"),
+                 (int16_t)(janusChipTempC * 10.0f), (int16_t)janusPortTempRaw,
+                 (int16_t)ledBright, 0, 22000UL, true);
 }
 
 void janusThermalTick(uint32_t now) {
@@ -5394,7 +7203,7 @@ void drawStalkerGuitar(int sx, int sy, uint16_t th, bool musicActive) {
 // ============================================================
 void drawFastUI() {
   uint16_t th = getThemeColor();
-  bool act = playing && !softPaused;
+  bool act = janusMusicVisualActive();
   updateCampWeather(act);
 
   // V16: heavy UI pass only. Tobi is handled by drawTobiTurboOverlay() at 60 FPS.
@@ -5658,7 +7467,7 @@ void eraseStableTobi() {
 // Fast old movement: crawl walls/ceiling, Tarzan swing, zipline, camera-web.
 // ============================================================
 void drawTobiTurboOverlay() {
-  bool act = playing && !softPaused;
+  bool act = janusMusicVisualActive();
   float bass = spectrum[0];
   uint32_t now = millis();
 
@@ -5849,7 +7658,7 @@ uint32_t getPaletteColor(uint8_t pal, float phase, float heat, bool spark) {
 void updateUnifiedLED() {
   uint32_t rnd = janusRand();
   uint32_t now = millis();
-  bool act = playing && !softPaused;
+  bool act = janusMusicVisualActive();
 
   float shareFlare = 0.0f;
   uint32_t until = ledShareFlareUntilMs;
@@ -5946,7 +7755,7 @@ void updateSpectrumModel() {
     float pulse = powf(sinf(t * (0.003f + i*0.0002f)), 6.0f); 
     float noise = (float)((janusRand() >> (i%4)) & 0xFF) / 255.0f;
     float target = (pulse * 0.7f + noise * 0.3f) * br;
-    if (!(playing && !softPaused)) target *= 0.15f; 
+    if (!janusMusicVisualActive()) target *= 0.15f;
     if (target > spectrum[i]) spectrum[i] = spectrum[i] * 0.3f + target * 0.7f; 
     else spectrum[i] = spectrum[i] * 0.88f + target * 0.12f;
     if (spectrum[i] > 1.0f) spectrum[i] = 1.0f;
@@ -6030,18 +7839,23 @@ void audio_eof_mp3(const char* info){
   audioEofFlag = true;
 }
 
-void audioSetupPins() {
+bool audioSetupPins() {
   // v10.11N1: setPinout must be one-shot per boot unless we intentionally changed DOUT.
   // Repeating it during play/next/recovery leaks/duplicates the I2S channel on core 3.x.
   if (!janusAudioPinsConfigured || janusAudioPinsDoutConfigured != audioDoutPin) {
-    audio.setPinout(I2S_BCLK, I2S_LRCK, audioDoutPin, I2S_MCLK);
-    janusAudioPinsConfigured = true;
-    janusAudioPinsDoutConfigured = audioDoutPin;
-    Serial.printf("[Audio] pinout INIT BCLK=%d LRCK=%d DOUT=%u MCLK=%d vol=%u\n", I2S_BCLK, I2S_LRCK, audioDoutPin, I2S_MCLK, volumeVal);
+    bool ok = audio.setPinout(I2S_BCLK, I2S_LRCK, audioDoutPin, I2S_MCLK);
+    janusAudioPinsConfigured = ok;
+    janusAudioPinsDoutConfigured = ok ? audioDoutPin : 0;
+    Serial.printf("[Audio] pinout %s BCLK=%d LRCK=%d DOUT=%u MCLK=%d vol=%u psram=%u/%d\n",
+                  ok ? "INIT" : "FAIL",
+                  I2S_BCLK, I2S_LRCK, audioDoutPin, I2S_MCLK, volumeVal,
+                  ESP.getFreePsram(), psramFound() ? 1 : 0);
+    if (!ok) return false;
   } else {
     Serial.printf("[Audio] pinout reuse DOUT=%u vol=%u run=%d\n", audioDoutPin, volumeVal, audio.isRunning() ? 1 : 0);
   }
   audio.setVolume(softPaused ? 0 : volumeVal);
+  return true;
 }
 
 void printAudioDiag(const char* tag) {
@@ -6054,6 +7868,40 @@ void printAudioDiag(const char* tag) {
                 wanted, playing, softPaused, audio.isRunning(), volumeVal,
                 ESP.getFreeHeap(), ESP.getFreePsram(), psramFound() ? 1 : 0,
                 tcaIn, tcaOutput, tcaConfig, codec ? 1 : 0);
+}
+
+bool janusAudioPsramReady() {
+  return psramFound() || (ESP.getFreePsram() > (256UL * 1024UL));
+}
+
+void janusAudioAbortStart(const char* reason, bool connected) {
+  audio.setVolume(0);
+  audio.stopSong();
+  setupTCA();
+  tcaWritePin(EXIO_AUDIO_PA, false);
+
+  wanted = false;
+  playing = false;
+  softPaused = false;
+  audioUserPaused = false;
+  audioBusySwitching = false;
+  audioEofFlag = false;
+  audioHadStableRun = false;
+  audioRecoveryAttempts = 0;
+  janusAudioStartFailStreak++;
+  janusAudioLastStartFailMs = millis();
+  janusAudioFailCooldownUntilMs = janusAudioLastStartFailMs + JANUS_AUDIO_FAIL_COOLDOWN_MS;
+  audioCriticalUntilMs = janusAudioLastStartFailMs + 3500UL;
+  strlcpy(minerStatus, janusAudioPsramReady() ? "AUD_FAIL" : "AUD_PSRAM", sizeof(minerStatus));
+
+  Serial.printf("[Audio] START FAIL reason=%s connected=%d fail=%u cooldown=%lums heap=%u psram=%u psramFound=%d hint=%s\n",
+                reason ? reason : "-",
+                connected ? 1 : 0,
+                (unsigned)janusAudioStartFailStreak,
+                (unsigned long)JANUS_AUDIO_FAIL_COOLDOWN_MS,
+                ESP.getFreeHeap(), ESP.getFreePsram(), psramFound() ? 1 : 0,
+                janusAudioPsramReady() ? "check stream/NAS" : "set Arduino PSRAM=OPI PSRAM");
+  printAudioDiag("start-fail");
 }
 
 void audioAmpKick(const char* reason) {
@@ -6077,13 +7925,18 @@ void connectAudioStreamFresh(const char* reason, bool hardAmpKick) {
   }
 
   audioBusySwitching = true;
-  audioCriticalUntilMs = millis() + 9000UL;
+  audioCriticalUntilMs = millis() + JANUS_AUDIO_FIRST_START_MS;
 #if JANUS_SWARMSENSE_AUDIO_SAFE && JANUS_SWARMSENSE_RESET_QUEUE_ON_AUDIO_START
   janusDropSwarmSenseBacklog("audio-start");
 #endif
   audioEofFlag = false;
 
   Serial.printf("[Audio] FRESH START reason=%s hardKick=%d url=%s\n", reason ? reason : "-", hardAmpKick ? 1 : 0, STREAM_URL);
+
+  if (!janusAudioPsramReady()) {
+    janusAudioAbortStart("psram-missing", false);
+    return;
+  }
 
   // Apply random track selection at the only moment that matters: right before /stream opens.
   // This keeps boot sound stable and prevents NAS from falling back to track #1.
@@ -6102,15 +7955,32 @@ void connectAudioStreamFresh(const char* reason, bool hardAmpKick) {
 
   initES8311();
   delay(100);
-  audioSetupPins();
+  if (!audioSetupPins()) {
+    janusAudioAbortStart("pinout", false);
+    return;
+  }
   audio.setVolume(volumeVal);
 
-  audio.connecttohost(STREAM_URL);
+  bool connected = audio.connecttohost(STREAM_URL);
+  bool runningNow = audio.isRunning();
+  for (uint8_t i = 0; connected && !runningNow && i < 24; ++i) {
+    audio.loop();
+    delay(25);
+    yield();
+    runningNow = audio.isRunning();
+  }
+
+  if (!connected || !runningNow) {
+    janusAudioAbortStart("connect-run", connected);
+    return;
+  }
 
   streamStartedAt = millis();
   audioLastRunningMs = streamStartedAt;
   audioLastRecoveryMs = streamStartedAt;
   audioRecoveryAttempts = 0;
+  janusAudioStartFailStreak = 0;
+  janusAudioFailCooldownUntilMs = 0;
   audioHadStableRun = false;
   audioStableSinceMs = 0;
   audioSoftPauseAtMs = 0;
@@ -6213,27 +8083,16 @@ void prevTrack() { prevTrackManual(); }
 void startStream() {
   if(WiFi.status()!=WL_CONNECTED) return;
 
-  // True resume: do not reconnect, do not restart track, just unmute and reopen PA/codec.
+  // Hash-safe resume: pause stops the decoder to return CPU/Wi-Fi time to SHA.
+  // So resume opens a fresh stream instead of keeping a hidden HTTP decoder alive.
   if (softPaused && wanted) {
-    setupTCA();
-    tcaWritePin(EXIO_AUDIO_PA, true);
-    delay(60);
-    initES8311();
-    audioSetupPins();
-    audio.setVolume(volumeVal);
-
+    Serial.println("[Audio] HASH-SAFE RESUME fresh stream after pause");
     softPaused = false;
-    playing = true;
     audioUserPaused = false;
-    audioBusySwitching = false;
-    audioEofFlag = false;
-    audioRecoveryAttempts = 0;
-    streamStartedAt = millis();
-    audioLastRunningMs = millis();
-    audioSoftPauseAtMs = 0;
-
-    Serial.println("[Audio] RESUME same track");
-    printAudioDiag("resume-same-track");
+    playing = false;
+    wanted = false;
+    audioCriticalUntilMs = 0;
+    connectAudioStreamFresh("resume-hash-safe", true);
     return;
   }
 
@@ -6241,18 +8100,28 @@ void startStream() {
 }
 
 void stopStream() {
-  if (!wanted) return;
+  if (!wanted && !playing && !softPaused) return;
 
-  // Real pause: keep Audio.h stream alive and muted. Autopilot must stay silent.
+  // v10.11N3F1D hash-safe pause: stop Audio.h while paused.
+  // Keeping the HTTP decoder alive muted was stealing enough CPU/Wi-Fi time that the miner
+  // sometimes stayed below the normal 22k H/s after pause.
   audioUserPaused = true;
   softPaused = true;
   playing = false;
+  audioBusySwitching = false;
+  audioEofFlag = false;
+  audioRecoveryAttempts = 0;
   audioSoftPauseAtMs = millis();
+  audioCriticalUntilMs = 0;
   audio.setVolume(0);
+  audio.stopSong();
+  tcaWritePin(EXIO_AUDIO_PA, false);
+  Serial.println("[Audio] PA OFF reason=hash-safe-pause");
 
-  // Do NOT audio.stopSong() here. That would lose the current HTTP stream/track.
-  Serial.println("[Audio] SOFT PAUSE same track: recovery/autonext disabled");
-  printAudioDiag("soft-pause");
+  if (stratumConnected) strlcpy(minerStatus, "HASH", sizeof(minerStatus));
+
+  Serial.println("[Audio] HASH-SAFE PAUSE: decoder stopped, mining restored");
+  printAudioDiag("hash-safe-pause");
 }
 
 void hardAudioRestartSameTrack(const char* reason) {
@@ -6267,11 +8136,13 @@ void hardAudioRestartSameTrack(const char* reason) {
 void audioAutopilotTick(uint32_t now) {
   if (!wanted) return;
 
-  // Keep the decoder/service loop alive even during soft pause, so resume can continue.
+  // Manual pause means silence is intentional and hash has priority.
+  // v10.11N3F1D: do not service Audio.h while hash-safe paused.
+  if (softPaused || audioUserPaused) return;
+
   audio.loop();
 
-  // Manual pause means silence is intentional. No recovery, no next-track.
-  if (softPaused || audioUserPaused || !playing || audioBusySwitching) return;
+  if (!playing || audioBusySwitching) return;
 
   bool running = audio.isRunning();
   if (running) {
@@ -6570,7 +8441,14 @@ void handleSerialCommands() {
   while (Serial.available()) {
     char c = Serial.read();
     if (c == 'p') { if((playing || wanted) && !softPaused) stopStream(); else startStream(); }
-    else if (c == 'S') { audio.stopSong(); wanted=false; playing=false; softPaused=false; audioUserPaused=false; Serial.println("[Audio] HARD STOP"); }
+    else if (c == 'S') {
+      audio.setVolume(0);
+      audio.stopSong();
+      tcaWritePin(EXIO_AUDIO_PA, false);
+      wanted=false; playing=false; softPaused=false; audioUserPaused=false;
+      Serial.println("[Audio] PA OFF reason=serial-hard-stop");
+      Serial.println("[Audio] HARD STOP");
+    }
     else if (c == 'A') connectAudioStreamFresh("serial-A-hard", true);
     else if (c == 'a') audioAmpKick("serial-a");
     else if (c == 'n') nextTrackManual();
@@ -6620,7 +8498,7 @@ void handleSerialCommands() {
     else if (c == 'X') { janusSdRetentionTick(true); janusSdPrintStatus(); }
     else if (c == 'L') { janusSdListSerial(JANUS_SD_ROOT); }
     else if (c == 'T') { janusSdPrintTailSerial(JANUS_SD_ROOT "/logs/buzz.csv", 8192); }
-    else if (c == 'G') { janusSdPrintFileSerial(JANUS_SD_ROOT "/state/buzz.cfg", 4096); }
+    else if (c == 'g') { janusSdPrintFileSerial(JANUS_SD_ROOT "/state/buzz.cfg", 4096); }
     else if (c == 'P') { janusFarmPrintState(); janusSdPrintFileSerial(JANUS_FARM_STATE_FILE, 4096); }
     else if (c == 'Y') { janusFarmSaveState(true); janusFarmPrintState(); }
     else if (c == 'B') {
@@ -6646,6 +8524,34 @@ void handleSerialCommands() {
         minerStatus,
         minerLastSubmitNonce,
         minerLastRejectReason);
+    }
+    else if (c == 'G') {
+      janusBBUpdateWorldState(millis());
+      Serial.printf("[BLACKBOARDDBG] tx=%lu rx=%lu merge=%lu drop=%lu fail=%lu crcWeak=%lu pol=%lu mood=%s radio=%u buzz=%u sensor=%u danger=%.2f att=%u stress=%u fatigue=%u health=%u trust=%u need=%u cortex=%u mirror=%u digest=%lu order=%s\n",
+        (unsigned long)janusBlackboardEventTx,
+        (unsigned long)janusBlackboardEventRx,
+        (unsigned long)janusBlackboardEventMerged,
+        (unsigned long)janusBlackboardEventDropped,
+        (unsigned long)janusBlackboardEventFail,
+        (unsigned long)janusBlackboardEventCrcWeak,
+        (unsigned long)janusBlackboardPolicyRx,
+        janusBBMoodName(janusBlackboardMood),
+        (unsigned)janusBlackboardRadioRate,
+        (unsigned)janusBlackboardBuzzBudget,
+        (unsigned)janusBlackboardSensorRate,
+        (float)janusBlackboardDangerX100 / 100.0f,
+        (unsigned)janusBlackboardLastAttention,
+        (unsigned)janusBuzzWorld.localStress,
+        (unsigned)janusBuzzWorld.fatigue,
+        (unsigned)janusBuzzWorld.health,
+        (unsigned)janusBuzzWorld.swarmTrust,
+        janusBuzzWorld.workersNeeded ? 1U : 0U,
+        janusBuzzWorld.cortexOnline ? 1U : 0U,
+        (unsigned)janusBuzzWorld.mirrorActive,
+        (unsigned long)janusBuzzWorld.digestSaves,
+        janusBlackboardOrder);
+      janusBBSaveMirrorDigest(true);
+      janusSdPrintFileSerial(JANUS_BLACKBOARD_DIGEST_FILE, 4096);
     }
   }
 }
@@ -6680,16 +8586,17 @@ void safeLittleFSBeginOptional() {
 
 void setup() {
   Serial.begin(115200); delay(1000);
-  Serial.println("[MINER] v10.11N3D SAFE-CHARGE WIFI-GUARD + N3C FARM MEMORY");
+  Serial.println("[MINER] v10.11N3F1F FARM BLACKOUT RECOVERY + TOBI AUDIO REACTIVE + POOL WATCHDOG");
   Serial.println("[MINER] v10.11M Colony: stack-safe loop + locked ESP-NOW + 5GB SD retention");
   Serial.println("[MINER] v10.6 EXPECTED: no CAND/SUBMIT with bits lower than targetBits");
   Serial.println("\n[JANUS] BUZZ COLONY MASTER AUDIO v40.9 TACHYON STABLE COLONY");
   initJanusWorkerName();
   Serial.printf("[JANUS] Worker: %s\n", MINER_USER);
   Serial.println("[Audio] PROVEN ROUTE: /stream MP3 -> Audio.h -> ES8311/PA");
+  Serial.println("[Audio] v10.11N3F3B audio-first + PSRAM guard; set Arduino PSRAM=OPI PSRAM");
   Serial.println("[Audio] keys: KEY1 play/pause, KEY2 vol-/prev long, KEY3 vol+/next long; Serial +/- vol, M miner dbg");
   Serial.println("[MINER] v40: Public-Pool tickets >=32 bits + verified ESP-NOW remote shares");
-  Serial.println("[COLONY] Buzz is master: ESP-NOW job beacon + verified share relay + Core2 remote control");
+  Serial.println("[COLONY] Buzz is master: ESP-NOW job beacon + verified share relay + Core2 remote control + J/E blackboard mirror");
   safeLittleFSBeginOptional();
 
   Wire.begin(SDA_PIN, SCL_PIN); Wire.setClock(100000);
@@ -6729,8 +8636,18 @@ void setup() {
   // Brownout-safe audio bootstrap. Do a full old ES8311 init at boot,
   // then again on every actual stream start/recovery.
   audioPowerWake();
-  audioSetupPins();
-  audio.setVolume(volumeVal);
+  Serial.printf("[Audio] PSRAM boot psramFound=%d freePsram=%u freeHeap=%u\n",
+                psramFound() ? 1 : 0, ESP.getFreePsram(), ESP.getFreeHeap());
+  if (janusAudioPsramReady()) {
+    audioSetupPins();
+    audio.setVolume(volumeVal);
+  } else {
+    Serial.println("[Audio] pinout deferred: PSRAM not visible; use Arduino PSRAM=OPI PSRAM");
+  }
+  if (!wanted && !playing) {
+    tcaWritePin(EXIO_AUDIO_PA, false);
+    Serial.println("[Audio] PA OFF reason=boot-idle-minimal");
+  }
 
   initOptionalCamera();
 
@@ -6747,6 +8664,11 @@ void setup() {
   }
 
   initColonyNow();
+  janusBBEmitEvent(JE_BOOT, "buzz_boot", 92, 58,
+                   janusBBHash16("boot"), janusBBHash16(BTC_WORKER),
+                   (int16_t)readBatteryClamped(), (int16_t)(ESP.getFreeHeap() / 1024UL),
+                   (int16_t)currentWifiChannel(), (int16_t)WiFi.RSSI(),
+                   30000UL, true);
 #if JANUS_CAMERA_ENABLE
   initJanusCamera();
 #endif
@@ -6787,7 +8709,19 @@ void loop() {
 
   if(now - lastLedMs >= 30) { lastLedMs = now; updateLED(); }
   if(now - lastFastUiMs >= (audioRealtime ? (HEAVY_UI_MS + 40) : HEAVY_UI_MS)) { lastFastUiMs = now; updateSpectrumModel(); drawFastUI(); }
-  if(!audioRealtime && now - lastTobiMs >= TOBI_TURBO_MS) { lastTobiMs = now; drawTobiTurboOverlay(); }
+
+  // v10.11N3F1E: do NOT suppress Tobi during music.
+  // audioRealtime is true for normal playback, so the old "!audioRealtime" gate made Tobi freeze
+  // exactly when the equalizer/music were active. Use a safer cadence during Audio.h realtime instead.
+  {
+    uint16_t tobiCadenceMs = audioRealtime ? TOBI_AUDIO_SAFE_MS : TOBI_TURBO_MS;
+    bool allowTobi = (!audioRealtime) || janusMusicVisualActive();
+    if (allowTobi && now - lastTobiMs >= tobiCadenceMs) {
+      lastTobiMs = now;
+      drawTobiTurboOverlay();
+    }
+  }
+
   if(!audioRealtime && now - lastTrackMs >= 12000) { lastTrackMs = now; if(wanted) updateTrackInfo(); }
   colonyTick();
 
@@ -6806,7 +8740,7 @@ void loop() {
     float agentPredErrSnap = 0.0f;
     colonyAgentSnapshot(agentTopSnap, sizeof(agentTopSnap), &agentPredErrSnap);
 
-    Serial.printf("[MINER] mode=%s pool=%d H=%lu poolH=%lu localH=%lu total=%llu best=%lu target=%u acc=%lu sub=%lu localSub=%lu remoteSub=%lu ok=%lu%% rej=%lu low=%lu stale=%lu other=%lu workers=%u/%u agentRewards=%lu aok=%lu top=%s predErr=%.3f rx=%lu qNow=%lu qTotal=%lu drop=%lu weak=%lu dup=%lu uniJob=%lu discJob=%lu peerBest=%lu diff=%.8f batch=%u sdRows=%lu status=%s err=%s\n",
+    Serial.printf("[MINER] mode=%s pool=%d H=%lu poolH=%lu localH=%lu total=%llu best=%lu target=%u acc=%lu sub=%lu localSub=%lu remoteSub=%lu ok=%lu%% rej=%lu low=%lu stale=%lu other=%lu workers=%u/%u agentRewards=%lu aok=%lu top=%s predErr=%.3f rx=%lu qNow=%lu qTotal=%lu drop=%lu weak=%lu dup=%lu uniJob=%lu discJob=%lu peerBest=%lu diff=%.8f batch=%u blackout=%lu hard=%lu authWd=%lu sdRows=%lu status=%s err=%s\n",
       stratumConnected ? "POOL" : "WAIT",
       stratumConnected ? 1 : 0,
       (unsigned long)totalHsNow,
@@ -6841,6 +8775,9 @@ void loop() {
       (unsigned long)colonyBestPeerBits,
       minerCurrentDiffF,
       (unsigned)activeBatch,
+      (unsigned long)minerFarmBlackoutWatchdogs,
+      (unsigned long)minerFarmBlackoutHardResets,
+      (unsigned long)minerPoolAuthWatchdogs,
       (unsigned long)minerStatsRows,
       minerStatus,
       minerLastRejectReason);

@@ -1,13 +1,15 @@
-/*
-  JANUS_ZIM_GEEK_S3_SOLO_NERDMINER_v3_10D_CARR_RAMANUJAN_AUTODUNGEON_STARVEFIX_COLONY.ino
+﻿/*
+  JANUS_ZIM_GEEK_S3_SOLO_NERDMINER_v3_11Q2_4_3_HOME_CORTEX_FINAL.ino
 
   Waveshare ESP32-S3-GEEK solo NerdMiner "Zim Geek" with JANUS swarm reporting and house-base dungeon crawler.
 
-  What is new in v3.10D AUTODUNGEON STARVEFIX:
-    - Hotfix: Buzz complaint banners no longer reset HOME timer; autoplay cannot starve while Buzz is active.
-    - Keeps v3.10C: STATUS screen is a draw-only overlay, not a game mode; autoplay never pauses.
-    - FINAL LOCKED patch: throttles Ramanujan math to at most one study every 450 ms.
-    - FINAL LOCKED patch: Buzz JobPacket hold window keeps current chore for 4.5 s before replacing it.
+  What is new in v3.11Q2.4.3 HOME CORTEX FINAL:
+    - Home Cortex Final: keeps Safe Machine Intuition and adds J/E + J/P + K2/TP + peerfix.
+    - Bridges ZimAgentMemory/Z/A into JE_AI_MEMORY, task_need/task_done, and Core policy RX.
+    - Zim remains solo NerdMiner first; Core policy guides rate/quiet mood without taking over his brain.
+    - Periodic printStatus is disabled by default; short BOOT still prints full status and toggles overlay.
+    - Heartbeat/SwarmSense/Entropy/Agent memory/Ramanujan/Buzz lazy/draw intervals are slowed safely.
+    - Keeps v3.10D: STARVEFIX, Buzz hold-safe, Carr/Ramanujan, MicroGPTSlime/White Raven, real Stratum.
     - Adds Zim's compact Carr Synopsis / Ramanujan pocket notebook.
     - Zim now carries theta3(q), mock-theta-like mu(q), partition-prior and tau-like signatures.
     - Ramanujan notebook influences SUPER ORUJIE route, White Raven features, SwarmSense entropy and status screen.
@@ -82,7 +84,7 @@
     Board: ESP32S3 Dev Module
     USB CDC On Boot: Enabled
     Flash Size: 16MB (128Mb)
-    PSRAM: OPI PSRAM / Enabled
+    PSRAM: Disabled / None  (this ESP32-S3-GEEK reports psram=0)
     USB Mode: Hardware CDC and JTAG
     Upload Mode: UART0 / Hardware CDC
     Upload Speed: 921600
@@ -95,6 +97,32 @@
 #include <esp_system.h>
 #include <esp_arduino_version.h>
 #include <mbedtls/sha256.h>
+// Q2.4.1: try several ESP-IDF / Arduino-ESP32 hardware-SHA header locations.
+// Different Arduino-ESP32 cores expose esp_sha() under different paths.
+#if __has_include(<esp_sha.h>)
+#include <esp_sha.h>
+#define ZIM_HAS_ESP_SHA_HEADER 1
+#define ZIM_SHA_HEADER_NAME "esp_sha.h"
+#elif __has_include(<sha/sha_parallel_engine.h>)
+#include <sha/sha_parallel_engine.h>
+#define ZIM_HAS_ESP_SHA_HEADER 1
+#define ZIM_SHA_HEADER_NAME "sha/sha_parallel_engine.h"
+#elif __has_include("sha/sha_parallel_engine.h")
+#include "sha/sha_parallel_engine.h"
+#define ZIM_HAS_ESP_SHA_HEADER 1
+#define ZIM_SHA_HEADER_NAME "sha/sha_parallel_engine.h"
+#elif __has_include(<esp32/sha.h>)
+#include <esp32/sha.h>
+#define ZIM_HAS_ESP_SHA_HEADER 1
+#define ZIM_SHA_HEADER_NAME "esp32/sha.h"
+#elif __has_include(<hwcrypto/sha.h>)
+#include <hwcrypto/sha.h>
+#define ZIM_HAS_ESP_SHA_HEADER 1
+#define ZIM_SHA_HEADER_NAME "hwcrypto/sha.h"
+#else
+#define ZIM_HAS_ESP_SHA_HEADER 0
+#define ZIM_SHA_HEADER_NAME "none"
+#endif
 #include <Preferences.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
@@ -122,30 +150,87 @@
 // ============================================================
 // USER CONFIG
 // ============================================================
-#define JANUS_GEEK_VERSION              "v3.10D CARR RAMANUJAN AUTODUNGEON STARVEFIX RU-LAT"
+#define JANUS_GEEK_VERSION              "v3.11Q2.4.3 HOME CORTEX FINAL RU-LAT"
 #define JANUS_NODE_ID                   "ZimGeek"
 #define JANUS_NODE_ROLE                 "ZIM_LAZY"
 #define JANUS_NODE_LORE                 "MicroGPTSlime brain: Carr Synopsis, Ramanujan theta, SHA sekrety, Buzz lazy, swarm memory"
+
+// Recovery SafeCore: stable rollback from v3.11Z CPU1 WDT; quiet cadence preserved.
+// Set ZIM_QUIET_CANARY to 0 for the old chatty home-lab cadence.
+#define ZIM_QUIET_CANARY                1
+#define ZIM_VERBOSE_STATUS              0   // short BOOT still calls printStatus(); this only disables periodic spam
+
+// Q2 safe machine intuition: no core-1 miner.
+// Q2.4.1 can use ESP hardware SHA through multiple known header paths, but only after boot self-test; Stratum ABI stays untouched.
+#define ZIM_SAFE_MACHINE_INTUITION      1
+#define ZIM_NOTIFY_ORACLE               1
+#define ZIM_NOTIFY_ORACLE_SLOTS         16
+#define ZIM_NOTIFY_MIN_INTERVAL_MS      3000UL
+#define ZIM_NOTIFY_MAX_INTERVAL_MS      180000UL
+#define ZIM_NOTIFY_PAUSE_WINDOW_MS      450UL
+#define ZIM_NOTIFY_PHASE_BATCH_MS       1200UL
+#define ZIM_SAFE_BATCH_BUSY             300
+#define ZIM_SAFE_BATCH_MID              500
+#define ZIM_SAFE_BATCH_PHASE            420
+#define ZIM_SAFE_BATCH_MAX              900
+#define ZIM_AI_BATCH_SAFE_MAX           900
+
+// Q2.2: "machine-only" online no-regret stride selector.
+// It does not change SHA or Stratum. It only chooses one of the old safe odd strides
+// by multiplicative weights, rewarding arms that recently produced low-diff hits.
+#define ZIM_STRIDE_BANDIT               1
+#define ZIM_STRIDE_BANDIT_ARMS          17
+#define ZIM_STRIDE_BANDIT_EXPLORE_Q8    26    // ~10% exploration
+#define ZIM_STRIDE_BANDIT_MIN_BITS      16
+#define ZIM_STRIDE_BANDIT_W0            256
+#define ZIM_STRIDE_BANDIT_WMIN          16
+#define ZIM_STRIDE_BANDIT_WMAX          8192
+
+// Q2.3: persist the learned stride-bandit weights in NVS/Preferences.
+// Saves are throttled to protect flash, and forced after an accepted solo share.
+#define ZIM_STRIDE_BANDIT_MEMORY        1
+#define ZIM_STRIDE_BANDIT_SAVE_MS       300000UL
+#define ZIM_STRIDE_BANDIT_SAVE_MIN_MS   15000UL
+
+// Q2.4: optional ESP32-S3 hardware SHA-256 acceleration.
+// It is enabled only after a boot self-test proves byte-for-byte equality
+// with the existing mbedtls double-SHA path. If esp_sha is missing or fails,
+// Zim silently keeps the old software path.
+#define ZIM_HW_SHA256                   1
+#define ZIM_HW_SHA_SELFTEST             1
+#define ZIM_SHA_AUTO_BENCH              1
+#define ZIM_SHA_BENCH_ROUNDS            512
+#define ZIM_SHA_HW_MIN_GAIN_PCT         3      // choose HW only if >=3% faster than SW
+#define ZIM_SHA_CROSSCHECK              1
+#define ZIM_SHA_CROSSCHECK_EVERY        4096UL // cheap safety: verify 1 hash per 4096 using the other engine
+
+#define ZIM_LCD_AUTO_DIM                1
+#define ZIM_LCD_IDLE_DIM_MS             600000UL
+#define ZIM_LCD_IDLE_SOFT_BRIGHTNESS    48
 
 // ============================================================
 // SOLO NERDMINER CONFIG
 // ============================================================
 // Personal direct config for Zim Geek real-pool mission.
 // This build does not require secrets.h.
-#define ZIM_WIFI_SSID "YOUR_WIFI"
-#define ZIM_WIFI_PASSWORD "YOUR_PASSWORD"
+#define ZIM_WIFI_SSID                   "JANUS_WIFI_PLACEHOLDER"
+#define ZIM_WIFI_PASSWORD               "JANUS_NET_PLACEHOLDER"
 #define ZIM_WALLET_ADDRESS              "1F1Y6CdkApZboDF6g1DYrQ8Dke2E5gWiP1"
 #define ZIM_WORKER_NAME                 "ZimGeek"
 #define ZIM_POOL_HOST                   "pool.nerdminers.org"
 #define ZIM_POOL_PORT                   3333
-#define ZIM_POOL_PASSWORD "YOUR_PASSWORD"
-#define ZIM_POOL_SUBSCRIBE_TAG          "NerdMinerV2/ZimGeek-v3.10D-STARVEFIX"
+#define ZIM_POOL_PASSWORD               "x"
+#define ZIM_POOL_SUBSCRIBE_TAG          "NerdMinerV2/ZimGeek-v3.11Q2.4.3-HOME-CORTEX"
 
 // Zim is a SOLO NerdMiner first, but he also appears in Buzz colony as a lazy worker.
 // Buzz jobs are accepted, but processed as low-priority side quests.
 #define ZIM_SEND_SWARMSENSE             1
 #define ZIM_SEND_LEGACY_COLONY_HEARTBEAT 1  // Buzz sees Zim and can send JobPacket ranges
+#if ZIM_QUIET_CANARY
+#define ZIM_SWARMSENSE_MS               10000UL
+#else
 #define ZIM_SWARMSENSE_MS               3000UL
+#endif
 #define ZIM_POOL_RECONNECT_MIN_MS       4000UL
 #define ZIM_STRATUM_DEBUG_LINES         18
 #define ZIM_MIN_SHARE_BITS              16
@@ -158,12 +243,24 @@
 #define ZIM_COLD_LOW_HEAP_BYTES         98000UL
 #define ZIM_COLD_WIFI_RSSI_DBM          -84
 #define ZIM_SOLO_BATCH_COLD             650
+#if ZIM_QUIET_CANARY
+#define ZIM_DRAW_MS_COLD                350UL
+#else
 #define ZIM_DRAW_MS_COLD                160UL
+#endif
+#if ZIM_QUIET_CANARY
+#define ZIM_SWARMSENSE_MS_COLD          20000UL
+#else
 #define ZIM_SWARMSENSE_MS_COLD          7000UL
+#endif
 
 #define ZIM_RAMANUJAN_BOOK              1
 #define ZIM_RAMANUJAN_DEPTH             12
+#if ZIM_QUIET_CANARY
+#define ZIM_RAMANUJAN_STUDY_MS          30000UL
+#else
 #define ZIM_RAMANUJAN_STUDY_MS          5000UL
+#endif
 #define ZIM_RAMANUJAN_MIN_GAP_MS        450UL   // final: powf/theta budget guard for miner task
 #define ZIM_RAMANUJAN_SAVE_MS           60000UL
 #define ZIM_RAMANUJAN_CARR_RESULTS      5000UL
@@ -172,9 +269,21 @@
 
 // Buzz lazy side-worker: Zim accepts ranges from Buzz, but treats them like annoying chores.
 #define ZIM_BUZZ_LAZY_WORKER            1
+#if ZIM_QUIET_CANARY
+#define ZIM_BUZZ_LAZY_BATCH             32
+#else
 #define ZIM_BUZZ_LAZY_BATCH             64
+#endif
+#if ZIM_QUIET_CANARY
+#define ZIM_BUZZ_LAZY_EVERY_MS          1500UL
+#else
 #define ZIM_BUZZ_LAZY_EVERY_MS          700UL
+#endif
+#if ZIM_QUIET_CANARY
+#define ZIM_BUZZ_LAZY_SKIP_MASK         0x07   // quiet: 7/8 lazy ticks are skipped on purpose
+#else
 #define ZIM_BUZZ_LAZY_SKIP_MASK         0x03   // 3/4 lazy ticks are skipped on purpose
+#endif
 #define ZIM_BUZZ_LAZY_MAX_JOB_AGE_MS    12000UL
 #define ZIM_BUZZ_JOB_HOLD_MS            4500UL  // final: do not replace fresh Buzz chore immediately
 
@@ -184,11 +293,31 @@
 #define ZIM_AGENT_INPUTS                12
 #define ZIM_AGENT_OUTPUTS               5
 #define ZIM_AGENT_LR                    0.045f
+#if ZIM_QUIET_CANARY
+#define ZIM_AGENT_MEMORY_MS             60000UL
+#else
 #define ZIM_AGENT_MEMORY_MS             12000UL
+#endif
+#if ZIM_QUIET_CANARY
+#define ZIM_AGENT_SAVE_MS               120000UL
+#else
 #define ZIM_AGENT_SAVE_MS               60000UL
+#endif
 #define ZIM_AGENT_NAS_MS                30000UL
 #define ZIM_NAS_MEMORY_HTTP             0
 #define ZIM_NAS_MEMORY_URL              "http://192.168.1.2:8787/janus/zim-memory"
+
+// v3.11Q2.4.3 Home Cortex final layer: Zim joins the common Janus blackboard
+// without becoming obedient. J/P policy is advisory; solo Stratum remains primary.
+#define ZIM_HOME_CORTEX_ENABLE          1
+#define ZIM_HOME_EVENT_MS               9000UL
+#define ZIM_HOME_K2_MS                  5200UL
+#define ZIM_HOME_TP_MS                  6500UL
+#define ZIM_HOME_TASK_MS                18000UL
+#define ZIM_HOME_DIAG_MS                12000UL
+#define ZIM_HOME_POLICY_STALE_MS        45000UL
+#define ZIM_PN_CORTEX_ENABLE           1       // every swarm node should expose a silicon/body trace
+#define ZIM_PN_CORTEX_MS               8500UL  // light observer packet; never touches Stratum/SHA validity
 
 
 #define JANUS_BUZZ_WIFI_CHANNEL         10
@@ -198,9 +327,21 @@
 #define JANUS_SCAN_STEP_MS              1400UL
 #define JANUS_MASTER_LOST_MS            16000UL
 
+#if ZIM_QUIET_CANARY
+#define JANUS_HEARTBEAT_MS              8000UL
+#else
 #define JANUS_HEARTBEAT_MS              1500UL
+#endif
+#if ZIM_QUIET_CANARY
+#define JANUS_ENTROPY_MS                15000UL
+#else
 #define JANUS_ENTROPY_MS                3000UL
+#endif
+#if ZIM_QUIET_CANARY
+#define JANUS_STATUS_MS                 30000UL
+#else
 #define JANUS_STATUS_MS                 4000UL
+#endif
 #define JANUS_JOB_TTL_MS                9000UL
 
 #define JANUS_MIN_BATCH                 80
@@ -241,7 +382,11 @@
 #define GAME_MAP_W                      30
 #define GAME_MAP_H                      15
 #define GAME_SAVE_MS                    60000UL
+#if ZIM_QUIET_CANARY
+#define GAME_DRAW_MS                    180UL
+#else
 #define GAME_DRAW_MS                    100UL
+#endif
 #define GAME_STEP_MS                    220UL
 #define GAME_BATTLE_STEP_MS             850UL
 #define GAME_DIALOG_MS                  950UL
@@ -267,6 +412,9 @@ const uint8_t ZIM_LCD_BRIGHTNESS_LEVELS[6] = {64, 88, 112, 144, 176, 216};
 uint8_t zimBrightnessIndex = 2;
 uint8_t zimLcdSoftBrightness = JANUS_LCD_SOFT_BRIGHTNESS;
 uint32_t zimLastBrightnessToastMs = 0;
+uint32_t zimLastUserInputMs = 0;
+bool zimAutoDimmed = false;
+uint8_t zimAutoDimSavedBrightness = JANUS_LCD_SOFT_BRIGHTNESS;
 
 #define ZIM_SLIME_MAGIC        0x5A534C39UL  // ZSL9
 #define ZIM_SLIME_VERSION      3
@@ -420,6 +568,39 @@ struct __attribute__((packed)) SwarmSensePacket {
   uint16_t flags;
 };
 
+// Common Janus P/N Cortex packet:
+// a small observer-only "silicon body" trace shared by Yaks, BH and future swarm nodes.
+// It reports physical/computational side effects of honest SHA work; it never changes pool math.
+struct __attribute__((packed)) JanusPnCortexPacket {
+  uint8_t magic[2];        // 'P','N'
+  uint8_t version;         // 1
+  uint8_t role;            // JanusNodeRoleId
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t job_sig;
+  uint32_t prev_hash;
+  uint32_t packet_hash;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint16_t target_bits;
+  uint16_t best_bits;
+  uint8_t lane;
+  uint8_t sector;
+  uint8_t flags;           // bit0 job, bit1 pool/buzz, bit2 blackstar context, bit3 transition, bit4 policy
+  int8_t rssi;
+  uint16_t thermal_x1000;
+  uint16_t load_x1000;
+  uint16_t jitter_us;
+  uint16_t entropy_x1000;
+  uint16_t tail_x1000;
+  uint16_t voltage_mv;     // 0 when this board has no trustworthy battery/voltage readout
+  uint16_t ir_phase;       // phase/signature, not an RF command
+  uint16_t reserved;
+};
+
 // White Raven memory delta. Buzz/Core2/NAS bridge can persist this as Zim's external memory.
 struct __attribute__((packed)) ZimAgentMemoryPacket {
   uint8_t magic[2];        // 'Z','A'
@@ -494,13 +675,130 @@ struct __attribute__((packed)) ZimMissionPacket {
 };
 
 // ============================================================
+// JANUS HOME CORTEX BLACKBOARD / KENSHI / TACHYON
+// ============================================================
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0, JR_CORE = 1, JR_ZIM = 2, JR_BUZZ = 3, JR_BEACON = 4,
+  JR_TRON = 5, JR_BLIND = 6, JR_AUDIO = 7, JR_PYRAMID = 8, JR_SENSOR = 9, JR_RELAY = 10
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE = 0, JE_BOOT = 1, JE_HEARTBEAT = 2, JE_ENV = 3, JE_MOTION = 4, JE_PRESENCE = 5,
+  JE_SOUND = 6, JE_WIFI_WEAK = 7, JE_LOW_HEAP = 8, JE_HASH = 9, JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11, JE_TASK_NEED = 12, JE_TASK_DONE = 13, JE_DANGER = 14, JE_SAFE = 15,
+  JE_POLICY = 16, JE_AI_MEMORY = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE = 0, JM_QUIET = 1, JM_ALERT = 2, JM_EXPLORE = 3, JM_GUARD = 4, JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP = 0x0001, JC_HUM = 0x0002, JC_PRESS = 0x0004, JC_IMU = 0x0008,
+  JC_MIC = 0x0010, JC_TMOS = 0x0020, JC_AIR = 0x0040, JC_HASH = 0x0080,
+  JC_AUDIO = 0x0100, JC_VISION = 0x0200, JC_TOUCH = 0x0400, JC_RELAY = 0x0800,
+  JC_MEMORY = 0x1000, JC_AI = 0x2000, JC_BATTERY = 0x4000, JC_RF = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;
+  uint8_t urgency;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t swarmMood;
+  uint8_t radioRate;
+  uint8_t buzzBudget;
+  uint8_t sensorRate;
+  uint8_t confidence;
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
+struct __attribute__((packed)) JanusKenshiPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint8_t activeBubbleNodes;
+  uint8_t virtualNodes;
+  uint32_t worldFlags;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t jobState;
+  uint8_t priority;
+  int8_t rssi;
+  float entropy;
+  float activity;
+  float confidence;
+  float values[6];
+};
+
+struct __attribute__((packed)) JanusTachyonProphecyPacket {
+  uint8_t magic[2];
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint16_t horizon_ms;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t confidence;
+  uint8_t jobState;
+  float presence_now;
+  float motion_now;
+  float pred_presence_1;
+  float pred_motion_1;
+  float pred_presence_2;
+  float pred_motion_2;
+  float pred_presence_3;
+  float pred_motion_3;
+  float event_eta_ms;
+  float future_stress;
+  float swarm_pressure;
+};
+
+// ============================================================
 // RX QUEUE
 // ============================================================
 enum JanusRxType : uint8_t {
   RX_NONE = 0,
   RX_JOB = 1,
   RX_AGENT_REWARD = 2,
-  RX_ZIM_MISSION = 3
+  RX_ZIM_MISSION = 3,
+  RX_BLACKBOARD_POLICY = 4,
+  RX_BLACKBOARD_EVENT = 5,
+  RX_KENSHI = 6,
+  RX_TACHYON = 7
 };
 
 struct __attribute__((packed)) JanusRxItem {
@@ -561,6 +859,50 @@ volatile uint32_t gRxDropped = 0;
 volatile uint32_t gRxOversize = 0;
 volatile int8_t gLastRssi = 0;
 
+// v3.11Q2.4.3 Home Cortex runtime counters.
+uint32_t zimHomeEventSeq = 0;
+uint32_t zimHomePolicySeq = 0;
+uint32_t zimHomePolicyRx = 0;
+uint32_t zimHomeLastPolicyMs = 0;
+uint32_t zimHomeQuietUntilMs = 0;
+uint8_t zimHomeMood = JM_IDLE;
+uint8_t zimHomeRadioRate = 1;
+uint8_t zimHomeSensorRate = 1;
+uint8_t zimHomeBuzzBudget = 1;
+uint8_t zimHomePolicyConfidence = 0;
+uint16_t zimHomeDangerX100 = 0;
+char zimHomeOrder[40] = "-";
+uint32_t zimHomeLastEventMs = 0;
+uint32_t zimHomeLastK2Ms = 0;
+uint32_t zimHomeLastTPMs = 0;
+uint32_t zimHomeLastTaskMs = 0;
+uint32_t zimHomeLastDiagMs = 0;
+uint32_t zimHomeLastBlackStarTransitionMs = 0;
+uint32_t zimHomeLastWifiWeakMs = 0;
+uint32_t zimHomeLastLowHeapMs = 0;
+uint32_t zimHomeEventTx = 0;
+uint32_t zimHomeEventFail = 0;
+uint32_t zimHomeMemTx = 0;
+uint32_t zimHomeNeedTx = 0;
+uint32_t zimHomeDoneTx = 0;
+uint32_t zimHomeK2Tx = 0;
+uint32_t zimHomeTPTx = 0;
+uint32_t zimHomeRxEvents = 0;
+uint32_t zimHomeRxK2 = 0;
+uint32_t zimHomeRxTP = 0;
+uint32_t zimPnLastMs = 0;
+uint32_t zimPnTx = 0;
+uint32_t zimPnFail = 0;
+uint32_t zimPnPrevHash = 0;
+uint32_t zimLastLoopStartUs = 0;
+uint16_t zimLoopJitterUs = 0;
+uint16_t zimLoopMaxUs = 0;
+uint32_t zimEspTxOk = 0;
+uint32_t zimEspTxFail = 0;
+uint32_t zimEspPeerRebuilds = 0;
+esp_err_t zimEspLastErr = ESP_OK;
+char zimEspLastTag[18] = "-";
+
 volatile uint16_t gAiBatch = JANUS_DEFAULT_BATCH;
 volatile uint8_t gAiHint = 1;
 volatile uint16_t gTargetBits = 0;
@@ -601,6 +943,61 @@ uint8_t soloExtranonce2Size = 4;
 uint64_t soloExtranonce2 = 0;
 uint32_t soloNonce = 0;
 uint32_t lastSwarmSenseMs = 0;
+volatile uint16_t gLastSoloBatchNow = 0;
+
+struct ZimNotifyOracle {
+  uint32_t lastMs = 0;
+  uint32_t medianMs = 0;
+  uint32_t nextMs = 0;
+  uint32_t intervals[ZIM_NOTIFY_ORACLE_SLOTS] = {0};
+  uint8_t idx = 0;
+  uint8_t count = 0;
+  uint32_t pauses = 0;
+
+  void record(uint32_t now) {
+#if ZIM_NOTIFY_ORACLE
+    if (lastMs != 0) {
+      uint32_t dt = now - lastMs;
+      if (dt >= ZIM_NOTIFY_MIN_INTERVAL_MS && dt <= ZIM_NOTIFY_MAX_INTERVAL_MS) {
+        intervals[idx] = dt;
+        idx = (uint8_t)((idx + 1U) % ZIM_NOTIFY_ORACLE_SLOTS);
+        if (count < ZIM_NOTIFY_ORACLE_SLOTS) count++;
+        recomputeMedian();
+      }
+    }
+    lastMs = now;
+    nextMs = medianMs ? (now + medianMs) : 0;
+#else
+    (void)now;
+#endif
+  }
+
+  void recomputeMedian() {
+    if (count == 0) { medianMs = 0; return; }
+    uint32_t tmp[ZIM_NOTIFY_ORACLE_SLOTS];
+    for (uint8_t i = 0; i < count; ++i) tmp[i] = intervals[i];
+    for (uint8_t i = 1; i < count; ++i) {
+      uint32_t v = tmp[i];
+      int8_t j = (int8_t)i - 1;
+      while (j >= 0 && tmp[j] > v) {
+        tmp[j + 1] = tmp[j];
+        j--;
+      }
+      tmp[j + 1] = v;
+    }
+    medianMs = tmp[count / 2];
+  }
+
+  uint32_t msToNext(uint32_t now) const {
+    if (medianMs == 0 || nextMs == 0) return 0;
+    if ((int32_t)(nextMs - now) <= 0) return 0;
+    return nextMs - now;
+  }
+
+  bool ready() const { return count >= 4 && medianMs > 0; }
+};
+
+ZimNotifyOracle gNotifyOracle;
 
 // White Raven micrograd-like agent state.
 struct ZimMicrogradAgent {
@@ -622,6 +1019,8 @@ ZimMicrogradAgent zimAgent{};
 uint32_t lastAgentMemoryMs = 0;
 uint32_t lastAgentSaveMs = 0;
 uint32_t lastAgentNasMs = 0;
+uint32_t lastStrideBanditSaveMs = 0;
+volatile bool gZimAgentMemoryEvent = false;  // quiet mode: burst memory only after meaningful events
 
 // v3.3 Core2 mission-control state.
 ZimMissionPacket zimCurrentMission{};
@@ -631,10 +1030,13 @@ volatile uint32_t zimMissionRx = 0;
 volatile uint32_t zimMissionAccepted = 0;
 volatile uint32_t zimMissionIgnored = 0;
 volatile uint32_t zimLastMissionMs = 0;
+volatile uint32_t zimBlackStarStudyRx = 0;
+uint32_t zimBlackStarLastMs = 0;
 uint8_t zimMissionSector = 6;
 char zimMissionLine[64] = "Core2 vyklyuchen; Buzz shlet hlam";
 char zimPlanetLine[20] = "Zemlya-Zim";
 char zimOrderLine[48] = "Buzz: rabotay. Zim: potom";
+char zimBlackStarLine[48] = "Gargantua Lab: ojidaet signal";
 uint16_t zimMissionStimHpBonus = 0;
 bool zimMissionStimActive = false;
 uint32_t zimMissionCancelled = 0;
@@ -984,7 +1386,44 @@ bool zimColdMode() {
 }
 
 uint16_t zimSoloBatchNow() {
-  return zimColdMode() ? (uint16_t)ZIM_SOLO_BATCH_COLD : (uint16_t)ZIM_SOLO_BATCH;
+  uint16_t batch = zimColdMode() ? (uint16_t)ZIM_SOLO_BATCH_COLD : (uint16_t)ZIM_SOLO_BATCH;
+#if ZIM_SAFE_MACHINE_INTUITION
+  if (batch > ZIM_SAFE_BATCH_MAX) batch = ZIM_SAFE_BATCH_MAX;
+
+  UBaseType_t q = gRxQueue ? uxQueueMessagesWaiting(gRxQueue) : 0;
+  if (q > 4) {
+    if (batch > ZIM_SAFE_BATCH_BUSY) batch = ZIM_SAFE_BATCH_BUSY;
+  } else if (q > 1) {
+    if (batch > ZIM_SAFE_BATCH_MID) batch = ZIM_SAFE_BATCH_MID;
+  }
+
+  if (ESP.getFreeHeap() < ZIM_COLD_LOW_HEAP_BYTES) {
+    if (batch > ZIM_SAFE_BATCH_BUSY) batch = ZIM_SAFE_BATCH_BUSY;
+  }
+
+#if ZIM_NOTIFY_ORACLE
+  uint32_t ttn = gNotifyOracle.msToNext(millis());
+  if (gNotifyOracle.ready() && ttn > 0 && ttn < ZIM_NOTIFY_PHASE_BATCH_MS) {
+    if (batch > ZIM_SAFE_BATCH_PHASE) batch = ZIM_SAFE_BATCH_PHASE;
+  }
+#endif
+#endif
+  gLastSoloBatchNow = batch;
+  return batch;
+}
+
+bool zimShouldPauseBeforeNotify(uint16_t batchNow) {
+#if ZIM_SAFE_MACHINE_INTUITION && ZIM_NOTIFY_ORACLE
+  (void)batchNow;
+  uint32_t ttn = gNotifyOracle.msToNext(millis());
+  if (!gNotifyOracle.ready() || ttn == 0) return false;
+  // Last fraction of a predicted Stratum phase: skip starting a fresh scan chunk,
+  // but keep soloJobReady intact. This avoids wasting work on likely-stale tails.
+  return (ttn <= ZIM_NOTIFY_PAUSE_WINDOW_MS);
+#else
+  (void)batchNow;
+  return false;
+#endif
 }
 
 uint32_t zimDrawIntervalMs() {
@@ -1000,7 +1439,18 @@ void setSoloStatus(const char* s, const char* err = nullptr) {
   if (err) strlcpy(soloLastError, err, sizeof(soloLastError));
 }
 
-void doubleSha256(mbedtls_sha256_context* ctx, const uint8_t* data, size_t len, uint8_t out[32]) {
+bool gZimHwShaAvailable = false;
+bool gZimHwShaEnabled = false;
+bool gZimShaAutoBenched = false;
+uint32_t gZimHwShaCalls = 0;
+uint32_t gZimSoftShaCalls = 0;
+uint32_t gZimHwShaFallbacks = 0;
+uint32_t gZimShaBenchSwUs = 0;
+uint32_t gZimShaBenchHwUs = 0;
+uint32_t gZimShaCrossChecks = 0;
+uint32_t gZimShaMismatches = 0;
+
+void doubleSha256_mbedtls(mbedtls_sha256_context* ctx, const uint8_t* data, size_t len, uint8_t out[32]) {
   uint8_t first[32];
   mbedtls_sha256_starts(ctx, 0);
   mbedtls_sha256_update(ctx, data, len);
@@ -1010,8 +1460,169 @@ void doubleSha256(mbedtls_sha256_context* ctx, const uint8_t* data, size_t len, 
   mbedtls_sha256_finish(ctx, out);
 }
 
+bool doubleSha256_hw_direct(const uint8_t* data, size_t len, uint8_t out[32]) {
+#if ZIM_HW_SHA256 && ZIM_HAS_ESP_SHA_HEADER
+  // esp_sha() is void in some Arduino/IDF cores and int/esp_err_t in others.
+  // Ignore the return value and trust the boot self-test to approve or reject HW mode.
+  uint8_t first[32];
+  esp_sha(SHA2_256, data, len, first);
+  esp_sha(SHA2_256, first, 32, out);
+  return true;
+#else
+  (void)data; (void)len; (void)out;
+  return false;
+#endif
+}
+
+void doubleSha256(mbedtls_sha256_context* ctx, const uint8_t* data, size_t len, uint8_t out[32]) {
+#if ZIM_HW_SHA256
+  if (gZimHwShaEnabled) {
+    if (doubleSha256_hw_direct(data, len, out)) {
+      gZimHwShaCalls++;
+#if ZIM_SHA_CROSSCHECK
+      if ((gZimHwShaCalls % ZIM_SHA_CROSSCHECK_EVERY) == 0) {
+        uint8_t swCheck[32];
+        doubleSha256_mbedtls(ctx, data, len, swCheck);
+        gZimShaCrossChecks++;
+        if (memcmp(out, swCheck, 32) != 0) {
+          memcpy(out, swCheck, 32);
+          gZimShaMismatches++;
+          gZimHwShaFallbacks++;
+          gZimHwShaEnabled = false; // trusted SW fallback if HW ever disagrees after boot
+          Serial.println("[ZIM/SHA] runtime crosscheck mismatch; forcing mode=SW");
+        }
+      }
+#endif
+      return;
+    }
+    gZimHwShaFallbacks++;
+  }
+#endif
+  doubleSha256_mbedtls(ctx, data, len, out);
+  gZimSoftShaCalls++;
+#if ZIM_HW_SHA256 && ZIM_SHA_CROSSCHECK
+  if (gZimHwShaAvailable && ((gZimSoftShaCalls % ZIM_SHA_CROSSCHECK_EVERY) == 0)) {
+    uint8_t hwCheck[32];
+    if (doubleSha256_hw_direct(data, len, hwCheck)) {
+      gZimShaCrossChecks++;
+      if (memcmp(out, hwCheck, 32) != 0) {
+        gZimShaMismatches++;
+        gZimHwShaAvailable = false;
+        Serial.println("[ZIM/SHA] runtime HW check mismatch; keeping mode=SW");
+      }
+    }
+  }
+#endif
+}
+
+bool zimHwShaSelfTest() {
+#if ZIM_HW_SHA256
+  gZimHwShaAvailable = (ZIM_HAS_ESP_SHA_HEADER != 0);
+  gZimHwShaEnabled = false;
+  if (!gZimHwShaAvailable) {
+    Serial.printf("[ZIM/SHA] esp_sha-compatible header missing; tried multipath, mode=SW\n");
+    return false;
+  }
+
+  uint8_t sample[80];
+  for (uint8_t i = 0; i < sizeof(sample); ++i) {
+    sample[i] = (uint8_t)(0xA5U ^ (i * 37U) ^ (i >> 1));
+  }
+  uint8_t ref[32];
+  uint8_t hw[32];
+  mbedtls_sha256_context testCtx;
+  mbedtls_sha256_init(&testCtx);
+  doubleSha256_mbedtls(&testCtx, sample, sizeof(sample), ref);
+  mbedtls_sha256_free(&testCtx);
+
+  bool ok = doubleSha256_hw_direct(sample, sizeof(sample), hw) && (memcmp(ref, hw, 32) == 0);
+  gZimHwShaEnabled = ok;
+  Serial.printf("[ZIM/SHA] header=%s selftest=%s candidate=%s\n",
+                ZIM_SHA_HEADER_NAME, ok ? "OK" : "FAIL", ok ? "HW" : "SW");
+  return ok;
+#else
+  gZimHwShaAvailable = false;
+  gZimHwShaEnabled = false;
+  Serial.println("[ZIM/SHA] disabled by build; mode=SW");
+  return false;
+#endif
+}
+
+void zimShaAutoBench() {
+#if ZIM_HW_SHA256 && ZIM_SHA_AUTO_BENCH
+  gZimShaAutoBenched = false;
+  gZimShaBenchSwUs = 0;
+  gZimShaBenchHwUs = 0;
+
+  if (!gZimHwShaAvailable || !gZimHwShaEnabled) {
+    gZimHwShaEnabled = false;
+    Serial.println("[ZIM/SHA] autobench skipped; mode=AUTO-SW");
+    return;
+  }
+
+  uint8_t sample[80];
+  uint8_t out[32];
+  volatile uint8_t sink = 0;
+  for (uint8_t i = 0; i < sizeof(sample); ++i) {
+    sample[i] = (uint8_t)(0x3CU ^ (i * 29U) ^ (i << 1));
+  }
+
+  mbedtls_sha256_context benchCtx;
+  mbedtls_sha256_init(&benchCtx);
+
+  uint32_t t0 = micros();
+  for (uint16_t n = 0; n < ZIM_SHA_BENCH_ROUNDS; ++n) {
+    sample[0] = (uint8_t)n;
+    sample[7] ^= (uint8_t)(n >> 1);
+    sample[79] = (uint8_t)(n * 13U);
+    doubleSha256_mbedtls(&benchCtx, sample, sizeof(sample), out);
+    sink ^= out[n & 31];
+  }
+  uint32_t t1 = micros();
+
+  bool hwOk = true;
+  for (uint16_t n = 0; n < ZIM_SHA_BENCH_ROUNDS; ++n) {
+    sample[0] = (uint8_t)n;
+    sample[7] ^= (uint8_t)(n >> 1);
+    sample[79] = (uint8_t)(n * 13U);
+    if (!doubleSha256_hw_direct(sample, sizeof(sample), out)) {
+      hwOk = false;
+      break;
+    }
+    sink ^= out[(n + 7) & 31];
+  }
+  uint32_t t2 = micros();
+  mbedtls_sha256_free(&benchCtx);
+
+  gZimShaBenchSwUs = (uint32_t)(t1 - t0);
+  gZimShaBenchHwUs = hwOk ? (uint32_t)(t2 - t1) : 0;
+  gZimShaAutoBenched = true;
+
+  uint32_t chooseLimit = gZimShaBenchSwUs - (gZimShaBenchSwUs * ZIM_SHA_HW_MIN_GAIN_PCT / 100UL);
+  bool chooseHw = hwOk && gZimShaBenchHwUs > 0 && gZimShaBenchHwUs < chooseLimit;
+  gZimHwShaEnabled = chooseHw;
+
+  // Keep compiler from discarding the timing work, and make the line unique enough for logs.
+  Serial.printf("[ZIM/SHA] autobench rounds=%u swUs=%lu hwUs=%lu sink=%u choose=%s mode=%s\n",
+                (unsigned)ZIM_SHA_BENCH_ROUNDS,
+                (unsigned long)gZimShaBenchSwUs,
+                (unsigned long)gZimShaBenchHwUs,
+                (unsigned)sink,
+                chooseHw ? "HW" : "SW",
+                chooseHw ? "AUTO-HW" : "AUTO-SW");
+#else
+  gZimHwShaEnabled = false;
+  gZimShaAutoBenched = false;
+#endif
+}
+
 void updateBestBits(uint16_t bits) {
-  if (bits > gBestBits) gBestBits = bits;
+  if (bits > gBestBits) {
+    gBestBits = bits;
+#if ZIM_QUIET_CANARY
+    gZimAgentMemoryEvent = true;
+#endif
+  }
 }
 
 bool macLooksValid(const uint8_t mac[6]) {
@@ -1032,6 +1643,152 @@ static uint32_t mix32(uint32_t x) {
   x ^= x >> 16;
   return x;
 }
+
+#if ZIM_STRIDE_BANDIT
+struct ZimStrideBandit {
+  uint16_t w[ZIM_STRIDE_BANDIT_ARMS] = {
+    ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0,
+    ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0,
+    ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0,
+    ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0, ZIM_STRIDE_BANDIT_W0,
+    ZIM_STRIDE_BANDIT_W0
+  };
+  uint8_t lastArm = 14;   // golden-ratio stride arm by default
+  uint32_t pulls = 0;
+  uint32_t hits = 0;
+  uint16_t rewardEmaQ8 = 0;
+  uint32_t saves = 0;
+  bool dirty = false;
+
+  uint32_t armStride(uint8_t a) const {
+    static const uint32_t arms[ZIM_STRIDE_BANDIT_ARMS] = {
+      1UL, 3UL, 5UL, 7UL, 11UL, 17UL, 29UL, 31UL, 53UL,
+      97UL, 257UL, 521UL, 4099UL, 65537UL,
+      0x9E3779B9UL, 0xC4111903UL, (0x4F1BBCDCUL | 1UL)
+    };
+    if (a >= ZIM_STRIDE_BANDIT_ARMS) a = 14;
+    return arms[a] | 1UL;
+  }
+
+  uint8_t choose(uint32_t seed) {
+    pulls++;
+    uint32_t r = mix32(seed ^ pulls ^ esp_random() ^ ((uint32_t)lastArm << 24));
+    if ((r & 0xFFU) < ZIM_STRIDE_BANDIT_EXPLORE_Q8) {
+      lastArm = (uint8_t)((r >> 8) % ZIM_STRIDE_BANDIT_ARMS);
+      return lastArm;
+    }
+    uint32_t total = 0;
+    for (uint8_t i = 0; i < ZIM_STRIDE_BANDIT_ARMS; ++i) total += w[i];
+    if (!total) total = 1;
+    uint32_t pick = (r >> 8) % total;
+    uint32_t acc = 0;
+    for (uint8_t i = 0; i < ZIM_STRIDE_BANDIT_ARMS; ++i) {
+      acc += w[i];
+      if (pick < acc) { lastArm = i; return i; }
+    }
+    lastArm = (uint8_t)(ZIM_STRIDE_BANDIT_ARMS - 1);
+    return lastArm;
+  }
+
+  uint32_t chooseStride(uint32_t seed) {
+    return armStride(choose(seed));
+  }
+
+  void observe(uint16_t bits, bool shareLike) {
+    if (!shareLike && bits < ZIM_STRIDE_BANDIT_MIN_BITS) return;
+    hits++;
+    // Reward is bounded: low-diff hits give a small signal; submitted shares give a strong signal.
+    uint16_t r = 1;
+    if (bits >= ZIM_STRIDE_BANDIT_MIN_BITS) r += (uint16_t)((bits - ZIM_STRIDE_BANDIT_MIN_BITS + 1U) * 12U);
+    if (bits >= 20) r += 24;
+    if (bits >= 22) r += 32;
+    if (shareLike) r += 96;
+    if (r > 255) r = 255;
+
+    rewardEmaQ8 = (uint16_t)(((uint32_t)rewardEmaQ8 * 15U + r) >> 4);
+
+    // Very slow forgetting prevents one lucky arm from dominating forever.
+    if ((hits & 0x1FUL) == 0) {
+      for (uint8_t i = 0; i < ZIM_STRIDE_BANDIT_ARMS; ++i) {
+        uint32_t wi = ((uint32_t)w[i] * 255U + 128U) >> 8;
+        if (wi < ZIM_STRIDE_BANDIT_WMIN) wi = ZIM_STRIDE_BANDIT_WMIN;
+        w[i] = (uint16_t)wi;
+      }
+    }
+
+    // Integer exponential-weights update: w <- w * (1 + eta*r), eta ~= 1/512.
+    uint32_t wi = w[lastArm];
+    wi += 1U + ((wi * (uint32_t)r) >> 9);
+    if (wi > ZIM_STRIDE_BANDIT_WMAX) wi = ZIM_STRIDE_BANDIT_WMAX;
+    w[lastArm] = (uint16_t)wi;
+    dirty = true;
+  }
+};
+
+ZimStrideBandit gStrideBandit;
+
+#if ZIM_STRIDE_BANDIT_MEMORY
+void zimStrideBanditLoadPrefs() {
+  uint8_t ok = prefs.getUChar("zsbOK", 0);
+  if (ok != 0xB3) {
+    gStrideBandit.dirty = false;
+    return;
+  }
+
+  uint16_t ww[ZIM_STRIDE_BANDIT_ARMS];
+  size_t got = prefs.getBytes("zsbW", ww, sizeof(ww));
+  if (got == sizeof(ww)) {
+    for (uint8_t i = 0; i < ZIM_STRIDE_BANDIT_ARMS; ++i) {
+      uint16_t wi = ww[i];
+      if (wi < ZIM_STRIDE_BANDIT_WMIN) wi = ZIM_STRIDE_BANDIT_WMIN;
+      if (wi > ZIM_STRIDE_BANDIT_WMAX) wi = ZIM_STRIDE_BANDIT_WMAX;
+      gStrideBandit.w[i] = wi;
+    }
+  }
+
+  uint8_t arm = prefs.getUChar("zsbArm", gStrideBandit.lastArm);
+  if (arm >= ZIM_STRIDE_BANDIT_ARMS) arm = 14;
+  gStrideBandit.lastArm = arm;
+  gStrideBandit.pulls = prefs.getUInt("zsbPull", gStrideBandit.pulls);
+  gStrideBandit.hits = prefs.getUInt("zsbHits", gStrideBandit.hits);
+  gStrideBandit.rewardEmaQ8 = prefs.getUShort("zsbRew", gStrideBandit.rewardEmaQ8);
+  if (gStrideBandit.rewardEmaQ8 > 255) gStrideBandit.rewardEmaQ8 = 255;
+  gStrideBandit.dirty = false;
+  gStrideBandit.saves = 0;
+  lastStrideBanditSaveMs = millis();
+  Serial.printf("[ZIM/BANDIT] memory load arm=%u hits=%lu rew=%u\n",
+                (unsigned)gStrideBandit.lastArm,
+                (unsigned long)gStrideBandit.hits,
+                (unsigned)gStrideBandit.rewardEmaQ8);
+}
+
+void zimStrideBanditSavePrefs(bool force) {
+  uint32_t now = millis();
+  if (!force && !gStrideBandit.dirty) return;
+  if (!force && lastStrideBanditSaveMs && now - lastStrideBanditSaveMs < ZIM_STRIDE_BANDIT_SAVE_MS) return;
+  if (force && lastStrideBanditSaveMs && now - lastStrideBanditSaveMs < ZIM_STRIDE_BANDIT_SAVE_MIN_MS && !gStrideBandit.dirty) return;
+
+  prefs.putUChar("zsbOK", 0xB3);
+  prefs.putBytes("zsbW", gStrideBandit.w, sizeof(gStrideBandit.w));
+  prefs.putUChar("zsbArm", gStrideBandit.lastArm);
+  prefs.putUInt("zsbPull", gStrideBandit.pulls);
+  prefs.putUInt("zsbHits", gStrideBandit.hits);
+  prefs.putUShort("zsbRew", gStrideBandit.rewardEmaQ8);
+  gStrideBandit.dirty = false;
+  gStrideBandit.saves++;
+  lastStrideBanditSaveMs = now;
+}
+
+void zimStrideBanditMaybeSave(uint32_t now) {
+  (void)now;
+  zimStrideBanditSavePrefs(false);
+}
+#else
+void zimStrideBanditLoadPrefs() {}
+void zimStrideBanditSavePrefs(bool force) { (void)force; }
+void zimStrideBanditMaybeSave(uint32_t now) { (void)now; }
+#endif
+#endif
 
 void setEspNowChannel(uint8_t ch, bool announce) {
   if (ch < JANUS_SCAN_MIN_CHANNEL || ch > JANUS_SCAN_MAX_CHANNEL) ch = JANUS_BUZZ_WIFI_CHANNEL;
@@ -1086,6 +1843,43 @@ bool zimMissionTargetMatches(const char target[16]) {
   return false;
 }
 
+char zimUpperAscii(char c) {
+  if (c >= 'a' && c <= 'z') return (char)(c - 32);
+  return c;
+}
+
+bool zimPackedFieldContains(const char* field, size_t n, const char* needle) {
+  if (!field || !needle || !needle[0] || n == 0) return false;
+  size_t nn = strlen(needle);
+  if (nn == 0 || nn > n) return false;
+  for (size_t i = 0; i + nn <= n; ++i) {
+    if (field[i] == 0) break;
+    bool ok = true;
+    for (size_t j = 0; j < nn; ++j) {
+      char a = field[i + j];
+      if (a == 0) { ok = false; break; }
+      char b = needle[j];
+      if (zimUpperAscii(a) != zimUpperAscii(b)) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+bool zimMissionIsBlackStarStudy(const ZimMissionPacket& zm) {
+  return zimPackedFieldContains(zm.planet, sizeof(zm.planet), "GARGANTUA") ||
+         zimPackedFieldContains(zm.planet, sizeof(zm.planet), "BLACK") ||
+         zimPackedFieldContains(zm.planet, sizeof(zm.planet), "BH") ||
+         zimPackedFieldContains(zm.order, sizeof(zm.order), "GARGANTUA") ||
+         zimPackedFieldContains(zm.order, sizeof(zm.order), "HORIZON") ||
+         zimPackedFieldContains(zm.order, sizeof(zm.order), "BH") ||
+         zimPackedFieldContains(zm.target, sizeof(zm.target), "BH");
+}
+
+bool zimBlackStarFresh(uint32_t now = millis()) {
+  return zimBlackStarLastMs && (now - zimBlackStarLastMs < 90000UL);
+}
+
 const char* zimMissionTypeName(uint8_t t) {
   switch (t % 5) {
     case 0: return "RAZVED";
@@ -1118,38 +1912,99 @@ void zimAgentSavePrefs();
 void zimAgentTick(const char* reason, float extReward);
 void sendZimAgentMemory();
 void zimAgentMaybePostNas();
+esp_err_t zimEspNowSend(const char* tag, const uint8_t* dst, const void* payload, size_t len, bool repairOnFail = true);
+void zimHomeCortexBoot();
+void zimHomeCortexTick(uint32_t now);
+void zimHomeCortexMemoryEvent(const char* reason);
+void zimHomeBlackStarTransitionTick(uint32_t now, bool force);
+void sendZimPnCortex(bool force = false);
+void zimHomeHandlePolicyRaw(const void* raw);
+void zimHomeHandleEventRaw(const void* raw);
+void zimHomeHandleKenshiRaw(const void* raw);
+void zimHomeHandleTachyonRaw(const void* raw);
 float zimClip(float x, float lo, float hi);
 uint8_t zimF2B(float x);
 void zimSlimeReset();
 void zimSlimeLoadPrefs();
 void zimSlimeSavePrefs(bool force);
 void zimSlimeObserve(uint8_t event, float intensity);
+#if ZIM_STRIDE_BANDIT
+void zimStrideBanditLoadPrefs();
+void zimStrideBanditSavePrefs(bool force);
+void zimStrideBanditMaybeSave(uint32_t now);
+#endif
 const char* zimSlimeFace();
 const char* zimSlimeMoodText();
 void loadDisplayPrefs();
 void saveDisplayPrefs();
 void cycleZimBrightness();
+void zimNoteUserActivity(uint32_t now);
+void zimAutoDimTick(uint32_t now);
 void drawInvaderOverlay();
 
 void handleZimMission(const uint8_t* srcMac, int8_t rssi, const ZimMissionPacket& zm) {
   (void)srcMac;
   if (zm.magic[0] != 'Z' || zm.magic[1] != 'M' || zm.version != 1) return;
-  // v3.7: Core2 is not required. Zim no longer waits for ZM orders in this branch.
-  // If old Core2 packets are present, he logs them as imperial spam and keeps doing Buzz/solo chaos.
   zimMissionRx++;
-  zimMissionIgnored++;
-  zimSlimeObserve(ZE_CORE2_SPAM, 0.55f);
   gLastRssi = rssi;
-  zimMissionPending = false;
-  zimMissionActive = false;
-  snprintf(zimMissionLine, sizeof(zimMissionLine), "Core2 spam otklonen S%02u", (unsigned)zm.sector);
-  snprintf(zimOrderLine, sizeof(zimOrderLine), "Buzz vazhnee. Core2 potom");
+  const bool targetOk = zimMissionTargetMatches(zm.target);
+  const bool blackStarOrder = zimMissionIsBlackStarStudy(zm);
+
+  if (targetOk && blackStarOrder) {
+    uint32_t now = millis();
+    zimMissionAccepted++;
+    zimBlackStarStudyRx++;
+    zimBlackStarLastMs = now;
+    memcpy((void*)&zimCurrentMission, &zm, sizeof(zm));
+    zimMissionSector = zm.sector;
+    uint8_t focus = (uint8_t)constrain((int)(48 + zm.priority / 4 + zm.floorMax * 4 + (gBestBits > 23 ? 10 : 0)), 0, 100);
+    if (superWeapon.blackhole < focus) superWeapon.blackhole = (uint8_t)((superWeapon.blackhole + focus) / 2U);
+    if (superWeapon.charge < ZIM_SUPER_WEAPON_MAX_CHARGE) {
+      uint16_t next = (uint16_t)superWeapon.charge + 2U + (zm.missionType % 3U);
+      superWeapon.charge = (uint8_t)min((unsigned)ZIM_SUPER_WEAPON_MAX_CHARGE, (unsigned)next);
+    }
+    snprintf(zimBlackStarLine, sizeof(zimBlackStarLine), "Gargantua S%02u F%u focus%u", (unsigned)zm.sector, (unsigned)zm.floorMax, (unsigned)focus);
+    snprintf(zimMissionLine, sizeof(zimMissionLine), "Gargantua Lab S%02u: %s", (unsigned)zm.sector, zimMissionTypeName(zm.missionType));
+    snprintf(zimOrderLine, sizeof(zimOrderLine), "%s", zm.order[0] ? zm.order : "BH horizon study");
+    zimSlimeObserve(ZE_RAMANUJAN_STUDY, 0.28f);
+    zimAgentTick("gargantua_order", 0.12f);
+    zimHomeBlackStarTransitionTick(now, true);
+    gZimAgentMemoryEvent = true;
+
+    if (!zimMissionActive && !zimMissionPending &&
+        (game.mode == GM_HOME || game.mode == GM_LAB || game.mode == GM_RETURN || game.mode == GM_REPORT || game.mode == GM_BOOT)) {
+      startMissionFromCore2();
+    } else if (!zimMissionActive) {
+      zimMissionPending = true;
+      setBanner("Gargantua signal prinyat", "Zim doletit do horizonta posle cikla");
+      game.dirty = true;
+    } else {
+      setBanner("Gargantua Lab obnovlen", "Zim uzhe u horizonta");
+      game.dirty = true;
+    }
+
+    Serial.printf("[ZIMCTRL] BH_STUDY accepted #%lu sector=%u type=%s planet=%s order=%s focus=%u mode=%u\n",
+                  (unsigned long)zimMissionAccepted, (unsigned)zm.sector, zimMissionTypeName(zm.missionType),
+                  zm.planet, zm.order, (unsigned)focus, (unsigned)game.mode);
+    return;
+  }
+
+  // v3.7 compatibility: non-target / non-Gargantua Core2 packets stay lazy background noise.
+  zimMissionIgnored++;
+  zimSlimeObserve(ZE_CORE2_SPAM, targetOk ? 0.38f : 0.18f);
+  if (!blackStarOrder) {
+    zimMissionPending = false;
+    zimMissionActive = false;
+  }
+  snprintf(zimMissionLine, sizeof(zimMissionLine), targetOk ? "Core2 spam otklonen S%02u" : "Core2 chujoy prikaz S%02u", (unsigned)zm.sector);
+  snprintf(zimOrderLine, sizeof(zimOrderLine), blackStarOrder ? "Ne moy sektor BH" : "Buzz vazhnee. Core2 potom");
   if ((zimMissionIgnored & 0x03UL) == 1UL) {
-    setBanner("Core2 prikaz v arhiv", "Zim seychas lenitsya dlya Buzz");
+    setBanner(targetOk ? "Core2 prikaz v arhiv" : "Core2 prikaz mimo", targetOk ? "Zim seychas lenitsya dlya Buzz" : "Zim ne etot ucheniy");
     game.dirty = true;
   }
-  Serial.printf("[ZIMCTRL] Core2 ZM ignored #%lu sector=%u type=%s order=%s\n",
-                (unsigned long)zimMissionIgnored, (unsigned)zm.sector, zimMissionTypeName(zm.missionType), zm.order);
+  Serial.printf("[ZIMCTRL] Core2 ZM ignored #%lu sector=%u type=%s targetOk=%u blackstar=%u planet=%s order=%s\n",
+                (unsigned long)zimMissionIgnored, (unsigned)zm.sector, zimMissionTypeName(zm.missionType),
+                (unsigned)targetOk, (unsigned)blackStarOrder, zm.planet, zm.order);
 }
 
 // ============================================================
@@ -1423,8 +2278,14 @@ void superWeaponRecomputeRoute(uint32_t pulse) {
 
   static const uint32_t strides[] = {1UL, 3UL, 5UL, 7UL, 11UL, 17UL, 29UL, 31UL, 53UL, 97UL, 257UL, 521UL, 4099UL, 65537UL, 0x9E3779B9UL, 0xC4111903UL, 0x4F1BBCDCUL | 1UL};
   uint8_t idx = (uint8_t)((pulse ^ ((uint32_t)superWeapon.resonance << 8) ^ ((uint32_t)thetaPressure << 16) ^ zimRama.tauLike ^ game.steps ^ gBestBits) % (sizeof(strides) / sizeof(strides[0])));
+#if ZIM_STRIDE_BANDIT
+  uint32_t banditSeed = pulse ^ ((uint32_t)thetaPressure << 24) ^ zimRama.tauLike ^ gTotalHashes ^ ((uint32_t)game.seen << 7);
+  superWeapon.reverseStride = gStrideBandit.chooseStride(banditSeed) | 1UL;
+#else
   superWeapon.reverseStride = strides[idx] | 1UL;
+#endif
 }
+
 
 void superWeaponTick(uint16_t bits, bool shareLike) {
   uint32_t pulse = mix32(gTotalHashes ^ ((uint32_t)bits << 16) ^ ((uint32_t)superWeapon.charge << 8) ^ millis() ^ game.dungeonSeed);
@@ -1730,7 +2591,9 @@ void sendZimAgentMemory() {
   za.trustSwarm = zimF2B(zimSlime.trustSwarm);
   za.slimeTicks = zimSlime.ticks;
   strlcpy(za.thought, zimSlime.thought, sizeof(za.thought));
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&za, sizeof(za));
+  if (zimEspNowSend("Z/A", JANUS_BROADCAST_MAC, &za, sizeof(za), true) == ESP_OK) {
+    zimHomeCortexMemoryEvent("za_memory");
+  }
 #endif
 }
 
@@ -2154,6 +3017,7 @@ Monster generateEncounterMonster() {
 }
 
 const char* currentMissionName() {
+  if (zimBlackStarFresh()) return "GargantuaLab";
   return MISSION_NAMES[game.missionId % 5];
 }
 
@@ -2201,6 +3065,7 @@ void enterLab(const char* why) {
 void startMissionFromCore2() {
   ZimMissionPacket zm{};
   memcpy(&zm, &zimCurrentMission, sizeof(zm));
+  const bool blackStarOrder = zimMissionIsBlackStarStudy(zm);
   zimMissionPending = false;
   zimMissionActive = true;
   zimLastMissionMs = millis();
@@ -2235,8 +3100,16 @@ void startMissionFromCore2() {
   }
   strlcpy(zimPlanetLine, zm.planet[0] ? zm.planet : "Zemlya-Zim", sizeof(zimPlanetLine));
   strlcpy(zimOrderLine, zm.order[0] ? zm.order : zimMissionTypeName(zm.missionType), sizeof(zimOrderLine));
-  snprintf(zimMissionLine, sizeof(zimMissionLine), "Core2 -> %s", zimPlanetLine);
-  setBanner("Prikaz Core2 zapushen", zimOrderLine);
+  if (blackStarOrder) {
+    if (superWeapon.blackhole < 64) superWeapon.blackhole = (uint8_t)((superWeapon.blackhole + 64U) / 2U);
+    if (superWeapon.vessel < 42) superWeapon.vessel = (uint8_t)((superWeapon.vessel + 42U) / 2U);
+    snprintf(zimMissionLine, sizeof(zimMissionLine), "Gargantua Lab: S%02u %s", (unsigned)zm.sector, zimMissionTypeName(zm.missionType));
+    snprintf(zimBlackStarLine, sizeof(zimBlackStarLine), "BH ucheniy: %s/%s", zimMissionTypeName(zm.missionType), superWeaponRouteText());
+    setBanner("Gargantua Lab start", "Zim u horizonta sobytiy");
+  } else {
+    snprintf(zimMissionLine, sizeof(zimMissionLine), "Core2 -> %s", zimPlanetLine);
+    setBanner("Prikaz Core2 zapushen", zimOrderLine);
+  }
   game.dirty = true;
 }
 
@@ -2411,6 +3284,10 @@ void updateHome() {
     game.dirty = true;
   }
   if (now - game.stateStartMs < 2500UL) return;
+  if (zimMissionPending) {
+    startMissionFromCore2();
+    return;
+  }
   game.housePhase = (uint8_t)((game.housePhase + 1) % 4);
   game.stateStartMs = now;
   switch (game.housePhase) {
@@ -2544,6 +3421,36 @@ void loadDisplayPrefs() {
 
 void saveDisplayPrefs() {
   prefs.putUChar("lcdBriIdx", zimBrightnessIndex);
+}
+
+void zimNoteUserActivity(uint32_t now) {
+  zimLastUserInputMs = now;
+#if ZIM_LCD_AUTO_DIM
+  if (zimAutoDimmed) {
+    zimLcdSoftBrightness = ZIM_LCD_BRIGHTNESS_LEVELS[zimBrightnessIndex];
+    zimAutoDimmed = false;
+    setBanner("Ekran prosnulsya", "Zim delaet vid chto ne spal");
+    game.dirty = true;
+  }
+#else
+  (void)now;
+#endif
+}
+
+void zimAutoDimTick(uint32_t now) {
+#if ZIM_LCD_AUTO_DIM
+  if (zimLastUserInputMs == 0) zimLastUserInputMs = now;
+  if (!zimAutoDimmed && (now - zimLastUserInputMs >= ZIM_LCD_IDLE_DIM_MS)) {
+    zimAutoDimSavedBrightness = zimLcdSoftBrightness;
+    if (zimLcdSoftBrightness > ZIM_LCD_IDLE_SOFT_BRIGHTNESS) {
+      zimLcdSoftBrightness = ZIM_LCD_IDLE_SOFT_BRIGHTNESS;
+    }
+    zimAutoDimmed = true;
+    game.dirty = true;
+  }
+#else
+  (void)now;
+#endif
 }
 
 void cycleZimBrightness() {
@@ -2808,7 +3715,7 @@ void drawHouseBase() {
 
   drawGbaDialog(2, 104, 236, 29);
   tft.setCursor(8, 110); tft.print(game.banner);
-  tft.setCursor(8, 120); tft.print(game.subBanner);
+  tft.setCursor(8, 120); tft.print(zimBlackStarFresh() ? zimBlackStarLine : game.subBanner);
 }
 
 
@@ -2831,7 +3738,7 @@ void drawMissionSelect() {
   tft.setCursor(126, 91); tft.print("Core "); tft.print(zimMissionPending ? "prikaz" : "svob");
 
   drawGbaDialog(2, 112, 236, 21);
-  tft.setCursor(8, 118); tft.print(zimMissionLine);
+  tft.setCursor(8, 118); tft.print(zimBlackStarFresh() ? zimBlackStarLine : zimMissionLine);
 }
 
 
@@ -3130,6 +4037,9 @@ void handleAgentReward(const uint8_t* srcMac, int8_t rssi, const JanusAgentRewar
   uint16_t b = ar.targetBatch;
   if (b < JANUS_MIN_BATCH) b = JANUS_MIN_BATCH;
   if (b > JANUS_MAX_BATCH) b = JANUS_MAX_BATCH;
+#if ZIM_SAFE_MACHINE_INTUITION
+  if (b > ZIM_AI_BATCH_SAFE_MAX) b = ZIM_AI_BATCH_SAFE_MAX;
+#endif
 
   gAiBatch = b;
   gAiHint = ar.aiHint;
@@ -3177,6 +4087,14 @@ void drainRxQueue() {
       ZimMissionPacket zm{};
       memcpy(&zm, item.data, sizeof(zm));
       handleZimMission(item.mac, item.rssi, zm);
+    } else if (item.type == RX_BLACKBOARD_POLICY && item.len == sizeof(JanusPolicyPacket)) {
+      zimHomeHandlePolicyRaw(item.data);
+    } else if (item.type == RX_BLACKBOARD_EVENT && item.len == sizeof(JanusEventPacket)) {
+      zimHomeHandleEventRaw(item.data);
+    } else if (item.type == RX_KENSHI && item.len == sizeof(JanusKenshiPacket)) {
+      zimHomeHandleKenshiRaw(item.data);
+    } else if (item.type == RX_TACHYON && item.len == sizeof(JanusTachyonProphecyPacket)) {
+      zimHomeHandleTachyonRaw(item.data);
     }
   }
 }
@@ -3200,6 +4118,10 @@ void onEspNowRecv(const uint8_t *src, const uint8_t *data, int len) {
   if (len == (int)sizeof(JobPacket) && data[0] == 'J' && data[1] == 'B') type = RX_JOB;
   else if (len == (int)sizeof(JanusAgentRewardPacket) && data[0] == 'A' && data[1] == 'R') type = RX_AGENT_REWARD;
   else if (len == (int)sizeof(ZimMissionPacket) && data[0] == 'Z' && data[1] == 'M') type = RX_ZIM_MISSION;
+  else if (len == (int)sizeof(JanusPolicyPacket) && data[0] == 'J' && data[1] == 'P') type = RX_BLACKBOARD_POLICY;
+  else if (len == (int)sizeof(JanusEventPacket) && data[0] == 'J' && data[1] == 'E') type = RX_BLACKBOARD_EVENT;
+  else if (len == (int)sizeof(JanusKenshiPacket) && data[0] == 'K' && data[1] == '2') type = RX_KENSHI;
+  else if (len == (int)sizeof(JanusTachyonProphecyPacket) && data[0] == 'T' && data[1] == 'P') type = RX_TACHYON;
   else return;
 
   JanusRxItem item{};
@@ -3255,11 +4177,14 @@ void sendHeartbeat() {
   pkt.jobAgeMs = gJobActive ? (millis() - gJobRxMs) : (soloJobReady ? (millis() - soloLastJobMs) : 0);
   pkt.rssi = gLastRssi;
   pkt.uptime = millis();
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&pkt, sizeof(pkt));
+  zimEspNowSend("hb", JANUS_BROADCAST_MAC, &pkt, sizeof(pkt), true);
 }
 
 void sendSwarmSense() {
 #if ZIM_SEND_SWARMSENSE
+  uint32_t now = millis();
+  bool blackStarFresh = zimBlackStarFresh(now);
+  uint8_t blackStarFocus = blackStarFresh ? (uint8_t)constrain((int)superWeapon.blackhole + (int)superWeapon.vessel / 3, 0, 100) : 0;
   SwarmSensePacket ss{};
   ss.magic[0] = 'S'; ss.magic[1] = 'S';
   ss.version = 1;
@@ -3270,16 +4195,18 @@ void sendSwarmSense() {
   ss.uptime_ms = millis();
   ss.micros_tail = micros();
   ss.free_heap = ESP.getFreeHeap();
-  ss.loop_jitter_us = 0;
-  ss.loop_max_us = 0;
+  ss.loop_jitter_us = zimLoopJitterUs;
+  ss.loop_max_us = zimLoopMaxUs;
   ss.rssi = gLastRssi;
   ss.radio_mode = 1;
   ss.bt_flags = 0;
   ss.palette = (uint8_t)game.mode;
   ss.knn_label = soloAuthorized ? (soloJobReady ? 3 : 2) : (WiFi.status() == WL_CONNECTED ? 1 : 0);
   ss.knn_confidence = zimAgent.confidence ? zimAgent.confidence : (soloJobReady ? 92 : (WiFi.status() == WL_CONNECTED ? 55 : 20));
+  if (blackStarFocus > ss.knn_confidence) ss.knn_confidence = blackStarFocus;
   ss.ai_hint = (uint8_t)((zimAgent.policy & 0x03) | ((superWeapon.route & 0x03) << 6) | ((zimMissionSector & 0x03) << 2)); // agent policy + SUPER route + sector
-  ss.thermal_load = superWeapon.charge;
+  if (blackStarFresh) ss.ai_hint |= 0x20; // Gargantua scientist marker, ABI-safe spare bit
+  ss.thermal_load = (superWeapon.charge > blackStarFocus) ? superWeapon.charge : blackStarFocus;
   ss.effective_batch = zimSoloBatchNow();
   ss.dynamic_batch = gAiBatch;
   ss.hash_rate = gHashRate;
@@ -3287,7 +4214,7 @@ void sendSwarmSense() {
   ss.best_bits = (uint16_t)((gBestBits < 65535UL) ? gBestBits : 65535UL);
   ss.hash_eff_x1000 = (uint16_t)(((gHashRate / 20UL) < 65535UL) ? (gHashRate / 20UL) : 65535UL);
   ss.prediction_error_x1000 = (int16_t)(gLastPredictionError * 1000.0f);
-  ss.entropy_x1000 = (uint16_t)(1000 + ((esp_random() >> 8) & 0x1FF) + ((uint16_t)zimRama.resonance << 1));
+  ss.entropy_x1000 = (uint16_t)(1000 + ((esp_random() >> 8) & 0x1FF) + ((uint16_t)zimRama.resonance << 1) + (blackStarFresh ? ((uint16_t)blackStarFocus << 1) : 0));
   ss.touch_delta = (uint16_t)((zimCurrentMission.mission_id ? zimCurrentMission.mission_id : game.steps) & 0xFFFF);
   ss.job_age_s = zimLastMissionMs ? (uint16_t)((millis() - zimLastMissionMs) / 1000UL) : (soloLastJobMs ? (uint16_t)((millis() - soloLastJobMs) / 1000UL) : 0);
   ss.nonce_remaining_l16 = (uint16_t)(((uint16_t)game.fuel & 0x00FFU) | ((uint16_t)superWeapon.charge << 8));
@@ -3298,7 +4225,8 @@ void sendSwarmSense() {
   if (superWeapon.charge >= 100) ss.flags |= 0x1000;
   if (superWeapon.route == ZW_FLOW || superWeapon.route == ZW_BITE) ss.flags |= 0x2000;
   if (zimAgent.policy == 2 || zimAgent.policy == 3) ss.flags |= 0x4000;
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&ss, sizeof(ss));
+  if (blackStarFresh) ss.flags |= 0x8000;
+  zimEspNowSend("S/S", JANUS_BROADCAST_MAC, &ss, sizeof(ss), true);
 #endif
 }
 
@@ -3314,9 +4242,505 @@ void sendEntropy() {
   er.values[3] = (float)zimAgent.confidence;
 
   // Solo Dominion mode: broadcast telemetry to the swarm, never reply to a Buzz master.
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&er, sizeof(er));
+  zimEspNowSend("E/R", JANUS_BROADCAST_MAC, &er, sizeof(er), true);
 }
 
+
+
+// ============================================================
+// JANUS HOME CORTEX FINAL LAYER v3.11Q2.4.3
+// ============================================================
+uint16_t zimHomeHash16(const char* s) {
+  uint16_t h = 21661U;
+  if (!s) return h;
+  while (*s) {
+    h ^= (uint8_t)*s++;
+    h = (uint16_t)(h * 16719U);
+  }
+  return h ? h : 1;
+}
+
+uint16_t zimHomeCapabilities() {
+  uint16_t caps = JC_HASH | JC_MEMORY | JC_AI | JC_RF;
+  if (soloPoolConnected || soloJobReady) caps |= JC_RELAY;
+  return caps;
+}
+
+uint8_t zimHomeSectorNow() {
+  return (uint8_t)constrain((int)zimMissionSector, 0, 15);
+}
+
+uint8_t zimHomePredictedSector() {
+  uint8_t s = zimHomeSectorNow();
+  uint8_t drift = (uint8_t)((zimRama.resonance + superWeapon.charge + (uint8_t)zimAgent.policy) & 0x03U);
+  if (zimBlackStarFresh()) drift = (uint8_t)((drift + 1U) & 0x03U);
+  return (uint8_t)((s + drift) & 0x0FU);
+}
+
+float zimHomeEntropyNow() {
+  float e = 1.0f + (float)(gBestBits % 32UL) * 0.12f + (float)zimRama.resonance / 64.0f;
+  e += zimSlime.curiosityEarth * 1.3f + zimSlime.shaObsession * 0.8f;
+  if (superWeapon.charge >= 100) e += 1.0f;
+  if (zimBlackStarFresh()) e += 0.40f + (float)superWeapon.blackhole / 255.0f;
+  return constrain(e, 0.0f, 12.0f);
+}
+
+float zimHomeStressNow() {
+  float s = zimAgent.lossEma + fabsf(gLastPredictionError) + (zimColdMode() ? 0.45f : 0.0f);
+  if (zimHomeDangerX100 > 80) s += 0.35f;
+  if (WiFi.status() != WL_CONNECTED) s += 0.55f;
+  if (zimBlackStarFresh()) s += 0.12f;
+  return constrain(s, 0.0f, 3.0f);
+}
+
+uint16_t zimScaleX1000(float v, float lo, float hi) {
+  if (!isfinite(v)) v = lo;
+  v = constrain(v, lo, hi);
+  float span = hi - lo;
+  if (span <= 0.0f) return 0;
+  return (uint16_t)constrain((int)((v - lo) * 1000.0f / span + 0.5f), 0, 65535);
+}
+
+uint32_t zimCurrentJobSignature() {
+  uint32_t h = 0x5A1D0BEEUL ^ (uint32_t)workerId();
+  if (soloJobId[0]) {
+    for (size_t i = 0; soloJobId[i] && i < sizeof(soloJobId); ++i) {
+      h ^= (uint8_t)soloJobId[i];
+      h = mix32(h + 0x9E3779B9UL);
+    }
+  }
+  for (uint8_t i = 0; i < 8; ++i) h ^= ((uint32_t)gJobId[i] << ((i & 3U) * 8U));
+  h ^= (uint32_t)soloExtranonce2 ^ gExtranonce2 ^ (soloJobReady ? 0x51010A00UL : 0) ^ (gJobActive ? 0xB0770000UL : 0);
+  return mix32(h);
+}
+
+void sendZimPnCortex(bool force) {
+#if ZIM_PN_CORTEX_ENABLE
+  uint32_t now = millis();
+  if (!force && now - zimPnLastMs < ZIM_PN_CORTEX_MS) return;
+  zimPnLastMs = now;
+
+  uint32_t hashRate = gHashRate ? gHashRate : gHashRateSmooth;
+  uint16_t targetBits = gTargetBits ? gTargetBits : soloShareTargetBits;
+  uint16_t bestBits = (uint16_t)((gBestBits < 65535UL) ? gBestBits : 65535UL);
+  bool blackStarFresh = zimBlackStarFresh(now);
+  float heapPressure = 1.0f - constrain((float)ESP.getFreeHeap() / 240000.0f, 0.0f, 1.0f);
+  float hashLoad = constrain((float)hashRate / 9000.0f, 0.0f, 2.4f);
+  float batchLoad = constrain((float)zimSoloBatchNow() / (float)ZIM_SAFE_BATCH_MAX, 0.0f, 1.4f);
+  float thermal = constrain(0.18f + hashLoad * 0.34f + batchLoad * 0.16f + heapPressure * 0.22f + (zimColdMode() ? 0.20f : 0.0f), 0.0f, 4.0f);
+  float load = constrain(0.12f + hashLoad * 0.48f + batchLoad * 0.22f + (gJobActive ? 0.16f : 0.0f) + (soloPoolConnected ? 0.12f : 0.0f), 0.0f, 4.0f);
+  float entropy = constrain(zimHomeEntropyNow() / 12.0f + (float)superWeapon.resonance / 700.0f, 0.0f, 6.0f);
+  float tail = constrain(((float)bestBits / (float)max((uint16_t)1, targetBits)) + (blackStarFresh ? (float)superWeapon.blackhole / 1024.0f : 0.0f), 0.0f, 6.0f);
+
+  JanusPnCortexPacket pn{};
+  pn.magic[0] = 'P'; pn.magic[1] = 'N';
+  pn.version = 1;
+  pn.role = JR_ZIM;
+  pn.worker_id = workerId();
+  strlcpy(pn.nodeId, JANUS_NODE_ID, sizeof(pn.nodeId));
+  strlcpy(pn.kind, "zim_pn_lab", sizeof(pn.kind));
+  pn.seq = ++gSeq;
+  pn.uptime_ms = now;
+  pn.job_sig = zimCurrentJobSignature();
+  pn.prev_hash = zimPnPrevHash;
+  pn.hash_rate = hashRate;
+  pn.total_hashes = gTotalHashes;
+  pn.target_bits = targetBits;
+  pn.best_bits = bestBits;
+  pn.lane = blackStarFresh ? 3 : (uint8_t)(superWeapon.route & 0x03U);
+  pn.sector = zimHomeSectorNow();
+  pn.flags = 0;
+  if (soloJobReady || gJobActive) pn.flags |= 0x01;
+  if (soloPoolConnected || gBuzzJobsAccepted) pn.flags |= 0x02;
+  if (blackStarFresh) pn.flags |= 0x04;
+  if (zimMissionActive || zimMissionPending || blackStarFresh) pn.flags |= 0x08;
+  if (zimHomePolicyRx && now - zimHomeLastPolicyMs < ZIM_HOME_POLICY_STALE_MS) pn.flags |= 0x10;
+  pn.rssi = gLastRssi;
+  pn.thermal_x1000 = zimScaleX1000(thermal, 0.0f, 4.0f);
+  pn.load_x1000 = zimScaleX1000(load, 0.0f, 4.0f);
+  pn.jitter_us = zimLoopJitterUs;
+  pn.entropy_x1000 = zimScaleX1000(entropy, 0.0f, 6.0f);
+  pn.tail_x1000 = zimScaleX1000(tail, 0.0f, 6.0f);
+  pn.voltage_mv = 0;
+  pn.ir_phase = (uint16_t)((superWeapon.reverseStride ^ zimRama.tauLike ^ ((uint32_t)superWeapon.resonance << 8)) & 0xFFFFUL);
+  pn.reserved = 0;
+  pn.packet_hash = mix32(pn.job_sig ^ pn.prev_hash ^ pn.hash_rate ^ pn.total_hashes ^
+                         ((uint32_t)pn.best_bits << 16) ^ ((uint32_t)pn.thermal_x1000 << 1) ^
+                         ((uint32_t)pn.load_x1000 << 11) ^ pn.ir_phase ^ now);
+  zimPnPrevHash = pn.packet_hash;
+
+  if (zimEspNowSend("P/N", JANUS_BROADCAST_MAC, &pn, sizeof(pn), true) == ESP_OK) {
+    zimPnTx++;
+    if ((zimPnTx & 0x07UL) == 1UL) {
+      Serial.printf("[ZIM/PN] tx=%lu lane=%u sector=%u H=%lu best=%u/%u heat=%.2f load=%.2f tail=%.2f flags=0x%02X\n",
+                    (unsigned long)zimPnTx, (unsigned)pn.lane, (unsigned)pn.sector,
+                    (unsigned long)pn.hash_rate, (unsigned)pn.best_bits, (unsigned)pn.target_bits,
+                    thermal, load, tail, (unsigned)pn.flags);
+    }
+  } else {
+    zimPnFail++;
+  }
+#else
+  (void)force;
+#endif
+}
+
+bool zimForcePeerRebuild(const char* reason) {
+  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  esp_now_peer_info_t peer{};
+  memcpy(peer.peer_addr, JANUS_BROADCAST_MAC, 6);
+  peer.channel = 0;   // follow current STA/home Wi-Fi channel
+  peer.ifidx = WIFI_IF_STA;
+  peer.encrypt = false;
+  esp_err_t err = esp_now_add_peer(&peer);
+  if (err == ESP_OK || err == ESP_ERR_ESPNOW_EXIST) {
+    zimEspPeerRebuilds++;
+    Serial.printf("[ZIM/RADIO] peer ready ch=%u rebuilds=%lu reason=%s\n",
+                  (unsigned)gCurrentChannel, (unsigned long)zimEspPeerRebuilds, reason ? reason : "-");
+    return true;
+  }
+  zimEspLastErr = err;
+  strlcpy(zimEspLastTag, reason ? reason : "peer", sizeof(zimEspLastTag));
+  Serial.printf("[ZIM/RADIO] peer rebuild fail err=%d reason=%s\n", (int)err, reason ? reason : "-");
+  return false;
+}
+
+esp_err_t zimEspNowSend(const char* tag, const uint8_t* dst, const void* payload, size_t len, bool repairOnFail) {
+  if (!payload || len == 0) return ESP_ERR_INVALID_ARG;
+  const uint8_t* mac = dst ? dst : JANUS_BROADCAST_MAC;
+  ensurePeer(mac);
+  esp_err_t err = esp_now_send(mac, (const uint8_t*)payload, len);
+  if (err == ESP_OK) {
+    zimEspTxOk++;
+    return ESP_OK;
+  }
+  zimEspTxFail++;
+  zimEspLastErr = err;
+  strlcpy(zimEspLastTag, tag ? tag : "send", sizeof(zimEspLastTag));
+  if (repairOnFail) {
+    if (memcmp(mac, JANUS_BROADCAST_MAC, 6) == 0) zimForcePeerRebuild(tag ? tag : "tx-fail");
+    else {
+      if (esp_now_is_peer_exist(mac)) esp_now_del_peer(mac);
+      ensurePeer(mac);
+    }
+  }
+  if ((zimEspTxFail & 0x07UL) == 1UL) {
+    Serial.printf("[ZIM/RADIO] tx fail tag=%s err=%d fail=%lu ch=%u\n",
+                  zimEspLastTag, (int)err, (unsigned long)zimEspTxFail, (unsigned)gCurrentChannel);
+  }
+  return err;
+}
+
+bool zimHomeEmitEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                      int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                      uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs) {
+#if ZIM_HOME_CORTEX_ENABLE
+  JanusEventPacket ev{};
+  ev.magic[0] = 'J'; ev.magic[1] = 'E';
+  ev.version = 1;
+  ev.eventType = eventType;
+  ev.nodeRole = JR_ZIM;
+  ev.confidence = constrain((int)confidence, 0, 100);
+  ev.urgency = constrain((int)urgency, 0, 100);
+  strlcpy(ev.nodeId, JANUS_NODE_ID, sizeof(ev.nodeId));
+  strlcpy(ev.kind, kind && kind[0] ? kind : "zim_slime", sizeof(ev.kind));
+  ev.seq = ++zimHomeEventSeq;
+  ev.uptimeMs = millis();
+  ev.topicHash = topicHash ? topicHash : zimHomeHash16("zim");
+  ev.objectHash = objectHash;
+  ev.capabilities = zimHomeCapabilities();
+  ev.valueA_x10 = a_x10;
+  ev.valueB_x10 = b_x10;
+  ev.valueC_x10 = c_x10;
+  ev.valueD_x10 = d_x10;
+  ev.eventHash = ((uint32_t)eventType << 24) ^ ((uint32_t)ev.topicHash << 8) ^ ev.seq ^ (uint32_t)workerId();
+  ev.ttlMs = ttlMs ? ttlMs : 15000UL;
+  bool ok = (zimEspNowSend("J/E", JANUS_BROADCAST_MAC, &ev, sizeof(ev), true) == ESP_OK);
+  if (ok) {
+    zimHomeEventTx++;
+    zimHomeLastEventMs = millis();
+    if (eventType == JE_AI_MEMORY) zimHomeMemTx++;
+    else if (eventType == JE_TASK_NEED) zimHomeNeedTx++;
+    else if (eventType == JE_TASK_DONE) zimHomeDoneTx++;
+  } else {
+    zimHomeEventFail++;
+  }
+  return ok;
+#else
+  (void)eventType; (void)kind; (void)confidence; (void)urgency; (void)a_x10; (void)b_x10; (void)c_x10; (void)d_x10; (void)topicHash; (void)objectHash; (void)ttlMs;
+  return false;
+#endif
+}
+
+void zimHomeCortexMemoryEvent(const char* reason) {
+#if ZIM_HOME_CORTEX_ENABLE
+  uint8_t urgency = (uint8_t)constrain(24 + (int)(zimHomeStressNow() * 18.0f), 10, 88);
+  zimHomeEmitEvent(JE_AI_MEMORY, reason && reason[0] ? reason : "slime_memory", zimAgent.confidence ? zimAgent.confidence : 70, urgency,
+                   (int16_t)constrain((int)zimAgent.policy, -32768, 32767),
+                   (int16_t)constrain((int)zimAgent.confidence, -32768, 32767),
+                   (int16_t)constrain((int)(zimSlime.trustSwarm * 100.0f), -32768, 32767),
+                   (int16_t)constrain((int)(zimHomeEntropyNow() * 10.0f), -32768, 32767),
+                   zimHomeHash16("zim_memory"), zimHomeHash16(zimSlime.thought), 45000UL);
+#endif
+}
+
+void zimHomeBlackStarTransitionTick(uint32_t now, bool force) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (!zimBlackStarFresh(now)) return;
+  if (!force && now - zimHomeLastBlackStarTransitionMs < 11000UL) return;
+  zimHomeLastBlackStarTransitionMs = now;
+  uint8_t conf = (uint8_t)constrain((int)(62 + superWeapon.blackhole / 4 + (gBestBits > 23 ? 8 : 0)), 30, 98);
+  uint8_t urgency = (uint8_t)constrain((int)(36 + superWeapon.vessel / 5 + (zimHomeMood == JM_ALERT ? 12 : 0)), 20, 92);
+  zimHomeEmitEvent(JE_AI_MEMORY, "blackstar_transition", conf, urgency,
+                   (int16_t)constrain((int)zimMissionSector, -32768, 32767),
+                   (int16_t)constrain((int)superWeapon.blackhole, -32768, 32767),
+                   (int16_t)constrain((int)superWeapon.vessel, -32768, 32767),
+                   (int16_t)constrain((int)gBestBits, -32768, 32767),
+                   zimHomeHash16("gargantua"), zimHomeHash16("transition"), 36000UL);
+#else
+  (void)now; (void)force;
+#endif
+}
+
+void zimHomeHandlePolicyRaw(const void* raw) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (!raw) return;
+  JanusPolicyPacket jp{};
+  memcpy(&jp, raw, sizeof(jp));
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+  if (jp.seq && jp.seq == zimHomePolicySeq) return;
+  zimHomePolicySeq = jp.seq;
+  zimHomePolicyRx++;
+  zimHomeLastPolicyMs = millis();
+  zimHomeMood = jp.swarmMood;
+  zimHomeRadioRate = constrain((int)jp.radioRate, 0, 2);
+  zimHomeSensorRate = constrain((int)jp.sensorRate, 0, 2);
+  zimHomeBuzzBudget = constrain((int)jp.buzzBudget, 0, 3);
+  zimHomePolicyConfidence = constrain((int)jp.confidence, 0, 100);
+  zimHomeDangerX100 = jp.danger_x100;
+  zimHomeQuietUntilMs = jp.quietUntilMs ? millis() + min((uint32_t)jp.quietUntilMs, 60000UL) : 0;
+  strlcpy(zimHomeOrder, jp.order[0] ? jp.order : "-", sizeof(zimHomeOrder));
+
+  // Advisory only: Core can ask Zim to slow down, but cannot steal solo priority.
+  if (zimHomeMood == JM_ALERT || zimHomeDangerX100 > 80) {
+    gAiHint = 2;
+    if (gAiBatch > ZIM_SAFE_BATCH_MID) gAiBatch = ZIM_SAFE_BATCH_MID;
+  } else if (zimHomeMood == JM_RECOVER && gAiHint == 2) {
+    gAiHint = 1;
+  }
+  if ((zimHomePolicyRx & 0x03UL) == 1UL) {
+    Serial.printf("[BLACKBOARD/ZIM] policy rx=%lu mood=%u radio=%u sensor=%u conf=%u danger=%.2f order=%s\n",
+                  (unsigned long)zimHomePolicyRx, (unsigned)zimHomeMood, (unsigned)zimHomeRadioRate,
+                  (unsigned)zimHomeSensorRate, (unsigned)zimHomePolicyConfidence,
+                  (float)zimHomeDangerX100 / 100.0f, zimHomeOrder);
+  }
+#endif
+}
+
+void zimHomeHandleEventRaw(const void* raw) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (!raw) return;
+  JanusEventPacket je{};
+  memcpy(&je, raw, sizeof(je));
+  if (je.magic[0] != 'J' || je.magic[1] != 'E' || je.version != 1) return;
+  if (strncmp(je.nodeId, JANUS_NODE_ID, sizeof(je.nodeId)) == 0) return;
+  zimHomeRxEvents++;
+  if (je.eventType == JE_TASK_NEED || je.eventType == JE_DANGER) {
+    zimSlime.trustSwarm = zimClip(zimSlime.trustSwarm + 0.003f, 0.02f, 1.50f);
+  }
+#endif
+}
+
+void zimHomeHandleKenshiRaw(const void* raw) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (!raw) return;
+  JanusKenshiPacket kp{};
+  memcpy(&kp, raw, sizeof(kp));
+  if (kp.magic[0] != 'K' || kp.magic[1] != '2' || kp.version != 1) return;
+  if (strncmp(kp.nodeId, JANUS_NODE_ID, sizeof(kp.nodeId)) == 0) return;
+  zimHomeRxK2++;
+  if (kp.priority > 220 && (zimHomeRxK2 & 0x0FUL) == 1UL) zimSlimeObserve(ZE_CORE2_SPAM, 0.18f);
+#endif
+}
+
+void zimHomeHandleTachyonRaw(const void* raw) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (!raw) return;
+  JanusTachyonProphecyPacket tp{};
+  memcpy(&tp, raw, sizeof(tp));
+  if (tp.magic[0] != 'T' || tp.magic[1] != 'P' || tp.version != 1) return;
+  if (strncmp(tp.nodeId, JANUS_NODE_ID, sizeof(tp.nodeId)) == 0) return;
+  zimHomeRxTP++;
+  if (tp.future_stress > 1.8f && (zimHomeRxTP & 0x0FUL) == 1UL) zimSlimeObserve(ZE_CORE2_SPAM, 0.14f);
+#endif
+}
+
+void zimHomeKenshiTick(bool force) {
+#if ZIM_HOME_CORTEX_ENABLE
+  uint32_t now = millis();
+  if (!force && now - zimHomeLastK2Ms < ZIM_HOME_K2_MS) return;
+  zimHomeLastK2Ms = now;
+  JanusKenshiPacket kp{};
+  kp.magic[0] = 'K'; kp.magic[1] = '2';
+  kp.version = 1;
+  kp.flags = 0x01; // alive/self model
+  bool blackStarFresh = zimBlackStarFresh(now);
+  if (soloPoolConnected) kp.flags |= 0x02;
+  if (superWeapon.charge >= 100) kp.flags |= 0x04;
+  if (zimHomePolicyRx) kp.flags |= 0x08;
+  if (blackStarFresh) kp.flags |= 0x10;
+  strlcpy(kp.nodeId, JANUS_NODE_ID, sizeof(kp.nodeId));
+  kp.seq = ++gSeq;
+  kp.worker_id = workerId();
+  kp.uptime_ms = now;
+  kp.activeBubbleNodes = (uint8_t)constrain((int)(2 + (soloPoolConnected ? 1 : 0) + (gJobActive ? 1 : 0) + (blackStarFresh ? 1 : 0)), 0, 9);
+  kp.virtualNodes = (uint8_t)constrain((int)(zimAgent.policy + (superWeapon.route & 3) + (blackStarFresh ? 1 : 0)), 0, 9);
+  kp.worldFlags = 0;
+  if (soloPoolConnected) kp.worldFlags |= 1UL << 0;
+  if (soloJobReady) kp.worldFlags |= 1UL << 1;
+  if (gJobActive) kp.worldFlags |= 1UL << 2;
+  if (superWeapon.charge >= 100) kp.worldFlags |= 1UL << 3;
+  if (zimMissionActive || zimMissionPending) kp.worldFlags |= 1UL << 4;
+  if (zimHomePolicyRx && now - zimHomeLastPolicyMs < ZIM_HOME_POLICY_STALE_MS) kp.worldFlags |= 1UL << 5;
+  if (blackStarFresh) kp.worldFlags |= 1UL << 6;
+  kp.sector = zimHomeSectorNow();
+  kp.predictedSector = zimHomePredictedSector();
+  kp.jobState = soloJobReady ? 3 : (gJobActive ? 2 : (soloPoolConnected ? 1 : 0));
+  kp.priority = (uint8_t)constrain((int)(48 + zimAgent.confidence + superWeapon.charge / 2 + (gBestBits > 24 ? 30 : 0) + (blackStarFresh ? 18 : 0)), 0, 255);
+  kp.rssi = gLastRssi;
+  kp.entropy = zimHomeEntropyNow();
+  kp.activity = constrain((float)gHashRate / 12000.0f + (float)superWeapon.charge / 100.0f, 0.0f, 3.0f);
+  kp.confidence = constrain((float)zimAgent.confidence / 100.0f, 0.0f, 1.5f);
+  kp.values[0] = (float)gHashRate;
+  kp.values[1] = (float)gBestBits;
+  kp.values[2] = (float)soloAccepts;
+  kp.values[3] = (float)gBuzzSharesSent;
+  kp.values[4] = blackStarFresh ? ((float)superWeapon.blackhole / 255.0f) : zimSlime.trustSwarm;
+  kp.values[5] = blackStarFresh ? ((float)superWeapon.vessel / 255.0f) : zimSlime.btcHunger;
+  if (zimEspNowSend("K2", JANUS_BROADCAST_MAC, &kp, sizeof(kp), true) == ESP_OK) zimHomeK2Tx++;
+#endif
+}
+
+void zimHomeTachyonTick(bool force) {
+#if ZIM_HOME_CORTEX_ENABLE
+  uint32_t now = millis();
+  if (!force && now - zimHomeLastTPMs < ZIM_HOME_TP_MS) return;
+  zimHomeLastTPMs = now;
+  float stress = zimHomeStressNow();
+  bool blackStarFresh = zimBlackStarFresh(now);
+  JanusTachyonProphecyPacket tp{};
+  tp.magic[0] = 'T'; tp.magic[1] = 'P';
+  tp.version = 1;
+  tp.flags = 0x02; // psychological prophecy
+  if (superWeapon.charge >= 100) tp.flags |= 0x04;
+  if (zimHomeDangerX100 > 75) tp.flags |= 0x08;
+  if (blackStarFresh) tp.flags |= 0x10;
+  strlcpy(tp.nodeId, JANUS_NODE_ID, sizeof(tp.nodeId));
+  tp.seq = ++gSeq;
+  tp.worker_id = workerId();
+  tp.uptime_ms = now;
+  tp.horizon_ms = blackStarFresh ? 42000 : 30000;
+  tp.sector = zimHomeSectorNow();
+  tp.predictedSector = zimHomePredictedSector();
+  tp.confidence = (uint8_t)constrain((int)zimAgent.confidence, 0, 100);
+  tp.jobState = soloJobReady ? 3 : (gJobActive ? 2 : 1);
+  tp.presence_now = zimSlime.curiosityEarth;
+  tp.motion_now = (float)game.steps / 500.0f;
+  tp.pred_presence_1 = zimSlime.trustSwarm + 0.1f * (float)(zimHomePolicyRx > 0);
+  tp.pred_motion_1 = (float)superWeapon.charge / 100.0f;
+  tp.pred_presence_2 = blackStarFresh ? ((float)superWeapon.blackhole / 255.0f) : zimSlime.shaObsession;
+  tp.pred_motion_2 = (float)gHashRate / 15000.0f;
+  tp.pred_presence_3 = zimSlime.btcHunger;
+  tp.pred_motion_3 = (float)gBestBits / 64.0f;
+  tp.event_eta_ms = superWeapon.charge >= 100 ? 600.0f : (float)(100U - superWeapon.charge) * 450.0f;
+  tp.future_stress = stress;
+  tp.swarm_pressure = constrain((float)zimHomeDangerX100 / 100.0f + (zimHomeMood == JM_ALERT ? 0.35f : 0.0f) + (blackStarFresh ? 0.18f : 0.0f), 0.0f, 3.0f);
+  if (zimEspNowSend("TP", JANUS_BROADCAST_MAC, &tp, sizeof(tp), true) == ESP_OK) zimHomeTPTx++;
+#endif
+}
+
+void zimHomeCortexBoot() {
+#if ZIM_HOME_CORTEX_ENABLE
+  zimForcePeerRebuild("boot");
+  zimHomeEmitEvent(JE_BOOT, "zim_boot", 92, 38,
+                   (int16_t)(ESP.getFreeHeap() / 1024),
+                   (int16_t)(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : -127),
+                   (int16_t)gBestBits,
+                   (int16_t)zimAgent.confidence,
+                   zimHomeHash16("boot"), zimHomeHash16("zim"), 25000UL);
+  zimHomeEmitEvent(JE_TASK_DONE, "slime_online", 88, 28,
+                   (int16_t)zimAgent.policy, (int16_t)zimAgent.confidence,
+                   (int16_t)zimF2B(zimSlime.trustSwarm), (int16_t)zimF2B(zimSlime.btcHunger),
+                   zimHomeHash16("personality"), zimHomeHash16("slime"), 25000UL);
+  zimHomeKenshiTick(true);
+  zimHomeTachyonTick(true);
+  Serial.printf("[BLACKBOARD/ZIM] Home Cortex ready J/E+J/P+K2/TP node=%s ch=%u\n", JANUS_NODE_ID, (unsigned)gCurrentChannel);
+#endif
+}
+
+void zimHomeCortexTick(uint32_t now) {
+#if ZIM_HOME_CORTEX_ENABLE
+  if (now - zimHomeLastEventMs >= ZIM_HOME_EVENT_MS) {
+    uint8_t urgency = (uint8_t)constrain(18 + (int)(zimHomeStressNow() * 18.0f) + (zimHomeMood == JM_ALERT ? 18 : 0), 12, 90);
+    zimHomeEmitEvent(JE_HEARTBEAT, "zim_heartbeat", zimAgent.confidence ? zimAgent.confidence : 70, urgency,
+                     (int16_t)constrain((int)(zimHomeEntropyNow() * 10.0f), -32768, 32767),
+                     (int16_t)constrain((int)(zimHomeStressNow() * 100.0f), -32768, 32767),
+                     (int16_t)constrain((int)gBestBits, -32768, 32767),
+                     (int16_t)constrain((int)superWeapon.charge, -32768, 32767),
+                     zimHomeHash16("heartbeat"), zimHomeHash16("zim"), 18000UL);
+  }
+
+  if (WiFi.status() == WL_CONNECTED && WiFi.RSSI() < ZIM_COLD_WIFI_RSSI_DBM && now - zimHomeLastWifiWeakMs > 20000UL) {
+    zimHomeLastWifiWeakMs = now;
+    zimHomeEmitEvent(JE_WIFI_WEAK, "wifi_weak", 82, 62,
+                     (int16_t)(WiFi.RSSI() * 10), (int16_t)gCurrentChannel, (int16_t)zimEspTxFail, 0,
+                     zimHomeHash16("radio"), zimHomeHash16("zim_wifi"), 22000UL);
+  }
+
+  if (ESP.getFreeHeap() < ZIM_COLD_LOW_HEAP_BYTES && now - zimHomeLastLowHeapMs > 25000UL) {
+    zimHomeLastLowHeapMs = now;
+    zimHomeEmitEvent(JE_LOW_HEAP, "zim_low_heap", 82, 58,
+                     (int16_t)(ESP.getFreeHeap() / 1024), (int16_t)gAiBatch, (int16_t)zimSoloBatchNow(), 0,
+                     zimHomeHash16("heap"), zimHomeHash16("zim"), 22000UL);
+  }
+
+  if (now - zimHomeLastTaskMs >= ZIM_HOME_TASK_MS) {
+    zimHomeLastTaskMs = now;
+    if (zimHomeMood == JM_ALERT || zimHomeDangerX100 > 80 || zimColdMode()) {
+      zimHomeEmitEvent(JE_TASK_NEED, "zim_needs_quiet", 80, (uint8_t)constrain(45 + (int)zimHomeStressNow() * 18, 45, 92),
+                       (int16_t)zimHomeDangerX100, (int16_t)(ESP.getFreeHeap() / 1024), (int16_t)gHashRate, (int16_t)gBestBits,
+                       zimHomeHash16("quiet"), zimHomeHash16("zim"), 30000UL);
+    } else if (soloPoolConnected && soloAuthorized) {
+      zimHomeEmitEvent(JE_TASK_DONE, "solo_pool_alive", 88, 24,
+                       (int16_t)gHashRate, (int16_t)gBestBits, (int16_t)soloAccepts, (int16_t)soloRejects,
+                       zimHomeHash16("solo_pool"), zimHomeHash16("nerdminer"), 30000UL);
+    }
+  }
+
+  if (soloAccepts > zimAgent.lastSoloAccept) {
+    zimHomeEmitEvent(JE_SOLO_ACCEPT, "solo_accept", 96, 70,
+                     (int16_t)soloAccepts, (int16_t)gBestBits, (int16_t)gHashRate, (int16_t)zimAgent.confidence,
+                     zimHomeHash16("btc"), zimHomeHash16("solo_pool"), 45000UL);
+  }
+
+  zimHomeBlackStarTransitionTick(now, false);
+  zimHomeKenshiTick(false);
+  zimHomeTachyonTick(false);
+
+  if (now - zimHomeLastDiagMs >= ZIM_HOME_DIAG_MS) {
+    zimHomeLastDiagMs = now;
+    Serial.printf("[BLACKBOARD/ZIM] ev=%lu/%lu fail=%lu pol=%lu mood=%u txOk=%lu txFail=%lu K2=%lu TP=%lu mem=%lu need=%lu done=%lu rxJE=%lu rxK2=%lu rxTP=%lu H=%lu best=%lu policy=%u conf=%u heap=%lu order=%s\n",
+                  (unsigned long)zimHomeEventTx, (unsigned long)zimHomeEventSeq, (unsigned long)zimHomeEventFail,
+                  (unsigned long)zimHomePolicyRx, (unsigned)zimHomeMood,
+                  (unsigned long)zimEspTxOk, (unsigned long)zimEspTxFail,
+                  (unsigned long)zimHomeK2Tx, (unsigned long)zimHomeTPTx,
+                  (unsigned long)zimHomeMemTx, (unsigned long)zimHomeNeedTx, (unsigned long)zimHomeDoneTx,
+                  (unsigned long)zimHomeRxEvents, (unsigned long)zimHomeRxK2, (unsigned long)zimHomeRxTP,
+                  (unsigned long)gHashRate, (unsigned long)gBestBits, (unsigned)zimAgent.policy,
+                  (unsigned)zimAgent.confidence, (unsigned long)ESP.getFreeHeap(), zimHomeOrder);
+  }
+#endif
+}
 
 
 // ============================================================
@@ -3342,9 +4766,9 @@ bool sendBuzzShareV2(const uint8_t jobId[8], uint32_t nonce, uint16_t bits, cons
   esp_err_t err = ESP_ERR_ESPNOW_NOT_FOUND;
   if (have && macLooksValid(mac)) {
     ensurePeer(mac);
-    err = esp_now_send(mac, (const uint8_t*)&sr, sizeof(sr));
+    err = zimEspNowSend("S/2m", mac, &sr, sizeof(sr), true);
   }
-  if (err != ESP_OK) err = esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&sr, sizeof(sr));
+  if (err != ESP_OK) err = zimEspNowSend("S/2", JANUS_BROADCAST_MAC, &sr, sizeof(sr), true);
   if (err == ESP_OK) {
     gBuzzSharesSent++;
     gSharesSent = soloAccepts + gBuzzSharesSent;
@@ -3496,7 +4920,12 @@ bool buildSoloHeaderFromNotify(JsonDocument& doc, mbedtls_sha256_context* ctx) {
   superWeaponRecomputeRoute(mix32(soloNonce ^ soloExtranonce2));
   soloJobReady = true;
   soloLastJobMs = millis();
+  uint32_t notifyNow = soloLastJobMs;
   portEXIT_CRITICAL(&soloMux);
+
+#if ZIM_NOTIFY_ORACLE
+  gNotifyOracle.record(notifyNow);
+#endif
 
   // Mirror solo state for HUD only. Never expose solo Stratum work as a Buzz lazy job.
   portENTER_CRITICAL(&jobMux);
@@ -3626,6 +5055,12 @@ void soloMinerTask(void* pv) {
           soloLastAcceptMs = millis();
           superWeaponOnPoolResult(true);
           zimAgentTick("solo_accept", 1.2f);
+#if ZIM_STRIDE_BANDIT
+          zimStrideBanditSavePrefs(true);
+#endif
+#if ZIM_QUIET_CANARY
+          gZimAgentMemoryEvent = true;
+#endif
           gSharesSent = soloAccepts + gBuzzSharesSent;
           snprintf(game.banner, sizeof(game.banner), "ACCEPT! Zim ne udivil nikogo");
           snprintf(game.subBanner, sizeof(game.subBanner), "shary=%lu", (unsigned long)soloAccepts);
@@ -3639,6 +5074,9 @@ void soloMinerTask(void* pv) {
           if (doc["error"].is<const char*>()) errText = doc["error"].as<const char*>();
           else if (doc["error"].is<JsonArray>() && !doc["error"][1].isNull()) errText = doc["error"][1] | "unknown";
           classifySoloReject(errText);
+#if ZIM_QUIET_CANARY
+          gZimAgentMemoryEvent = true;
+#endif
           setSoloStatus("REJECT", errText);
           Serial.printf("[ZIM] SOLO REJECT rejects=%lu err=%s\n", (unsigned long)soloRejects, errText);
         }
@@ -3684,6 +5122,13 @@ void soloMinerTask(void* pv) {
 
       uint32_t reverseStride = superWeapon.reverseStride | 1UL;
       const uint16_t batchNow = zimSoloBatchNow();
+#if ZIM_SAFE_MACHINE_INTUITION
+      if (zimShouldPauseBeforeNotify(batchNow)) {
+        gNotifyOracle.pauses++;
+        vTaskDelay(pdMS_TO_TICKS(10));
+        continue;
+      }
+#endif
       for (uint16_t i = 0; i < batchNow; ++i) {
 #if ZIM_REVERSE_NONCE_ENGINE
         nonce -= reverseStride;
@@ -3697,6 +5142,9 @@ void soloMinerTask(void* pv) {
         hashesThisSecond++;
         uint16_t bits = countLeadingZeroBits(shareHash);
         updateBestBits(bits);
+#if ZIM_STRIDE_BANDIT
+        if (bits >= ZIM_STRIDE_BANDIT_MIN_BITS) gStrideBandit.observe(bits, false);
+#endif
         if (bits >= 16) superWeaponTick(bits, false);
         if ((bits >= targetBits) && hashMeetsTargetBytes(shareHash, target)) {
           char nHex[9];
@@ -3706,13 +5154,16 @@ void soloMinerTask(void* pv) {
           client.println(submit);
           soloSubmits++;
           soloLastSubmitMs = millis();
+#if ZIM_STRIDE_BANDIT
+          gStrideBandit.observe(bits, true);
+#endif
           superWeaponTick(bits, true);
           snprintf(game.banner, sizeof(game.banner), "Zim strelyaet NAZAD");
           snprintf(game.subBanner, sizeof(game.subBanner), "bits=%u cel=%u sh=%lu", bits, targetBits, (unsigned long)reverseStride);
           Serial.printf("[ZIM] SOLO_SUBMIT nonce=%s bits=%u target=%u H=%lu\n", nHex, bits, targetBits, (unsigned long)gHashRate);
           break;
         }
-        if ((i & 0x3F) == 0) taskYIELD();
+        if ((i & 0x1F) == 0) taskYIELD();
       }
       portENTER_CRITICAL(&soloMux);
       soloNonce = nonce;
@@ -3747,7 +5198,7 @@ void printStatus() {
   uint32_t age = soloJobReady ? (millis() - soloLastJobMs) : 0;
   uint32_t buzzAge = gJobActive ? (millis() - gJobRxMs) : 0;
   UBaseType_t qNow = gRxQueue ? uxQueueMessagesWaiting(gRxQueue) : 0;
-  Serial.printf("[ZIM] solo=%s pool=%u auth=%u ch=%u H=%lu total=%lu submits=%lu acc=%lu rej=%lu best=%lu target=%u buzzJobs=%lu buzzHeld=%lu buzzActive=%u buzzAge=%lu buzzRemain=%lu buzzHash=%lu buzzShare=%lu buzzSkip=%lu soloAge=%lu diff=%.8f rewards=%lu rssi=%d rxQ=%u rxTotal=%lu rxDrop=%lu rxBig=%lu heap=%lu stack=%lu game=%u seen=%lu cap=%lu credits=%lu core2Ignored=%lu sector=%u weapon=%u/%s stride=%lu shots=%lu order=%s err=%s\n",
+  Serial.printf("[ZIM] solo=%s pool=%u auth=%u ch=%u H=%lu total=%lu submits=%lu acc=%lu rej=%lu best=%lu target=%u buzzJobs=%lu buzzHeld=%lu buzzActive=%u buzzAge=%lu buzzRemain=%lu buzzHash=%lu buzzShare=%lu buzzSkip=%lu soloAge=%lu diff=%.8f rewards=%lu rssi=%d rxQ=%u rxTotal=%lu rxDrop=%lu rxBig=%lu heap=%lu stack=%lu game=%u seen=%lu cap=%lu credits=%lu core2Ignored=%lu sector=%u weapon=%u/%s stride=%lu bandit=%u/%lu/%u bmem=%lu/%u shots=%lu sBatch=%u oracleMed=%lu oraclePause=%lu sha=%s/%lu/%lu/%lu bench=%lu/%lu chk=%lu/%lu order=%s err=%s\n",
                 soloStatus,
                 (unsigned)(soloPoolConnected ? 1 : 0),
                 (unsigned)(soloAuthorized ? 1 : 0),
@@ -3786,7 +5237,27 @@ void printStatus() {
                 (unsigned)superWeapon.charge,
                 superWeaponRouteText(),
                 (unsigned long)superWeapon.reverseStride,
+#if ZIM_STRIDE_BANDIT
+                (unsigned)gStrideBandit.lastArm,
+                (unsigned long)gStrideBandit.hits,
+                (unsigned)gStrideBandit.rewardEmaQ8,
+                (unsigned long)gStrideBandit.saves,
+                (unsigned)(gStrideBandit.dirty ? 1 : 0),
+#else
+                0U, 0UL, 0U, 0UL, 0U,
+#endif
                 (unsigned long)superWeapon.shots,
+                (unsigned)gLastSoloBatchNow,
+                (unsigned long)gNotifyOracle.medianMs,
+                (unsigned long)gNotifyOracle.pauses,
+                gZimHwShaEnabled ? "AUTO-HW" : "AUTO-SW",
+                (unsigned long)gZimHwShaCalls,
+                (unsigned long)gZimSoftShaCalls,
+                (unsigned long)gZimHwShaFallbacks,
+                (unsigned long)gZimShaBenchSwUs,
+                (unsigned long)gZimShaBenchHwUs,
+                (unsigned long)gZimShaCrossChecks,
+                (unsigned long)gZimShaMismatches,
                 zimOrderLine,
                 soloLastError);
   Serial.printf("[ZIM/AI] whiteRaven ep=%lu upd=%lu pol=%u conf=%u lazy=0x%02x reward=%.3f loss=%.3f mem=ESP+ESPNow%s\n",
@@ -3830,6 +5301,7 @@ void updateButton(uint32_t now) {
   } else if (!down && bootButtonWasDown) {
     uint32_t held = now - bootButtonDownMs;
     bootButtonWasDown = false;
+    zimNoteUserActivity(now);
     if (held >= JANUS_BUTTON_VERY_LONG_MS) {
       clearMasterLock("button very long: Buzz chore dropped");
       zimMissionPending = false;
@@ -3938,11 +5410,16 @@ void setup() {
                 (unsigned long)ESP.getFreeHeap(),
                 (unsigned long)ESP.getPsramSize());
 
+  zimHwShaSelfTest();
+  zimShaAutoBench();
+
   setupDisplay();
   loadGame();
   loadDisplayPrefs();
+  zimLastUserInputMs = millis();
   zimSlimeLoadPrefs();
   zimAgentLoadPrefs();
+  zimStrideBanditLoadPrefs();
   zimRamanujanLoadPrefs();
   zimRamanujanStudyTick("boot", 0, false);
   setupWiFi();
@@ -3969,19 +5446,30 @@ void setup() {
   game.lastMoveMs = millis();
   game.lastSaveMs = millis();
 
-  Serial.printf("[ZIM] ready: rxQ=%u dataMax=%u SOLO Stratum real wallet + BUZZ hold-safe + RAMA throttled + AUTO-DUNGEON STARVEFIX\n",
+  Serial.printf("[ZIM] ready: rxQ=%u dataMax=%u SOLO Stratum real wallet + HOME CORTEX J/E J/P K2/TP + SAFE CLAMP + STRIDE BANDIT MEMORY + QUIET CANARY + BUZZ hold-safe + RAMA night-mode\n",
                 (unsigned)JANUS_RX_QUEUE_LEN, (unsigned)JANUS_RX_DATA_MAX);
-  Serial.println("[ZIM] screen: GBA house-base JRPG + auto-dungeon no-filter display");
+  Serial.println("[ZIM] screen: GBA house-base JRPG + quiet redraw + auto-dim + auto-dungeon");
   Serial.println("[ZIM] canon: Zim razvedchik Zemli; nachalstvo skazalo najti BTC i sekret SHA");
   Serial.println("[ZIM] button: short=status, long=brightness, very-long=drop Buzz chore");
   Serial.printf("[ZIM/RAMA] Carr Synopsis loaded: year=%lu results=%lu lemma=%s\n", (unsigned long)ZIM_RAMANUJAN_CARR_YEAR, (unsigned long)ZIM_RAMANUJAN_CARR_RESULTS, zimRamanujanLemma());
   sendHeartbeat();
   sendZimAgentMemory();
+  zimHomeCortexBoot();
+  lastAgentMemoryMs = millis();
   lastHashRateMs = millis();
   lastScanMs = millis();
 }
 
 void loop() {
+  uint32_t loopStartUs = micros();
+  if (zimLastLoopStartUs) {
+    uint32_t d = loopStartUs - zimLastLoopStartUs;
+    uint16_t j = (d > 65535UL) ? 65535U : (uint16_t)d;
+    zimLoopJitterUs = (uint16_t)((zimLoopJitterUs * 7UL + j) / 8UL);
+    if (j > zimLoopMaxUs) zimLoopMaxUs = j;
+  }
+  zimLastLoopStartUs = loopStartUs;
+
   uint32_t now = millis();
 
   drainRxQueue();
@@ -4002,12 +5490,25 @@ void loop() {
 
   if (now - lastSwarmSenseMs >= zimSwarmSenseIntervalMs()) {
     sendSwarmSense();
+    zimLoopMaxUs = zimLoopJitterUs;
     lastSwarmSenseMs = now;
   }
+
+  zimHomeCortexTick(now);
+  sendZimPnCortex(false);
 
   if (now - zimRama.lastStudyMs >= ZIM_RAMANUJAN_STUDY_MS) {
     zimRamanujanStudyTick("periodic", (uint16_t)gBestBits, false);
   }
+
+#if ZIM_QUIET_CANARY
+  if (gZimAgentMemoryEvent && now - lastAgentMemoryMs >= 3000UL) {
+    gZimAgentMemoryEvent = false;
+    zimAgentTick("event_memory", 0.10f);
+    sendZimAgentMemory();
+    lastAgentMemoryMs = now;
+  }
+#endif
 
   if (now - lastAgentMemoryMs >= ZIM_AGENT_MEMORY_MS) {
     zimAgentTick("periodic", 0.0f);
@@ -4022,6 +5523,10 @@ void loop() {
     lastAgentSaveMs = now;
   }
 
+#if ZIM_STRIDE_BANDIT
+  zimStrideBanditMaybeSave(now);
+#endif
+
   if (now - lastAgentNasMs >= ZIM_AGENT_NAS_MS) {
     zimAgentMaybePostNas();
     lastAgentNasMs = now;
@@ -4032,12 +5537,18 @@ void loop() {
     lastEntropyMs = now;
   }
 
+#if ZIM_VERBOSE_STATUS
   if (now - lastStatusMs >= JANUS_STATUS_MS) {
     printStatus();
     lastStatusMs = now;
   }
+#else
+  // Quiet Canary: keep full status on short BOOT press, but do not spam Serial periodically.
+  lastStatusMs = now;
+#endif
 
   updateButton(now);
+  zimAutoDimTick(now);
   if (now - superWeapon.lastPulseMs > 3000UL) superWeaponRecomputeRoute(mix32(now ^ gHashRate ^ gBestBits));
   updateGameLogic();
   drawGame();

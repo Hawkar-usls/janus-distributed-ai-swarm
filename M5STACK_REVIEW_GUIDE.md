@@ -1,6 +1,6 @@
 # M5Stack Review Guide
 
-JANUS LastSwarm is an independent ESP32/M5Stack-oriented firmware suite. It is not an official M5Stack product. The repository is scoped for external hardware review: eight current sketches, focused documentation, minimal config examples, and static audits.
+JANUS LastSwarm is an independent ESP32/M5Stack-oriented firmware suite. It is not an official M5Stack product. The repository is scoped for external hardware review: current active swarm sketches, compatibility firmware, focused documentation, minimal config examples, and static audits.
 
 ## 10-Minute Path
 

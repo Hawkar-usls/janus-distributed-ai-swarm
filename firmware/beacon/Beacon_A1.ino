@@ -1,11 +1,13 @@
-/*
-  JANUS_BEACON_ADV_v4_4_SD_TACHYON_HOME.ino
-  BeaconADV v4.4 SD-TACHYON-HOME / RAMANUJAN THETA / CYBER BEATMAKER
+﻿/*
+  JANUS_BEACON_ADV_v4_5A_BLACKBOX_HOME_CORTEX_POLISH.ino
+  BeaconADV v4.5A BLACKBOX-HOME-CORTEX-POLISH / SD-TACHYON / RAMANUJAN THETA / CYBER BEATMAKER
 
   Preservation rule:
   - Base is the older 2906-line Beacon sketch.
   - Old ESP-NOW colony, BlindEye/Audio intake, HTTP queue, LittleFS/SD archive, LoRa, QMP/IMU, UI, anomaly logic are preserved.
   - v4.4 adds SD-first tachyon memory, LittleFS relief, 15GB SD brain budget, bounded self-cleanup, Ramanujan theta notebook, SHA-home Love.json enrichment, and non-blocking beatmaker.
+  - v4.5 adds Janus Home Cortex blackboard J/E + J/P, K2/TP prophecy mirror, SwarmSense S/S, peer self-healing, and SD black-box witness mode.
+  - v4.5A polishes Cardputer ADV SD boot order, filters legacy ER1 loss spikes, and throttles THETA serial spam.
 
   Strict note:
   - This does not bypass SHA-256.
@@ -42,6 +44,23 @@ QMP6988 janusQmp6988;
 #define COLONY_ENTROPY_MS 2500UL
 #define COLONY_MASTER_TIMEOUT_MS 18000UL
 #define COLONY_REMOTE_BATCH 220
+
+// v4.5 JANUS HOME CORTEX / BLACKBOX additions.
+// Beacon becomes the long-memory witness node for the distributed swarm.
+#define JANUS_BEACON_BLACKBOARD_ENABLE       1
+#define JANUS_BEACON_EVENT_BASE_MS           7000UL
+#define JANUS_BEACON_EVENT_FAST_MS           2200UL
+#define JANUS_BEACON_MEMORY_MS               30000UL
+#define JANUS_BEACON_ENV_MS                  12000UL
+#define JANUS_BEACON_TASK_MS                 18000UL
+#define JANUS_BEACON_SWARMSENSE_MS           3500UL
+#define JANUS_BEACON_K2_MS                   4200UL
+#define JANUS_BEACON_TP_MS                   5200UL
+#define JANUS_BEACON_BLACKBOX_MS             20000UL
+#define JANUS_BEACON_CORE_STALE_MS           45000UL
+#define JANUS_BEACON_POLICY_TTL_GUARD_MS     18000UL
+#define JANUS_BEACON_BLACKBOX_LOG            "/janus_ai/blackbox.jsonl"
+#define JANUS_BEACON_EVENT_BLACKBOX_LOG      "/janus_ai/blackboard_events.jsonl"
 
 uint8_t JANUS_BROADCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
@@ -100,6 +119,192 @@ struct __attribute__((packed)) EntropyReportV2 {
   float values[8];
   uint32_t uptime_ms;
 };
+
+// Core v6.41+ JANUS BLACKBOARD packets.
+enum JanusNodeRoleId : uint8_t {
+  JR_UNKNOWN = 0,
+  JR_CORE    = 1,
+  JR_ZIM     = 2,
+  JR_BUZZ    = 3,
+  JR_BEACON  = 4,
+  JR_TRON    = 5,
+  JR_BLIND   = 6,
+  JR_AUDIO   = 7,
+  JR_PYRAMID = 8,
+  JR_SENSOR  = 9,
+  JR_RELAY   = 10
+};
+
+enum JanusSemanticEventType : uint8_t {
+  JE_NONE        = 0,
+  JE_BOOT        = 1,
+  JE_HEARTBEAT   = 2,
+  JE_ENV         = 3,
+  JE_MOTION      = 4,
+  JE_PRESENCE    = 5,
+  JE_SOUND       = 6,
+  JE_WIFI_WEAK   = 7,
+  JE_LOW_HEAP    = 8,
+  JE_HASH        = 9,
+  JE_SOLO_ACCEPT = 10,
+  JE_SOLO_REJECT = 11,
+  JE_TASK_NEED   = 12,
+  JE_TASK_DONE   = 13,
+  JE_DANGER      = 14,
+  JE_SAFE        = 15,
+  JE_POLICY      = 16,
+  JE_AI_MEMORY   = 17
+};
+
+enum JanusSwarmMood : uint8_t {
+  JM_IDLE    = 0,
+  JM_QUIET   = 1,
+  JM_ALERT   = 2,
+  JM_EXPLORE = 3,
+  JM_GUARD   = 4,
+  JM_RECOVER = 5
+};
+
+enum JanusNodeCapability : uint16_t {
+  JC_TEMP     = 0x0001,
+  JC_HUM      = 0x0002,
+  JC_PRESS    = 0x0004,
+  JC_IMU      = 0x0008,
+  JC_MIC      = 0x0010,
+  JC_TMOS     = 0x0020,
+  JC_AIR      = 0x0040,
+  JC_HASH     = 0x0080,
+  JC_AUDIO    = 0x0100,
+  JC_VISION   = 0x0200,
+  JC_TOUCH    = 0x0400,
+  JC_RELAY    = 0x0800,
+  JC_MEMORY   = 0x1000,
+  JC_AI       = 0x2000,
+  JC_BATTERY  = 0x4000,
+  JC_RF       = 0x8000
+};
+
+struct __attribute__((packed)) JanusEventPacket {
+  uint8_t magic[2];        // 'J','E'
+  uint8_t version;         // 1
+  uint8_t eventType;
+  uint8_t nodeRole;
+  uint8_t confidence;
+  uint8_t urgency;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptimeMs;
+  uint16_t topicHash;
+  uint16_t objectHash;
+  uint16_t capabilities;
+  int16_t valueA_x10;
+  int16_t valueB_x10;
+  int16_t valueC_x10;
+  int16_t valueD_x10;
+  uint32_t eventHash;
+  uint32_t ttlMs;
+};
+
+struct __attribute__((packed)) JanusPolicyPacket {
+  uint8_t magic[2];        // 'J','P'
+  uint8_t version;         // 1
+  uint8_t swarmMood;
+  uint8_t radioRate;
+  uint8_t buzzBudget;
+  uint8_t sensorRate;
+  uint8_t confidence;
+  uint16_t flags;
+  uint32_t seq;
+  uint32_t ttlMs;
+  uint32_t quietUntilMs;   // duration ms from Core, not foreign absolute millis
+  uint16_t dominantTopic;
+  uint16_t danger_x100;
+  char order[40];
+};
+
+struct __attribute__((packed)) JanusKenshiPacket {
+  uint8_t magic[2];        // 'K','2'
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint8_t activeBubbleNodes;
+  uint8_t virtualNodes;
+  uint32_t worldFlags;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t jobState;
+  uint8_t priority;
+  int8_t rssi;
+  float entropy;
+  float activity;
+  float confidence;
+  float values[6];
+};
+
+struct __attribute__((packed)) JanusTachyonProphecyPacket {
+  uint8_t magic[2];        // 'T','P'
+  uint8_t version;
+  uint8_t flags;
+  char nodeId[24];
+  uint32_t seq;
+  uint16_t worker_id;
+  uint32_t uptime_ms;
+  uint16_t horizon_ms;
+  uint8_t sector;
+  uint8_t predictedSector;
+  uint8_t confidence;
+  uint8_t jobState;
+  float presence_now;
+  float motion_now;
+  float pred_presence_1;
+  float pred_motion_1;
+  float pred_presence_2;
+  float pred_motion_2;
+  float pred_presence_3;
+  float pred_motion_3;
+  float event_eta_ms;
+  float future_stress;
+  float swarm_pressure;
+};
+
+struct __attribute__((packed)) SwarmSensePacket {
+  uint8_t magic[2];        // 'S','S'
+  uint8_t version;         // 1
+  uint16_t worker_id;
+  char nodeId[24];
+  char kind[16];
+  uint32_t seq;
+  uint32_t uptime_ms;
+  uint32_t micros_tail;
+  uint32_t free_heap;
+  uint16_t loop_jitter_us;
+  uint16_t loop_max_us;
+  int8_t rssi;
+  uint8_t radio_mode;
+  uint8_t bt_flags;
+  uint8_t palette;
+  uint8_t knn_label;
+  uint8_t knn_confidence;
+  uint8_t ai_hint;
+  uint8_t thermal_load;
+  uint16_t effective_batch;
+  uint16_t dynamic_batch;
+  uint32_t hash_rate;
+  uint32_t total_hashes;
+  uint16_t best_bits;
+  uint16_t hash_eff_x1000;
+  int16_t prediction_error_x1000;
+  uint16_t entropy_x1000;
+  uint16_t touch_delta;
+  uint16_t job_age_s;
+  uint16_t nonce_remaining_l16;
+  uint16_t flags;
+};
+
 struct __attribute__((packed)) JanusAiNodePacket {
   uint8_t magic[2];        // 'A','I'
   uint8_t version;         // 1
@@ -147,6 +352,55 @@ int8_t colonyLastRssi = 0;
 char colonyMode[10] = "LOCAL";
 float colonyEntropyWeight = 1.0f;
 float colonySurpriseWeight = 1.0f;
+
+// v4.5 radio self-healing + Home Cortex state.
+uint32_t colonyPeerRebuilds = 0;
+uint32_t colonyTxOk = 0;
+uint32_t colonyTxFail = 0;
+esp_err_t colonyLastTxErr = ESP_OK;
+char colonyLastTxTag[18] = "-";
+
+uint32_t janusBeaconEventSeq = 0;
+uint32_t janusBeaconPolicySeq = 0;
+uint32_t janusBeaconPolicyRx = 0;
+uint32_t janusBeaconPolicyUntilMs = 0;
+uint32_t janusBeaconQuietUntilMs = 0;
+uint32_t janusBeaconLastPolicyMs = 0;
+uint8_t janusBeaconMood = JM_IDLE;
+uint8_t janusBeaconRadioRate = 1;
+uint8_t janusBeaconSensorRate = 1;
+uint8_t janusBeaconBuzzBudget = 1;
+uint8_t janusBeaconPolicyConfidence = 0;
+uint16_t janusBeaconDangerX100 = 0;
+char janusBeaconOrder[40] = "-";
+
+uint32_t janusBeaconLastEventMs = 0;
+uint32_t janusBeaconLastEnvMs = 0;
+uint32_t janusBeaconLastMemoryMs = 0;
+uint32_t janusBeaconLastTaskMs = 0;
+uint32_t janusBeaconLastSwarmSenseMs = 0;
+uint32_t janusBeaconLastK2Ms = 0;
+uint32_t janusBeaconLastTPMs = 0;
+uint32_t janusBeaconLastBlackboxMs = 0;
+uint32_t janusBeaconLastDiagMs = 0;
+uint32_t janusBeaconLastWifiWeakMs = 0;
+uint32_t janusBeaconLastLowHeapMs = 0;
+
+uint32_t janusBeaconMemTx = 0;
+uint32_t janusBeaconNeedTx = 0;
+uint32_t janusBeaconDoneTx = 0;
+uint32_t janusBeaconEnvTx = 0;
+uint32_t janusBeaconSSTx = 0;
+uint32_t janusBeaconSSFail = 0;
+uint32_t janusBeaconK2Tx = 0;
+uint32_t janusBeaconTPTx = 0;
+uint32_t janusBeaconRemoteK2Rx = 0;
+uint32_t janusBeaconRemoteTPRx = 0;
+uint32_t janusBeaconRemoteSSRx = 0;
+uint32_t janusBeaconBlackboxWrites = 0;
+bool janusBeaconArchiveReadyAnnounced = false;
+bool janusBeaconCoreStaleLatched = false;
+
 
 uint16_t countLeadingZeroBitsBE(const uint8_t h[32]) {
   uint16_t bits = 0;
@@ -201,6 +455,25 @@ bool core2SeenRecently();
 uint8_t onlineAiNodes();
 float distributedAiEntropy();
 void flushAiSummaryToSd();
+void rotateAiLogIfNeeded(const char* path);
+float beaconLocalEntropy();
+
+bool forceColonyPeerRebuild(const char* reason);
+esp_err_t janusBeaconEspNowSend(const char* tag, const void* payload, size_t len, bool repairOnFail=true);
+void onJanusBeaconPolicyPacket(const JanusPolicyPacket& jp);
+void onJanusBeaconEventPacket(const JanusEventPacket& je);
+void onJanusBeaconKenshiPacket(const JanusKenshiPacket& kp, int8_t rxRssi);
+void onJanusBeaconTachyonPacket(const JanusTachyonProphecyPacket& tp, int8_t rxRssi);
+void onJanusBeaconSwarmSensePacket(const SwarmSensePacket& ss, int8_t rxRssi);
+void janusBeaconBlackboardTick();
+void janusBeaconSwarmSenseTick(bool force=false);
+void janusBeaconKenshiTick(bool force=false);
+void janusBeaconTachyonTick(bool force=false);
+void janusBeaconBlackboxTick(bool force=false);
+bool janusBeaconEmitEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                          int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                          uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs);
+void janusBeaconBootEvent();
 
 void sendShareResponse(const RemoteJobState& job, uint32_t nonce) {
   ShareResponse sr{};
@@ -208,8 +481,7 @@ void sendShareResponse(const RemoteJobState& job, uint32_t nonce) {
   memcpy(sr.job_id, job.job_id, 8);
   sr.nonce = nonce;
   sr.worker_id = colonyWorkerId;
-  esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)&sr, sizeof(sr));
-  colonyRemoteShares++;
+  if (janusBeaconEspNowSend("share", &sr, sizeof(sr), true) == ESP_OK) colonyRemoteShares++;
 }
 
 void runRemoteMiningBatch() {
@@ -244,16 +516,86 @@ uint8_t getWifiChannelSafe() {
   return primary;
 }
 
-void ensureColonyPeer() {
+bool forceColonyPeerRebuild(const char* reason) {
+#if JANUS_COLONY_ENABLE
+  if (WiFi.status() != WL_CONNECTED) return false;
+
   uint8_t ch = getWifiChannelSafe();
-  if (ch == 0) ch = JANUS_BROADCAST_CHANNEL;
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC) && colonyPeerChannel == ch) return;
-  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) esp_now_del_peer(JANUS_BROADCAST_MAC);
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
+
+  if (esp_now_is_peer_exist(JANUS_BROADCAST_MAC)) {
+    esp_now_del_peer(JANUS_BROADCAST_MAC);
+  }
+
   esp_now_peer_info_t peer{};
   memcpy(peer.peer_addr, JANUS_BROADCAST_MAC, 6);
   peer.channel = ch;
   peer.encrypt = false;
-  if (esp_now_add_peer(&peer) == ESP_OK) colonyPeerChannel = ch;
+
+  esp_err_t err = esp_now_add_peer(&peer);
+  if (err == ESP_OK || err == ESP_ERR_ESPNOW_EXIST) {
+    colonyPeerChannel = ch;
+    colonyPeerRebuilds++;
+    Serial.printf("[COLONY/BEACON] peer ready ch=%u rebuilds=%lu reason=%s\n",
+                  (unsigned)ch, (unsigned long)colonyPeerRebuilds, reason ? reason : "-");
+    return true;
+  }
+
+  colonyPeerChannel = 0;
+  Serial.printf("[COLONY/BEACON] peer rebuild FAIL err=%d ch=%u reason=%s\n",
+                (int)err, (unsigned)ch, reason ? reason : "-");
+  return false;
+#else
+  (void)reason;
+  return false;
+#endif
+}
+
+void ensureColonyPeer() {
+#if JANUS_COLONY_ENABLE
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  uint8_t ch = getWifiChannelSafe();
+  if (ch == 0 && WiFi.status() == WL_CONNECTED) ch = WiFi.channel();
+  if (ch == 0) ch = 1;
+
+  bool exists = esp_now_is_peer_exist(JANUS_BROADCAST_MAC);
+  if (exists && colonyPeerChannel == ch) return;
+  forceColonyPeerRebuild(exists ? "channel-change" : "ensure");
+#endif
+}
+
+esp_err_t janusBeaconEspNowSend(const char* tag, const void* payload, size_t len, bool repairOnFail) {
+#if JANUS_COLONY_ENABLE
+  if (!payload || len == 0) return ESP_ERR_INVALID_ARG;
+
+  if (WiFi.status() != WL_CONNECTED) {
+    colonyTxFail++;
+    colonyLastTxErr = ESP_ERR_INVALID_STATE;
+    strlcpy(colonyLastTxTag, tag ? tag : "wifi-off", sizeof(colonyLastTxTag));
+    return colonyLastTxErr;
+  }
+
+  ensureColonyPeer();
+  esp_err_t err = esp_now_send(JANUS_BROADCAST_MAC, (const uint8_t*)payload, len);
+  if (err == ESP_OK) {
+    colonyTxOk++;
+    return ESP_OK;
+  }
+
+  colonyTxFail++;
+  colonyLastTxErr = err;
+  strlcpy(colonyLastTxTag, tag ? tag : "send", sizeof(colonyLastTxTag));
+  colonyPeerChannel = 0;
+  Serial.printf("[COLONY/BEACON] TX FAIL tag=%s err=%d fail=%lu\n",
+                colonyLastTxTag, (int)err, (unsigned long)colonyTxFail);
+  if (repairOnFail) forceColonyPeerRebuild(tag ? tag : "tx-fail");
+  return err;
+#else
+  (void)tag; (void)payload; (void)len; (void)repairOnFail;
+  return ESP_ERR_INVALID_STATE;
+#endif
 }
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -266,6 +608,32 @@ void onColonyRecv(const uint8_t *mac, const uint8_t *data, int len)
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
   if (info && info->rx_ctrl) colonyLastRssi = info->rx_ctrl->rssi;
 #endif
+
+  if (len == sizeof(JanusPolicyPacket) && data[0] == 'J' && data[1] == 'P') {
+    JanusPolicyPacket jp{}; memcpy(&jp, data, sizeof(jp));
+    onJanusBeaconPolicyPacket(jp);
+    return;
+  }
+  if (len == sizeof(JanusEventPacket) && data[0] == 'J' && data[1] == 'E') {
+    JanusEventPacket je{}; memcpy(&je, data, sizeof(je));
+    onJanusBeaconEventPacket(je);
+    return;
+  }
+  if (len == sizeof(JanusKenshiPacket) && data[0] == 'K' && data[1] == '2') {
+    JanusKenshiPacket kp{}; memcpy(&kp, data, sizeof(kp));
+    onJanusBeaconKenshiPacket(kp, colonyLastRssi);
+    return;
+  }
+  if (len == sizeof(JanusTachyonProphecyPacket) && data[0] == 'T' && data[1] == 'P') {
+    JanusTachyonProphecyPacket tp{}; memcpy(&tp, data, sizeof(tp));
+    onJanusBeaconTachyonPacket(tp, colonyLastRssi);
+    return;
+  }
+  if (len == sizeof(SwarmSensePacket) && data[0] == 'S' && data[1] == 'S') {
+    SwarmSensePacket ss{}; memcpy(&ss, data, sizeof(ss));
+    onJanusBeaconSwarmSensePacket(ss, colonyLastRssi);
+    return;
+  }
 
   if (len == sizeof(JanusColonyPacket)) {
     JanusColonyPacket pkt{}; memcpy(&pkt, data, sizeof(pkt));
@@ -316,9 +684,10 @@ void colonyTick() {
 // ==========              ==========
 #define DEVICE_ID              "janus_adv_beacon_eye_chain"
 #define DEVICE_KIND            "adv_env3_beacon_sd_tachyon_home_ramanujan_beatmaker"
-#define JANUS_BEACON_VERSION   "v4.4 SD TACHYON HOME RAMANUJAN BEATMAKER"
-#define WIFI_SSID "YOUR_WIFI"
-#define WIFI_PASSWORD "YOUR_PASSWORD"
+#define JANUS_BEACON_VERSION   "v4.5A BLACKBOX HOME CORTEX POLISH SD TACHYON RAMANUJAN BEATMAKER"
+
+#define WIFI_SSID              "JANUS_WIFI_PLACEHOLDER"
+#define WIFI_PASSWORD          "JANUS_NET_PLACEHOLDER"
 
 const char* SERVER_CANDIDATES[] = { "http://192.168.1.92:5000" };
 const int SERVER_COUNT = sizeof(SERVER_CANDIDATES) / sizeof(SERVER_CANDIDATES[0]);
@@ -408,6 +777,7 @@ CRGB leds[NUM_LEDS];
 #define JANUS_THETA_DEPTH         12
 #define JANUS_THETA_STUDY_MS      5000UL
 #define JANUS_THETA_MIN_GAP_MS    450UL
+#define JANUS_THETA_SERIAL_MS     8000UL   // v4.5A: keep Serial readable while theta still learns internally
 #define JANUS_THETA_FILE          "/theta_v43c.dat"   // LittleFS fallback only
 #define JANUS_THETA_MAGIC         0x54483343UL  // TH3C
 #define JANUS_BRAINWAVE_MEM_SLOTS 16
@@ -613,6 +983,7 @@ struct JanusThetaState {
   char lemma[64] = "Theta sleep";
 };
 JanusThetaState thetaState;
+uint32_t janusThetaLastSerialMs = 0;
 
 struct JanusMusicPhraseSlot {
   int8_t semi = 0;
@@ -704,6 +1075,547 @@ void rememberThoughtTransition(const String& first, const String& second);
 String applyThoughtChainBias(const String& candidate);
 String buildSeedPhrase(float adjustedFit, float currentSync, float currentEntropy);
 
+// ========================= JANUS BEACON HOME CORTEX BLACKBOX v4.5 =========================
+uint16_t janusHash16(const char* s) {
+  uint16_t h = 21661U;
+  if (!s) return h;
+  while (*s) {
+    h ^= (uint8_t)*s++;
+    h = (uint16_t)(h * 16719U);
+  }
+  return h ? h : 1;
+}
+
+uint16_t janusBeaconCapabilities() {
+  uint16_t caps = JC_TEMP | JC_HUM | JC_PRESS | JC_IMU | JC_HASH | JC_MEMORY | JC_AI | JC_BATTERY | JC_RF;
+  if (g.sd_ready) caps |= JC_RELAY;
+  return caps;
+}
+
+const char* janusEventName(uint8_t eventType) {
+  switch (eventType) {
+    case JE_BOOT: return "boot";
+    case JE_HEARTBEAT: return "heartbeat";
+    case JE_ENV: return "env";
+    case JE_WIFI_WEAK: return "wifi_weak";
+    case JE_LOW_HEAP: return "low_heap";
+    case JE_HASH: return "hash";
+    case JE_TASK_NEED: return "task_need";
+    case JE_TASK_DONE: return "task_done";
+    case JE_DANGER: return "danger";
+    case JE_SAFE: return "safe";
+    case JE_POLICY: return "policy";
+    case JE_AI_MEMORY: return "ai_memory";
+    default: return "event";
+  }
+}
+
+void janusBeaconSdAppend(const char* path, const String& line) {
+#if JANUS_AI_SD_ENABLE
+  if (!g.sd_ready || !path || !path[0]) return;
+  if (!SD.exists(JANUS_AI_SD_DIR)) SD.mkdir(JANUS_AI_SD_DIR);
+  File f = SD.open(path, FILE_APPEND);
+  if (!f) return;
+  f.println(line);
+  f.close();
+#endif
+}
+
+void janusBeaconArchiveEvent(const JanusEventPacket& ev, const char* note) {
+#if JANUS_AI_SD_ENABLE
+  if (!g.sd_ready) return;
+  StaticJsonDocument<384> doc;
+  doc["ts_ms"] = millis();
+  doc["event"] = janusEventName(ev.eventType);
+  doc["kind"] = ev.kind;
+  doc["node"] = ev.nodeId;
+  doc["seq"] = ev.seq;
+  doc["conf"] = ev.confidence;
+  doc["urg"] = ev.urgency;
+  doc["topic"] = ev.topicHash;
+  doc["object"] = ev.objectHash;
+  doc["a"] = ev.valueA_x10;
+  doc["b"] = ev.valueB_x10;
+  doc["c"] = ev.valueC_x10;
+  doc["d"] = ev.valueD_x10;
+  doc["note"] = note ? note : "";
+  doc["policy_rx"] = janusBeaconPolicyRx;
+  doc["core_stale"] = janusBeaconCoreStaleLatched;
+  String out; serializeJson(doc, out);
+  janusBeaconSdAppend(JANUS_BEACON_EVENT_BLACKBOX_LOG, out);
+  rotateAiLogIfNeeded(JANUS_BEACON_EVENT_BLACKBOX_LOG);
+#endif
+}
+
+bool janusBeaconEmitEvent(uint8_t eventType, const char* kind, uint8_t confidence, uint8_t urgency,
+                          int16_t a_x10, int16_t b_x10, int16_t c_x10, int16_t d_x10,
+                          uint16_t topicHash, uint16_t objectHash, uint32_t ttlMs) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  JanusEventPacket ev{};
+  ev.magic[0] = 'J'; ev.magic[1] = 'E';
+  ev.version = 1;
+  ev.eventType = eventType;
+  ev.nodeRole = JR_BEACON;
+  ev.confidence = constrain((int)confidence, 0, 100);
+  ev.urgency = constrain((int)urgency, 0, 100);
+  strlcpy(ev.nodeId, "BeaconADV", sizeof(ev.nodeId));
+  strlcpy(ev.kind, kind && kind[0] ? kind : "beacon_blackbox", sizeof(ev.kind));
+  ev.seq = ++janusBeaconEventSeq;
+  ev.uptimeMs = millis();
+  ev.topicHash = topicHash ? topicHash : janusHash16("beacon");
+  ev.objectHash = objectHash;
+  ev.capabilities = janusBeaconCapabilities();
+  ev.valueA_x10 = a_x10;
+  ev.valueB_x10 = b_x10;
+  ev.valueC_x10 = c_x10;
+  ev.valueD_x10 = d_x10;
+  ev.eventHash = ((uint32_t)eventType << 24) ^ ((uint32_t)ev.topicHash << 8) ^ ev.seq ^ (uint32_t)colonyWorkerId;
+  ev.ttlMs = ttlMs ? ttlMs : 12000UL;
+  bool ok = janusBeaconEspNowSend("J/E", &ev, sizeof(ev), true) == ESP_OK;
+  if (ok) {
+    janusBeaconLastEventMs = millis();
+    if (eventType == JE_AI_MEMORY) janusBeaconMemTx++;
+    else if (eventType == JE_TASK_NEED) janusBeaconNeedTx++;
+    else if (eventType == JE_TASK_DONE) janusBeaconDoneTx++;
+    else if (eventType == JE_ENV) janusBeaconEnvTx++;
+  }
+  janusBeaconArchiveEvent(ev, ok ? "tx_ok" : "tx_fail");
+  return ok;
+#else
+  (void)eventType; (void)kind; (void)confidence; (void)urgency; (void)a_x10; (void)b_x10; (void)c_x10; (void)d_x10; (void)topicHash; (void)objectHash; (void)ttlMs;
+  return false;
+#endif
+}
+
+void janusBeaconSavePolicyToSd(const JanusPolicyPacket& jp) {
+#if JANUS_AI_SD_ENABLE
+  if (!g.sd_ready) return;
+  if (!SD.exists(JANUS_AI_POLICY_DIR)) SD.mkdir(JANUS_AI_POLICY_DIR);
+  StaticJsonDocument<512> doc;
+  doc["ts_ms"] = millis();
+  doc["seq"] = jp.seq;
+  doc["mood"] = jp.swarmMood;
+  doc["radio"] = jp.radioRate;
+  doc["sensor"] = jp.sensorRate;
+  doc["buzz"] = jp.buzzBudget;
+  doc["conf"] = jp.confidence;
+  doc["flags"] = jp.flags;
+  doc["ttl"] = jp.ttlMs;
+  doc["quiet"] = jp.quietUntilMs;
+  doc["topic"] = jp.dominantTopic;
+  doc["danger"] = jp.danger_x100;
+  doc["order"] = jp.order;
+  doc["node"] = "BeaconADV";
+  File f = SD.open(JANUS_AI_POLICY_FILE, FILE_WRITE);
+  if (!f) return;
+  serializeJson(doc, f);
+  f.println();
+  f.close();
+#endif
+}
+
+void onJanusBeaconPolicyPacket(const JanusPolicyPacket& jp) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  if (jp.magic[0] != 'J' || jp.magic[1] != 'P' || jp.version != 1) return;
+  if (jp.seq && jp.seq == janusBeaconPolicySeq) return;
+
+  janusBeaconPolicyRx++;
+  janusBeaconPolicySeq = jp.seq;
+  janusBeaconLastPolicyMs = millis();
+  janusBeaconMood = jp.swarmMood;
+  janusBeaconRadioRate = constrain((int)jp.radioRate, 0, 2);
+  janusBeaconSensorRate = constrain((int)jp.sensorRate, 0, 2);
+  janusBeaconBuzzBudget = constrain((int)jp.buzzBudget, 0, 3);
+  janusBeaconPolicyConfidence = constrain((int)jp.confidence, 0, 100);
+  janusBeaconDangerX100 = jp.danger_x100;
+  janusBeaconPolicyUntilMs = millis() + (jp.ttlMs ? jp.ttlMs : JANUS_BEACON_POLICY_TTL_GUARD_MS);
+  janusBeaconQuietUntilMs = jp.quietUntilMs ? millis() + min((uint32_t)jp.quietUntilMs, 60000UL) : 0;
+  strlcpy(janusBeaconOrder, jp.order[0] ? jp.order : "-", sizeof(janusBeaconOrder));
+  janusBeaconCoreStaleLatched = false;
+
+  janusBeaconSavePolicyToSd(jp);
+  Serial.printf("[BLACKBOARD/BEACON] policy rx=%lu mood=%u radio=%u sensor=%u conf=%u danger=%.2f order=%s\n",
+                (unsigned long)janusBeaconPolicyRx,
+                (unsigned)janusBeaconMood,
+                (unsigned)janusBeaconRadioRate,
+                (unsigned)janusBeaconSensorRate,
+                (unsigned)janusBeaconPolicyConfidence,
+                (float)janusBeaconDangerX100 / 100.0f,
+                janusBeaconOrder);
+
+  janusBeaconEmitEvent(JE_POLICY, "policy_rx", janusBeaconPolicyConfidence, 20,
+                       (int16_t)janusBeaconMood,
+                       (int16_t)janusBeaconRadioRate,
+                       (int16_t)janusBeaconSensorRate,
+                       (int16_t)janusBeaconDangerX100,
+                       janusHash16("policy"), janusHash16("core_policy"), 10000UL);
+#endif
+}
+
+void onJanusBeaconEventPacket(const JanusEventPacket& je) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  if (je.magic[0] != 'J' || je.magic[1] != 'E' || je.version != 1) return;
+  if (strncmp(je.nodeId, "Beacon", 6) == 0) return;
+  rememberSwarmAiNode(je.nodeId, je.kind,
+                      constrain((float)je.urgency / 10.0f, 0.0f, 10.0f),
+                      0.0f,
+                      constrain((float)je.confidence / 100.0f, 0.0f, 1.0f),
+                      constrain((float)je.valueA_x10 / 1000.0f, 0.0f, 3.0f),
+                      constrain((float)je.urgency / 100.0f, 0.0f, 1.5f),
+                      je.eventType, je.seq, 0, colonyLastRssi);
+  if (g.sd_ready && (je.eventType == JE_DANGER || je.eventType == JE_TASK_NEED || je.eventType == JE_AI_MEMORY)) {
+    janusBeaconArchiveEvent(je, "rx");
+  }
+#endif
+}
+
+void onJanusBeaconKenshiPacket(const JanusKenshiPacket& kp, int8_t rxRssi) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  if (kp.magic[0] != 'K' || kp.magic[1] != '2' || kp.version != 1) return;
+  if (strncmp(kp.nodeId, "Beacon", 6) == 0) return;
+  janusBeaconRemoteK2Rx++;
+  rememberSwarmAiNode(kp.nodeId, "KenshiK2", kp.entropy, 0.0f, kp.confidence, kp.activity,
+                      constrain((float)kp.priority / 255.0f, 0.0f, 1.5f), kp.flags, kp.seq, kp.worker_id, rxRssi);
+#endif
+}
+
+void onJanusBeaconTachyonPacket(const JanusTachyonProphecyPacket& tp, int8_t rxRssi) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  if (tp.magic[0] != 'T' || tp.magic[1] != 'P' || tp.version != 1) return;
+  if (strncmp(tp.nodeId, "Beacon", 6) == 0) return;
+  janusBeaconRemoteTPRx++;
+  float entropy = constrain((tp.future_stress + tp.swarm_pressure) * 1.5f, 0.0f, 10.0f);
+  rememberSwarmAiNode(tp.nodeId, "TachyonTP", entropy, tp.future_stress,
+                      constrain((float)tp.confidence / 100.0f, 0.0f, 1.0f),
+                      constrain(tp.pred_presence_1 / 1000.0f, 0.0f, 3.0f),
+                      constrain(tp.swarm_pressure, 0.0f, 1.5f), tp.flags, tp.seq, tp.worker_id, rxRssi);
+#endif
+}
+
+void onJanusBeaconSwarmSensePacket(const SwarmSensePacket& ss, int8_t rxRssi) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  if (ss.magic[0] != 'S' || ss.magic[1] != 'S' || ss.version != 1) return;
+  if (strncmp(ss.nodeId, "Beacon", 6) == 0) return;
+  janusBeaconRemoteSSRx++;
+  rememberSwarmAiNode(ss.nodeId, ss.kind,
+                      (float)ss.entropy_x1000 / 1000.0f,
+                      fabsf((float)ss.prediction_error_x1000) / 1000.0f,
+                      constrain((float)ss.knn_confidence / 100.0f, 0.0f, 1.0f),
+                      constrain((float)ss.hash_eff_x1000 / 1000.0f, 0.0f, 3.0f),
+                      constrain((float)ss.ai_hint / 4.0f, 0.0f, 1.0f),
+                      ss.flags, ss.seq, ss.worker_id, rxRssi);
+#endif
+}
+
+uint32_t janusBeaconEventIntervalNow() {
+  if (janusBeaconRadioRate == 0 || (janusBeaconQuietUntilMs && millis() < janusBeaconQuietUntilMs)) return JANUS_BEACON_EVENT_BASE_MS * 2UL;
+  if (janusBeaconRadioRate == 2 || janusBeaconMood == JM_ALERT || janusBeaconMood == JM_GUARD) return JANUS_BEACON_EVENT_FAST_MS;
+  return JANUS_BEACON_EVENT_BASE_MS;
+}
+
+void janusBeaconSwarmSenseTick(bool force) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  uint32_t now = millis();
+  if (!force && now - janusBeaconLastSwarmSenseMs < JANUS_BEACON_SWARMSENSE_MS) return;
+  janusBeaconLastSwarmSenseMs = now;
+
+  SwarmSensePacket ss{};
+  ss.magic[0] = 'S'; ss.magic[1] = 'S';
+  ss.version = 1;
+  ss.worker_id = colonyWorkerId;
+  strlcpy(ss.nodeId, "BeaconADV", sizeof(ss.nodeId));
+  strlcpy(ss.kind, "blackbox_archive", sizeof(ss.kind));
+  ss.seq = ++swarmAiSeq;
+  ss.uptime_ms = now;
+  ss.micros_tail = micros();
+  ss.free_heap = ESP.getFreeHeap();
+  ss.loop_jitter_us = 0;
+  ss.loop_max_us = DRAW_INTERVAL_MS;
+  ss.rssi = (WiFi.status() == WL_CONNECTED) ? (int8_t)WiFi.RSSI() : -127;
+  ss.radio_mode = janusBeaconRadioRate;
+  ss.bt_flags = 0;
+  if (g.sd_ready) ss.bt_flags |= 0x01;
+  if (core2SeenRecently() || (janusBeaconPolicyRx && now - janusBeaconLastPolicyMs < JANUS_BEACON_CORE_STALE_MS)) ss.bt_flags |= 0x02;
+  if (janusBeaconCoreStaleLatched) ss.bt_flags |= 0x04;
+  if (g.qmp_ready) ss.bt_flags |= 0x08;
+  ss.palette = brightness;
+  ss.knn_label = (uint8_t)constrain((int)(g.entropy), 0, 15);
+  ss.knn_confidence = (uint8_t)constrain((int)(g.fit * 35.0f + eye.sync * 40.0f), 0, 100);
+  ss.ai_hint = (uint8_t)((g.loss > 0.30f || janusBeaconCoreStaleLatched) ? 2 : ((g.fit > 1.35f) ? 3 : 1));
+  ss.thermal_load = (uint8_t)constrain((int)g.temp_c, 0, 100);
+  ss.effective_batch = constrain((uint16_t)(COLONY_REMOTE_BATCH * colonyEntropyWeight), (uint16_t)80, (uint16_t)700);
+  ss.dynamic_batch = ss.effective_batch;
+  ss.hash_rate = colonyRemoteHashrate;
+  ss.total_hashes = colonyHashCounter;
+  ss.best_bits = colonyBestBits;
+  ss.hash_eff_x1000 = (uint16_t)constrain((int32_t)(colonyRemoteHashrate / 10UL), 0L, 65535L);
+  ss.prediction_error_x1000 = (int16_t)constrain((int32_t)((g.loss + g.imu_loss) * 1000.0f), -32768L, 32767L);
+  ss.entropy_x1000 = (uint16_t)constrain((int32_t)(beaconLocalEntropy() * 1000.0f), 0L, 65535L);
+  ss.touch_delta = 0;
+  ss.job_age_s = colonyJob.active ? (uint16_t)min(65535UL, (now - colonyJob.receivedAt) / 1000UL) : 65535U;
+  ss.nonce_remaining_l16 = colonyJob.active ? (uint16_t)((colonyJob.endNonce > colonyJob.nonce) ? ((colonyJob.endNonce - colonyJob.nonce) & 0xFFFF) : 0) : 0;
+  ss.flags = ((uint16_t)onlineAiNodes() << 8) | (g.sd_ready ? 0x01 : 0x00) | (janusBeaconCoreStaleLatched ? 0x02 : 0x00) | (anomalyLatched ? 0x04 : 0x00);
+
+  if (janusBeaconEspNowSend("S/S", &ss, sizeof(ss), true) == ESP_OK) janusBeaconSSTx++;
+  else janusBeaconSSFail++;
+#endif
+}
+
+void janusBeaconKenshiTick(bool force) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  uint32_t now = millis();
+  if (!force && now - janusBeaconLastK2Ms < JANUS_BEACON_K2_MS) return;
+  janusBeaconLastK2Ms = now;
+
+  JanusKenshiPacket kp{};
+  kp.magic[0] = 'K'; kp.magic[1] = '2';
+  kp.version = 1;
+  kp.flags = 0x04; // virtual summary / archive witness
+  if (g.sd_ready) kp.flags |= 0x08;
+  if (anomalyLatched || janusBeaconCoreStaleLatched) kp.flags |= 0x02;
+  strlcpy(kp.nodeId, "BeaconADV", sizeof(kp.nodeId));
+  kp.seq = ++swarmAiSeq;
+  kp.worker_id = colonyWorkerId;
+  kp.uptime_ms = now;
+  kp.activeBubbleNodes = onlineAiNodes();
+  kp.virtualNodes = swarmAiNodeCount > kp.activeBubbleNodes ? swarmAiNodeCount - kp.activeBubbleNodes : 0;
+  kp.worldFlags = 0;
+  if (g.sd_ready) kp.worldFlags |= 1UL << 0;
+  if (core2SeenRecently()) kp.worldFlags |= 1UL << 1;
+  if (eye.online) kp.worldFlags |= 1UL << 2;
+  if (audioNode.online) kp.worldFlags |= 1UL << 3;
+  if (g.qmp_ready) kp.worldFlags |= 1UL << 4;
+  if (anomalyLatched) kp.worldFlags |= 1UL << 5;
+  if (janusBeaconCoreStaleLatched) kp.worldFlags |= 1UL << 6;
+  kp.sector = (uint8_t)constrain((int)floorf(g.entropy), 0, 7);
+  kp.predictedSector = (uint8_t)constrain((int)floorf(tachyonFuture2), 0, 7);
+  kp.jobState = janusBeaconCoreStaleLatched ? 5 : (g.sd_ready ? 4 : 1);
+  kp.priority = (uint8_t)constrain((int)(g.entropy * 18.0f + onlineAiNodes() * 8 + (janusBeaconCoreStaleLatched ? 80 : 0)), 0, 255);
+  kp.rssi = g.wifi_rssi;
+  kp.entropy = beaconLocalEntropy();
+  kp.activity = g.fit;
+  kp.confidence = constrain(0.25f + eye.sync * 0.35f + (g.sd_ready ? 0.25f : 0.0f) + (core2SeenRecently() ? 0.15f : 0.0f), 0.0f, 1.5f);
+  kp.values[0] = g.temp_c;
+  kp.values[1] = g.humidity;
+  kp.values[2] = g.pressure_hpa;
+  kp.values[3] = distributedAiEntropy();
+  kp.values[4] = (float)onlineAiNodes();
+  kp.values[5] = (float)ESP.getFreeHeap();
+
+  if (janusBeaconEspNowSend("K2", &kp, sizeof(kp), true) == ESP_OK) janusBeaconK2Tx++;
+#endif
+}
+
+void janusBeaconTachyonTick(bool force) {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  uint32_t now = millis();
+  if (!force && now - janusBeaconLastTPMs < JANUS_BEACON_TP_MS) return;
+  janusBeaconLastTPMs = now;
+
+  JanusTachyonProphecyPacket tp{};
+  tp.magic[0] = 'T'; tp.magic[1] = 'P';
+  tp.version = 1;
+  tp.flags = 0x08; // remote-assisted archive prophecy
+  if (anomalyLatched || janusBeaconCoreStaleLatched) tp.flags |= 0x04;
+  strlcpy(tp.nodeId, "BeaconADV", sizeof(tp.nodeId));
+  tp.seq = ++swarmAiSeq;
+  tp.worker_id = colonyWorkerId;
+  tp.uptime_ms = now;
+  tp.horizon_ms = 30000;
+  tp.sector = (uint8_t)constrain((int)floorf(g.entropy), 0, 7);
+  tp.predictedSector = (uint8_t)constrain((int)floorf(tachyonFuture3), 0, 7);
+  tp.confidence = (uint8_t)constrain((int)(tachyonFutureConfidence * 100.0f + (g.sd_ready ? 15.0f : 0.0f)), 0, 100);
+  tp.jobState = janusBeaconCoreStaleLatched ? 5 : 4;
+  tp.presence_now = eye.online ? eye.tmos_presence : 0.0f;
+  tp.motion_now = eye.online ? eye.tmos_motion : 0.0f;
+  tp.pred_presence_1 = tachyonFuture1;
+  tp.pred_motion_1 = swarmEntropyWeighted;
+  tp.pred_presence_2 = tachyonFuture2;
+  tp.pred_motion_2 = distributedAiEntropy();
+  tp.pred_presence_3 = tachyonFuture3;
+  tp.pred_motion_3 = (float)onlineAiNodes();
+  tp.event_eta_ms = janusBeaconCoreStaleLatched ? 1000.0f : 9999.0f;
+  tp.future_stress = constrain(g.loss + g.imu_loss + (janusBeaconCoreStaleLatched ? 0.8f : 0.0f), 0.0f, 3.0f);
+  tp.swarm_pressure = constrain(swarmAttentionSum + (float)onlineAiNodes() * 0.05f, 0.0f, 3.0f);
+
+  if (janusBeaconEspNowSend("TP", &tp, sizeof(tp), true) == ESP_OK) janusBeaconTPTx++;
+#endif
+}
+
+void janusBeaconBlackboxTick(bool force) {
+#if JANUS_AI_SD_ENABLE
+  uint32_t now = millis();
+  if (!force && now - janusBeaconLastBlackboxMs < JANUS_BEACON_BLACKBOX_MS) return;
+  janusBeaconLastBlackboxMs = now;
+  if (!g.sd_ready) return;
+
+  StaticJsonDocument<768> doc;
+  doc["ts_ms"] = now;
+  doc["event"] = "blackbox_summary";
+  doc["node"] = "BeaconADV";
+  doc["policy_rx"] = janusBeaconPolicyRx;
+  doc["policy_age_ms"] = janusBeaconLastPolicyMs ? (now - janusBeaconLastPolicyMs) : 0xFFFFFFFFUL;
+  doc["core_stale"] = janusBeaconCoreStaleLatched;
+  doc["online_nodes"] = onlineAiNodes();
+  doc["known_nodes"] = swarmAiNodeCount;
+  doc["entropy"] = g.entropy;
+  doc["swarm_entropy"] = distributedAiEntropy();
+  doc["fit"] = g.fit;
+  doc["loss"] = g.loss;
+  doc["temp"] = g.temp_c;
+  doc["hum"] = g.humidity;
+  doc["pressure"] = g.pressure_hpa;
+  doc["battery"] = g.battery;
+  doc["rssi"] = g.wifi_rssi;
+  doc["eye"] = eye.online;
+  doc["audio"] = audioNode.online;
+  doc["txOk"] = colonyTxOk;
+  doc["txFail"] = colonyTxFail;
+  doc["k2tx"] = janusBeaconK2Tx;
+  doc["tptx"] = janusBeaconTPTx;
+  doc["sstx"] = janusBeaconSSTx;
+  String out; serializeJson(doc, out);
+  janusBeaconSdAppend(JANUS_BEACON_BLACKBOX_LOG, out);
+  rotateAiLogIfNeeded(JANUS_BEACON_BLACKBOX_LOG);
+  janusBeaconBlackboxWrites++;
+#endif
+}
+
+void janusBeaconBootEvent() {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  janusBeaconEmitEvent(JE_BOOT, "beacon_boot", 92, 35,
+                       (int16_t)(g.sd_ready ? 1 : 0),
+                       (int16_t)(g.qmp_ready ? 1 : 0),
+                       (int16_t)(g.imu_ready ? 1 : 0),
+                       (int16_t)M5.Power.getBatteryLevel(),
+                       janusHash16("boot"), janusHash16("beacon"), 20000UL);
+  if (g.sd_ready) {
+    janusBeaconEmitEvent(JE_TASK_DONE, "archive_ready", 96, 24,
+                         (int16_t)onlineAiNodes(), (int16_t)g.battery, 0, 0,
+                         janusHash16("archive"), janusHash16("sd_blackbox"), 20000UL);
+    janusBeaconArchiveReadyAnnounced = true;
+  }
+  janusBeaconSwarmSenseTick(true);
+  janusBeaconKenshiTick(true);
+  janusBeaconTachyonTick(true);
+  janusBeaconBlackboxTick(true);
+#endif
+}
+
+void janusBeaconBlackboardTick() {
+#if JANUS_BEACON_BLACKBOARD_ENABLE
+  uint32_t now = millis();
+
+  bool policyAlive = janusBeaconPolicyRx && (now - janusBeaconLastPolicyMs < JANUS_BEACON_CORE_STALE_MS);
+  bool coreAlive = core2SeenRecently() || policyAlive;
+  if (!coreAlive && !janusBeaconCoreStaleLatched && now > JANUS_BEACON_CORE_STALE_MS) {
+    janusBeaconCoreStaleLatched = true;
+    janusBeaconEmitEvent(JE_TASK_NEED, "core_missing_blackbox", 88, 82,
+                         (int16_t)onlineAiNodes(), (int16_t)swarmAiNodeCount,
+                         (int16_t)(g.sd_ready ? 1 : 0), (int16_t)janusBeaconPolicyRx,
+                         janusHash16("cortex"), janusHash16("core2"), 30000UL);
+  } else if (coreAlive && janusBeaconCoreStaleLatched) {
+    janusBeaconCoreStaleLatched = false;
+    janusBeaconEmitEvent(JE_SAFE, "core_seen_again", 86, 28,
+                         (int16_t)onlineAiNodes(), (int16_t)janusBeaconPolicyRx, 0, 0,
+                         janusHash16("cortex"), janusHash16("core2"), 20000UL);
+  }
+
+  if (now - janusBeaconLastEventMs >= janusBeaconEventIntervalNow()) {
+    janusBeaconEmitEvent(JE_HEARTBEAT, "beacon_heartbeat", 88, janusBeaconCoreStaleLatched ? 70 : 22,
+                         (int16_t)constrain((int)(beaconLocalEntropy() * 10.0f), -32768, 32767),
+                         (int16_t)constrain((int)(distributedAiEntropy() * 10.0f), -32768, 32767),
+                         (int16_t)onlineAiNodes(),
+                         (int16_t)(g.sd_ready ? 1 : 0),
+                         janusHash16("heartbeat"), janusHash16("beacon"), 12000UL);
+  }
+
+  if (now - janusBeaconLastEnvMs >= JANUS_BEACON_ENV_MS) {
+    janusBeaconLastEnvMs = now;
+    janusBeaconEmitEvent(JE_ENV, "env_sentinel", 86, (g.pressure_loss > 8.0f || g.imu_loss > 0.8f) ? 66 : 24,
+                         (int16_t)constrain((int)(g.temp_c * 10.0f), -32768, 32767),
+                         (int16_t)constrain((int)(g.humidity * 10.0f), -32768, 32767),
+                         (int16_t)constrain((int)(g.pressure_hpa * 10.0f), -32768, 32767),
+                         (int16_t)constrain((int)(g.imu_shock * 100.0f), -32768, 32767),
+                         janusHash16("environment"), janusHash16("beacon_env"), 15000UL);
+  }
+
+  if (g.wifi_rssi != -127 && g.wifi_rssi < -74 && now - janusBeaconLastWifiWeakMs > 15000UL) {
+    janusBeaconLastWifiWeakMs = now;
+    janusBeaconEmitEvent(JE_WIFI_WEAK, "wifi_weak", 80, 60,
+                         (int16_t)(g.wifi_rssi * 10), (int16_t)colonyTxFail, (int16_t)colonyPeerChannel, 0,
+                         janusHash16("radio"), janusHash16("beacon_wifi"), 18000UL);
+  }
+
+  if (ESP.getFreeHeap() < 90000 && now - janusBeaconLastLowHeapMs > 20000UL) {
+    janusBeaconLastLowHeapMs = now;
+    janusBeaconEmitEvent(JE_LOW_HEAP, "low_heap", 80, 58,
+                         (int16_t)(ESP.getFreeHeap() / 1024), (int16_t)onlineAiNodes(), 0, 0,
+                         janusHash16("heap"), janusHash16("beacon_heap"), 18000UL);
+  }
+
+  if (now - janusBeaconLastMemoryMs >= JANUS_BEACON_MEMORY_MS) {
+    janusBeaconLastMemoryMs = now;
+    janusBeaconEmitEvent(JE_AI_MEMORY, "blackbox_digest", 92, janusBeaconCoreStaleLatched ? 78 : 34,
+                         (int16_t)onlineAiNodes(), (int16_t)swarmAiNodeCount,
+                         (int16_t)constrain((int)(distributedAiEntropy() * 10.0f), -32768, 32767),
+                         (int16_t)janusBeaconBlackboxWrites,
+                         janusHash16("memory"), janusHash16("beacon_blackbox"), 45000UL);
+  }
+
+  if (now - janusBeaconLastTaskMs >= JANUS_BEACON_TASK_MS) {
+    janusBeaconLastTaskMs = now;
+    if (!g.sd_ready) {
+      janusBeaconEmitEvent(JE_TASK_NEED, "sd_missing", 92, 88,
+                           (int16_t)g.battery, (int16_t)(ESP.getFreeHeap()/1024), 0, 0,
+                           janusHash16("storage"), janusHash16("sd_card"), 30000UL);
+    } else if (!janusBeaconArchiveReadyAnnounced) {
+      janusBeaconEmitEvent(JE_TASK_DONE, "archive_ready", 96, 24,
+                           (int16_t)onlineAiNodes(), (int16_t)g.battery, 0, 0,
+                           janusHash16("archive"), janusHash16("sd_blackbox"), 30000UL);
+      janusBeaconArchiveReadyAnnounced = true;
+    }
+    if (g.qmp_ready == false) {
+      janusBeaconEmitEvent(JE_TASK_NEED, "env_pressure_missing", 72, 42,
+                           (int16_t)g.temp_c, (int16_t)g.humidity, 0, 0,
+                           janusHash16("environment"), janusHash16("qmp6988"), 30000UL);
+    }
+  }
+
+  janusBeaconSwarmSenseTick(false);
+  janusBeaconKenshiTick(false);
+  janusBeaconTachyonTick(false);
+  janusBeaconBlackboxTick(false);
+
+  if (now - janusBeaconLastDiagMs >= 10000UL) {
+    janusBeaconLastDiagMs = now;
+    Serial.printf("[BLACKBOARD/BEACON] ev=%lu pol=%lu mood=%u txOk=%lu fail=%lu peerCh=%u rebuilds=%lu K2=%lu TP=%lu SS=%lu/%lu mem=%lu need=%lu done=%lu rxK2=%lu rxTP=%lu rxSS=%lu sd=%u blackbox=%lu coreStale=%u nodes=%u order=%s\n",
+                  (unsigned long)janusBeaconEventSeq,
+                  (unsigned long)janusBeaconPolicyRx,
+                  (unsigned)janusBeaconMood,
+                  (unsigned long)colonyTxOk,
+                  (unsigned long)colonyTxFail,
+                  (unsigned)colonyPeerChannel,
+                  (unsigned long)colonyPeerRebuilds,
+                  (unsigned long)janusBeaconK2Tx,
+                  (unsigned long)janusBeaconTPTx,
+                  (unsigned long)janusBeaconSSTx,
+                  (unsigned long)janusBeaconSSFail,
+                  (unsigned long)janusBeaconMemTx,
+                  (unsigned long)janusBeaconNeedTx,
+                  (unsigned long)janusBeaconDoneTx,
+                  (unsigned long)janusBeaconRemoteK2Rx,
+                  (unsigned long)janusBeaconRemoteTPRx,
+                  (unsigned long)janusBeaconRemoteSSRx,
+                  g.sd_ready ? 1 : 0,
+                  (unsigned long)janusBeaconBlackboxWrites,
+                  janusBeaconCoreStaleLatched ? 1 : 0,
+                  (unsigned)onlineAiNodes(),
+                  janusBeaconOrder);
+  }
+#endif
+}
+
 // ==========                         ==========
 JsonObject pickTelemetryObject(StaticJsonDocument<4096>& doc) {
   JsonObject root = doc.as<JsonObject>();
@@ -756,7 +1668,7 @@ bool janusTrySdBegin(uint8_t cs, uint32_t hz) {
 bool initJanusSdCard() {
 #if JANUS_AI_SD_ENABLE
   const uint32_t speeds[] = {25000000UL, 10000000UL, 4000000UL, 1000000UL};
-  const uint8_t csList[] = {CARDPUTER_ADV_SD_CS_PIN, CARDPUTER_SD_FALLBACK_CS_PIN};
+  const uint8_t csList[] = {CARDPUTER_SD_FALLBACK_CS_PIN, CARDPUTER_ADV_SD_CS_PIN};  // v4.5A: ADV launcher logs show CS=12 succeeds; try it first
   for (uint8_t c = 0; c < sizeof(csList); c++) {
     for (uint8_t s = 0; s < sizeof(speeds) / sizeof(speeds[0]); s++) {
       if (janusTrySdBegin(csList[c], speeds[s])) return true;
@@ -1136,8 +2048,11 @@ void updateThetaState(float currentEntropy, bool significantEvent) {
   thetaState.confidence = (uint8_t)janusClampF(20.0f + rawRes * 80.0f, 0.0f, 100.0f);
   snprintf(thetaState.lemma, sizeof(thetaState.lemma), "Carr q=%.2f th3=%.2f mu=%.3f", q, theta3, mock);
 
-  if (significantEvent || (thetaState.studies % 10 == 0)) {
-    Serial.printf("[THETA] %s res=%u conf=%u tau=%08lx\n", thetaState.lemma, thetaState.resonance, thetaState.confidence, (unsigned long)thetaState.tauLike);
+  if ((significantEvent || (thetaState.studies % 10 == 0)) && (now - janusThetaLastSerialMs >= JANUS_THETA_SERIAL_MS)) {
+    janusThetaLastSerialMs = now;
+    Serial.printf("[THETA] %s res=%u conf=%u tau=%08lx studies=%lu\n",
+                  thetaState.lemma, thetaState.resonance, thetaState.confidence,
+                  (unsigned long)thetaState.tauLike, (unsigned long)thetaState.studies);
   }
 #endif
 }
@@ -2089,7 +3004,7 @@ void kgTone(uint16_t freq, uint16_t dur) {
   M5Cardputer.Speaker.stop();
   setSpeakerVolume();
   M5Cardputer.Speaker.tone(freq, dur);
-  keygenNoteOffAt = "YOUR_KEY";
+  keygenNoteOffAt = millis() + dur + 2;
 }
 
 // ========================= JANUS SWARM KEYGEN BEAT MACHINE =========================
@@ -2129,7 +3044,7 @@ void kgPlay(uint16_t freq, uint16_t dur) {
   M5Cardputer.Speaker.stop();
   setSpeakerVolume();
   M5Cardputer.Speaker.tone(freq, dur);
-  keygenNoteOffAt = "YOUR_KEY";
+  keygenNoteOffAt = millis() + dur + 2;
 }
 
 void updateSwarmAttentionAndMusicState() {
@@ -2334,7 +3249,7 @@ void updateBrainWaveMusic() {
   brainStep = keygenStep & 7;
   if ((step & 7) == 0) {
     uint8_t bump = 1 + (theta >> 6);
-    keygenPattern = "YOUR_KEY";
+    keygenPattern = (keygenPattern + bump + (uint8_t)(swarmAttentionAudio * 2.0f)) & 7;
     statusLine = String("Janus beat fit ") + String(g.fit, 1) + String(" th ") + String(theta) + String(" p") + String(keygenPattern);
   }
 }
@@ -2393,19 +3308,19 @@ void processKeyboard() {
     isSpeakerPlaying = !isSpeakerPlaying;
     if (!isSpeakerPlaying) M5Cardputer.Speaker.stop();
     brainStep = 0;
-    keygenStep = "YOUR_KEY";
-    keygenPattern = "YOUR_KEY";
-    keygenNoteOffAt = "YOUR_KEY";
+    keygenStep = 0;
+    keygenPattern = 0;
+    keygenNoteOffAt = 0;
     statusLine = isSpeakerPlaying ? "swarm keygen beat" : "brainwave off";
     playTone(isSpeakerPlaying ? 1100 : 400, 50);
-    lastKeyAt = "YOUR_KEY";
+    lastKeyAt = millis();
   }
   prevEnter = enterNow;
 
   if (status.word.size() && millis() - lastKeyAt > 220) {
     for (size_t i = 0; i < status.word.size(); ++i) {
       handleChar(status.word[i]);
-      lastKeyAt = "YOUR_KEY";
+      lastKeyAt = millis();
       break;
     }
   }
@@ -2868,7 +3783,7 @@ void sendDistributedAiPacket() {
   ai.values[3] = distributedAiEntropy();
   ai.values[4] = (float)onlineAiNodes();
   ai.values[5] = (float)g.wifi_rssi;
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&ai, sizeof(ai));
+  janusBeaconEspNowSend("AI", &ai, sizeof(ai), true);
   rememberSwarmAiNode("BeaconADV", "BeaconArchiveAI", ai.entropy, ai.prediction_error, ai.sync, ai.fit, ai.attention, ai.flags, ai.seq, colonyWorkerId, g.wifi_rssi);
 }
 
@@ -3001,8 +3916,21 @@ void onJanusHeartbeat(const JanusColonyPacket& pkt) {
 
 void onJanusEntropy(const EntropyReport& er, const void* opt) {
   float safeE = janusSafeEntropy(er.local_entropy);
-  float safeLoss = janusSafeLoss(er.values[3]);
-  Serial.printf("[ESP-NOW] Got ER1 worker=%u entropy=%.3f loss=%.3f safe=%.3f\n", er.worker_id, er.local_entropy, er.values[3], safeLoss);
+  float rawLoss = er.values[3];
+  bool legacyLossNoise = (!isfinite(rawLoss) || fabsf(rawLoss) > 20.0f);
+  float safeLoss = legacyLossNoise ? 0.0f : janusSafeLoss(rawLoss);
+
+  static uint32_t lastEr1LegacyLogMs = 0;
+  if (legacyLossNoise) {
+    if (millis() - lastEr1LegacyLogMs > 12000UL) {
+      lastEr1LegacyLogMs = millis();
+      Serial.printf("[ESP-NOW] ER1 legacy loss ignored worker=%u entropy=%.3f rawLoss=%.3f safe=%.3f\n",
+                    er.worker_id, er.local_entropy, rawLoss, safeLoss);
+    }
+  } else {
+    Serial.printf("[ESP-NOW] Got ER1 worker=%u entropy=%.3f loss=%.3f safe=%.3f\n", er.worker_id, er.local_entropy, rawLoss, safeLoss);
+  }
+
   colonyRxPackets++;
   eye.online = true;
   eye.last_ok_ms = millis();
@@ -3012,10 +3940,10 @@ void onJanusEntropy(const EntropyReport& er, const void* opt) {
   eye.loss = safeLoss;
   eye.sync = 1.0f / (1.0f + safeLoss);
   eye.activity = safeE;
-  eyeDebugLine = "ESP-NOW EYE V1";
+  eyeDebugLine = legacyLossNoise ? "ESP-NOW ER1 LEGACY" : "ESP-NOW EYE V1";
   char wid[24]; snprintf(wid, sizeof(wid), "ER1-%u", er.worker_id);
-  rememberSwarmAiNode(wid, "EntropyV1", safeE, safeLoss, eye.sync, 0.0f, safeE * 0.1f, er.sensor_flags, 0, er.worker_id, colonyLastRssi);
-  logEntropyJson("v1", nullptr, &er);
+  rememberSwarmAiNode(wid, legacyLossNoise ? "EntropyV1Legacy" : "EntropyV1", safeE, safeLoss, eye.sync, 0.0f, safeE * 0.1f, er.sensor_flags, 0, er.worker_id, colonyLastRssi);
+  logEntropyJson(legacyLossNoise ? "v1_legacy" : "v1", nullptr, &er);
 }
 
 void onJanusEntropyV2(const EntropyReportV2& er2) {
@@ -3087,7 +4015,7 @@ void sendNodeHeartbeat() {
   pkt.jobAgeMs = colonyJob.active ? (millis() - colonyJob.receivedAt) : 0;
   pkt.rssi = g.wifi_rssi;
   pkt.uptime = millis() / 1000;
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&pkt, sizeof(pkt));
+  janusBeaconEspNowSend("HB", &pkt, sizeof(pkt), true);
 }
 
 void sendNodeEntropy() {
@@ -3100,7 +4028,7 @@ void sendNodeEntropy() {
   er.values[1] = g.humidity;
   er.values[2] = g.imu_shock;
   er.values[3] = g.loss + g.imu_loss;
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&er, sizeof(er));
+  janusBeaconEspNowSend("E/R", &er, sizeof(er), true);
 
   EntropyReportV2 er2{};
   er2.magic[0] = 'E'; er2.magic[1] = '2';
@@ -3120,7 +4048,7 @@ void sendNodeEntropy() {
   er2.values[6] = colonyEntropyWeight;
   er2.values[7] = (float)g.wifi_rssi;
   er2.uptime_ms = millis();
-  esp_now_send(JANUS_BROADCAST_MAC, (uint8_t*)&er2, sizeof(er2));
+  janusBeaconEspNowSend("E2", &er2, sizeof(er2), true);
 
   logEntropyJson("BeaconADV", &er2, nullptr);
 }
@@ -3184,7 +4112,7 @@ void drawScreen() {
   // Soft old-style frame / header
   beaconCanvas.drawFastHLine(0, 12, 240, houseProtocolActive ? COLOR_AMBER_DIM : TFT_DARKGREY);
   beaconCanvas.setTextColor(primary, TFT_BLACK);
-  beaconCanvas.setCursor(2, 2);   beaconCanvas.printf("JANUS ADV v4.4");
+  beaconCanvas.setCursor(2, 2);   beaconCanvas.printf("JANUS ADV v4.5");
   beaconCanvas.setTextColor(secondary, TFT_BLACK);
   beaconCanvas.setCursor(138, 2); beaconCanvas.printf("V:%03d", volume);
   beaconCanvas.setCursor(176, 2); beaconCanvas.printf("BAT:%d%%", g.battery);
@@ -3566,12 +4494,13 @@ void setup() {
   setSpeakerVolume();
   initWiFi(true);
   initColonyNow();
+  janusBeaconBootEvent();
   cleanupColonySdLogs();
   selectActiveServer(true);
   initLoRa();
   currentThought = "observing";
   statusLine = "sd tachyon home online";
-  Serial.println("[BEACON] v4.4 SD-TACHYON-HOME Ramanujan Beatmaker ready");
+  Serial.println("[BEACON] v4.5A BLACKBOX-HOME-CORTEX POLISH SD-TACHYON Ramanujan Beatmaker ready");
 }
 
 void loop() {
@@ -3588,6 +4517,7 @@ void loop() {
   if (loveExperimentActive && now - lastLoraAt >= LORA_BROADCAST_MS) { lastLoraAt = now; sendLovePacketLoRa(); }
   if (now - lastSaveAt >= AUTOSAVE_MS) { lastSaveAt = now; saveState(); saveThetaState(); saveModel(); }
   colonyTick();
+  janusBeaconBlackboardTick();
   if (WiFi.status() != WL_CONNECTED) initWiFi(false);
   updateLED();
   if (now - lastDrawAt >= DRAW_INTERVAL_MS) { lastDrawAt = now; drawScreen(); }
