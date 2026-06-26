@@ -1,0 +1,19 @@
+{
+  "schema": "janus/swarm_nodes/example/v1",
+  "nodes": [
+    {
+      "node_id": "Buzz",
+      "role": "master",
+      "health": "live",
+      "pool_facing": true,
+      "nas_facing": true
+    },
+    {
+      "node_id": "PEA4",
+      "role": "camera_presence_observer",
+      "health": "unknown",
+      "pool_facing": false,
+      "nas_facing": true
+    }
+  ]
+}

@@ -108,7 +108,7 @@
   ARCHITECTURE (JANUS 113.8):
     - CORE 1 (Face & LED): 25 FPS UI, Dark Red EQ Bonfire, Audio I2S.
     - CORE 0 (Vault): TRUE Stratum Miner (Merkle Root generation, exact Byte Order, Double SHA256).
-  
+
   V40.7/v10.11I TACHYON FINAL COLONY + SHARE SNAPSHOT FIXES:
     - Adds Core2 ESP-NOW remote control: play/pause, prev/next, volume.
     - Allows pool low-difficulty target instead of forcing diff-1 tickets.
@@ -175,9 +175,9 @@
     - Auto-next can random-skip 1..7 tracks to keep playlist order fresh.
 
   V25 TRUE HASH FIXES:
-    - SPIDER STATE FIX: Resolved the "stuck in a corner drawing a square" bug by properly 
+    - SPIDER STATE FIX: Resolved the "stuck in a corner drawing a square" bug by properly
       overwriting spMode and spOldState during Tarzan/Zip-line exits.
-    - TRUE STRATUM PROTOCOL: Replaced esp_random() headers with cryptographically exact 
+    - TRUE STRATUM PROTOCOL: Replaced esp_random() headers with cryptographically exact
       Merkle Root calculations and proper little/big endian byte swapping for valid BTC shares.
     - SESSION PERSISTENCE: Valid shares will now be accepted by public-pool.io.
 
@@ -262,19 +262,19 @@ size_t getArduinoLoopTaskStackSize(void) {
 #endif
 
 // ---------- НАСТРОЙКИ СЕТИ И АУДИО ----------
-const char* WIFI_SSID = "JANUS_WIFI_PLACEHOLDER";
-const char* WIFI_PASS = "JANUS_NET_PLACEHOLDER";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
-const char* STREAM_URL  = "http://192.168.1.92:8095/api/music/stream";
+const char* STREAM_URL  = "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/music/stream";
 // Raw PCM endpoint kept on NAS, but v37 uses proven MP3 Audio.h stream.
-// const char* STREAM_PCM_URL = "http://192.168.1.92:8095/api/music/stream.pcm";
-const char* CURRENT_URL = "http://192.168.1.92:8095/api/music/current";
-const char* NEXT_URL    = "http://192.168.1.92:8095/api/music/next";
-const char* PREV_URL    = "http://192.168.1.92:8095/api/music/prev";
+// const char* STREAM_PCM_URL = "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/music/stream.pcm";
+const char* CURRENT_URL = "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/music/current";
+const char* NEXT_URL    = "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/music/next";
+const char* PREV_URL    = "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/music/prev";
 
 // ---------- НАСТРОЙКИ MINER (VAULT) ----------
-const char* POOL_HOST = "pool.nerdminers.org";
-const uint16_t POOL_PORT = 3333;   // Public Pool current TCP Stratum port; TLS 4333 needs WiFiClientSecure and is not used here
+const char* POOL_HOST = "YOUR_POOL_HOST_HERE";
+const uint16_t POOL_PORT = 3333;   // Set YOUR_POOL_PORT_HERE if your pool uses a different TCP Stratum port.
 
 // Public-Pool / NerdMiner ticket gate.
 // v40.2: do NOT force diff-1 tickets. Buzz must obey the pool low-difficulty target,
@@ -296,15 +296,15 @@ const uint16_t POOL_PORT = 3333;   // Public Pool current TCP Stratum port; TLS 
 #define JANUS_FARM_BLACKOUT_RECOVERY_MS        20000UL   // minimum delay between recovery kicks
 #define JANUS_FARM_BLACKOUT_HARD_RESET_AFTER   3         // hard Wi-Fi/ESP-NOW reset after repeated soft kicks
 #define JANUS_FARM_BLACKOUT_RESTART_MS         600000UL  // final safety restart after 10 min starvation
-const char* BTC_WALLET = "1F1Y6CdkApZboDF6g1DYrQ8Dke2E5gWiP1";
+const char* BTC_WALLET = "YOUR_WALLET_HERE";
 char BTC_WORKER[32] = "BuzzLighter";
 char MINER_USER[96] = "";
 
 #define LED_COLOR_ORDER NEO_GRB
-#define LED_CHANNEL_FIX 1 
+#define LED_CHANNEL_FIX 1
 #define LED_PALETTE_COUNT 9
 #define LED_PROC_PALETTE_INDEX 8
-#define JANUS_SAFE_LITTLEFS_ENABLE 0 
+#define JANUS_SAFE_LITTLEFS_ENABLE 0
 
 // ---------- ПИНЫ ----------
 #define SDA_PIN      11
@@ -493,12 +493,12 @@ uint32_t popupTimer = 0;
 char popupText[16] = "";
 uint16_t popupColor = C_WHITE;
 bool popupIsVol = true;
-bool popupShowBar = true; 
+bool popupShowBar = true;
 
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ПАУКА
 int spOldX = 0, spOldY = 0;
 int spOldFrame = -1;
-uint8_t spOldState = 0; 
+uint8_t spOldState = 0;
 // v23: restored classic flexible Spider-Man/Tobi from stable Buzz builds.
 uint8_t spOldMode = 0;
 bool spOldShot = false;
@@ -534,7 +534,7 @@ uint32_t uiOldRejects = 0;
 
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ РЫЦАРЯ
 uint8_t knightFrame = 0;
-uint8_t knightState = 0; 
+uint8_t knightState = 0;
 uint32_t knightAnimStart = 0;
 uint32_t knightNextAction = 5000;
 
@@ -1709,8 +1709,8 @@ void hexStringToBytes(String hex, uint8_t *bytes) {
 
 void reverse_bytes(uint8_t *data, int len) {
   for(int i=0; i<len/2; i++) {
-    uint8_t t = data[i]; 
-    data[i] = data[len-1-i]; 
+    uint8_t t = data[i];
+    data[i] = data[len-1-i];
     data[len-1-i] = t;
   }
 }
@@ -1903,7 +1903,7 @@ bool hashMeetsShareTarget(const uint8_t hashBE[32]) {
 // v10.11N3: SwarmSense v1 observe bridge.
 // Buzz only observes/forwards. It does NOT apply batch/device commands from SwarmSense.
 #define JANUS_SWARMSENSE_ENABLE 1
-#define JANUS_SWARMSENSE_NAS_URL "http://192.168.1.92:5000/api/swarm/sense"
+#define JANUS_SWARMSENSE_NAS_URL "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/swarm/sense"
 #define JANUS_SWARMSENSE_QUEUE 8
 #define JANUS_SWARMSENSE_MAX_NODES 24
 #define JANUS_SWARMSENSE_POST_MIN_MS 5000UL
@@ -1916,7 +1916,7 @@ bool hashMeetsShareTarget(const uint8_t hashBE[32]) {
 // Allowed influence: conservative batch pacing. Forbidden: SHA header, target,
 // S/2 validity, submit pressure and nonce ownership.
 #define JANUS_TRANCEPTION_PULL_ENABLE 1
-#define JANUS_TRANCEPTION_URL "http://192.168.1.92:5000/api/swarm/tranception"
+#define JANUS_TRANCEPTION_URL "http://YOUR_NAS_HOST:YOUR_NAS_PORT/api/swarm/tranception"
 #define JANUS_TRANCEPTION_PULL_MS 20000UL
 #define JANUS_TRANCEPTION_HTTP_TIMEOUT_MS 220
 #define JANUS_TRANCEPTION_FAIL_STREAK_LIMIT 3
@@ -2429,7 +2429,7 @@ struct __attribute__((packed)) JanusOxytokinPacket {
   uint8_t dopamine;        // work reward / excitement 0..100
   uint8_t stress;          // caution / pressure 0..100
   uint8_t trust;           // Buzz trust in this node 0..100
-  uint8_t affinity;        // how strongly this node belongs to JANUS_WIFI_PLACEHOLDER hive
+  uint8_t affinity;        // how strongly this node belongs to the configured local hive
   uint8_t roleFlags;       // bit0 worker, bit1 sensor, bit2 audio, bit3 gladius, bit4 cortex, bit5 rf
   uint8_t rewardLevel;
   uint8_t aiHint;
@@ -6060,7 +6060,7 @@ void updateLcdBrightness() {
     return;
   }
   int pwm = map(ledBright, 1, 100, 1, 255);
-  ledcWrite(LCD_BL, constrain(pwm, 0, 255)); 
+  ledcWrite(LCD_BL, constrain(pwm, 0, 255));
 }
 
 
@@ -6257,14 +6257,14 @@ void janusWifiRecovered() {
 
 uint16_t getThemeColor() {
   switch (ledPalette % LED_PALETTE_COUNT) {
-    case 0: return C_AMBER2;   
-    case 1: return C_GREEN;    
-    case 2: return C_PURPLE;   
-    case 3: return C_CYAN;     
-    case 4: return C_ORANGE;   
-    case 5: return C_BLUE_DIM; 
-    case 6: return C_RED;      
-    case 7: return 0x07E0;     
+    case 0: return C_AMBER2;
+    case 1: return C_GREEN;
+    case 2: return C_PURPLE;
+    case 3: return C_CYAN;
+    case 4: return C_ORANGE;
+    case 5: return C_BLUE_DIM;
+    case 6: return C_RED;
+    case 7: return 0x07E0;
     default: return C_AMBER;
   }
 }
@@ -6318,7 +6318,7 @@ void lcdFillRect(int x, int y, int w, int h, uint16_t c) {
   if (y < 0) { h += y; y = 0; }
   if (w <= 0 || h <= 0) return;
   if (x >= 240 || y >= 320) return;
-  if (x + w > 240) w = 240 - x; 
+  if (x + w > 240) w = 240 - x;
   if (y + h > 320) h = 320 - y;
 
   lcdSetWindow(x,y,w,h);
@@ -6670,7 +6670,7 @@ uint8_t trackRemainBarWidth(uint8_t maxWidth);
 uint8_t poolJobBarWidth(uint8_t maxWidth);
 
 void drawStaticUI() {
-  lcdFillRect(0, 0, 240, 320, C_BLACK); 
+  lcdFillRect(0, 0, 240, 320, C_BLACK);
   uint16_t th = getThemeColor();
   lcdFillRect(4,4,232,2,th); lcdFillRect(4,314,232,2,th);
   lcdFillRect(4,4,2,312,th); lcdFillRect(234,4,2,312,th);
@@ -7334,13 +7334,13 @@ void drawFastUI() {
 
   static uint32_t lastPopupState = 0;
   if (millis() < popupTimer) {
-    lcdFillRect(144, 140, 86, 32, C_BLACK); 
-    lcdFillRect(144, 140, 2, 32, popupColor); 
-    tinyText(152, 146, popupText, popupColor); 
+    lcdFillRect(144, 140, 86, 32, C_BLACK);
+    lcdFillRect(144, 140, 2, 32, popupColor);
+    tinyText(152, 146, popupText, popupColor);
     if (popupShowBar) {
-      int barW = 70; lcdFillRect(152, 160, barW, 6, C_DARK); 
+      int barW = 70; lcdFillRect(152, 160, barW, 6, C_DARK);
       int fillW = popupIsVol ? map(volumeVal, 0, 21, 0, barW) : map(ledBright, 0, 100, 0, barW);
-      lcdFillRect(152, 160, constrain(fillW, 0, barW), 6, popupColor); 
+      lcdFillRect(152, 160, constrain(fillW, 0, barW), 6, popupColor);
     }
     lastPopupState = 1;
   } else if (lastPopupState == 1) {
@@ -7567,12 +7567,12 @@ void drawTobiTurboOverlay() {
 }
 
 // ============================================================
-// UNIFIED LED ENGINE 
+// UNIFIED LED ENGINE
 // ============================================================
 uint8_t gamma8(float v) { return constrain((int)v, 0, 255); }
 uint32_t fixedColor(uint8_t r, uint8_t g, uint8_t b) {
   switch (LED_CHANNEL_FIX) {
-    case 0: return strip.Color(r, g, b); case 1: return strip.Color(g, r, b); 
+    case 0: return strip.Color(r, g, b); case 1: return strip.Color(g, r, b);
     case 2: return strip.Color(b, g, r); default: return strip.Color(b, r, g);
   }
 }
@@ -7624,28 +7624,28 @@ uint32_t proceduralPaletteColor(uint8_t idx, float phase, float heat, bool spark
 uint32_t getPaletteColor(uint8_t pal, float phase, float heat, bool spark) {
   float r=0, g=0, b=0; float wave = 0.5f + 0.5f * sinf(phase);
   switch (pal % LED_PALETTE_COUNT) {
-    case 0: 
+    case 0:
       r = 5.0f + 200.0f * heat; g = 0.0f + 90.0f * powf(heat, 2.5f); b = 0;
       if(spark) { r=255; g=110; b=0; } break;
-    case 1: 
+    case 1:
       r = 10 * heat; g = 50 + 200 * heat; b = 5 * wave;
       if(spark) { r=100; g=255; b=50; } break;
-    case 2: 
+    case 2:
       r = 30 + 150 * heat; g = 10 * wave; b = 80 + 170 * heat;
       if(spark) { r=200; g=50; b=255; } break;
-    case 3: 
+    case 3:
       r = 20 + 180 * wave; g = 50 * heat; b = 100 + 150 * heat;
       if(spark) { r=255; g=100; b=255; } break;
-    case 4: 
+    case 4:
       r = 80 + 175 * heat; g = 30 + 100 * heat; b = 5 * wave;
       if(spark) { r=255; g=255; b=100; } break;
-    case 5: 
+    case 5:
       r = 0; g = 50 + 100 * heat; b = 100 + 155 * heat;
       if(spark) { r=100; g=200; b=255; } break;
-    case 6: 
+    case 6:
       r = 100 + 155 * heat; g = 0; b = 10 * wave;
       if(spark) { r=255; g=20; b=20; } break;
-    case 7: 
+    case 7:
       r = 0; g = 80 + 175 * heat; b = 20 * wave;
       if(spark) { r=50; g=255; b=50; } break;
     case 8:
@@ -7671,11 +7671,11 @@ void updateUnifiedLED() {
   for(int i=0; i<LED_NUM; i++) {
     float geo = (i==3) ? 1.3f : ((i==2||i==4)? 0.85f : ((i==1||i==5)?0.65f:0.35f));
     float targetHeat;
-    float musicBand = 0.0f; 
+    float musicBand = 0.0f;
 
     if (act) {
-        musicBand = spectrum[(i*2 + (ledFrame/4)) % 16]; 
-        targetHeat = (0.02f + musicBand * 1.6f) * geo; 
+        musicBand = spectrum[(i*2 + (ledFrame/4)) % 16];
+        targetHeat = (0.02f + musicBand * 1.6f) * geo;
     } else {
         float slow = 0.5f + 0.5f * sinf(ledFrame * 0.015f + i * 1.1f);
         float fast = ((rnd >> ((i%4)*8)) & 0xFF) / 255.0f;
@@ -7689,8 +7689,8 @@ void updateUnifiedLED() {
       targetHeat += kick;
     }
 
-    if (targetHeat > bonfireHeat[i]) bonfireHeat[i] = bonfireHeat[i] * 0.25f + targetHeat * 0.75f; 
-    else bonfireHeat[i] = bonfireHeat[i] * 0.92f + targetHeat * 0.08f; 
+    if (targetHeat > bonfireHeat[i]) bonfireHeat[i] = bonfireHeat[i] * 0.25f + targetHeat * 0.75f;
+    else bonfireHeat[i] = bonfireHeat[i] * 0.92f + targetHeat * 0.08f;
 
     bool spark = act ? ((musicBand > 0.7f) && ((rnd & 0xFF) == (uint32_t)(i * 73 + 11))) : ((rnd & 0x1FFF) == (uint32_t)(i * 73 + 11));
     if (shareFlare > 0.0f) {
@@ -7752,11 +7752,11 @@ void prevLedPalette() {
 void updateSpectrumModel() {
   uint32_t t = millis(); float br = constrain((float)bitrateKbps / 128.0f, 0.5f, 1.5f);
   for (int i=0; i<16; i++) {
-    float pulse = powf(sinf(t * (0.003f + i*0.0002f)), 6.0f); 
+    float pulse = powf(sinf(t * (0.003f + i*0.0002f)), 6.0f);
     float noise = (float)((janusRand() >> (i%4)) & 0xFF) / 255.0f;
     float target = (pulse * 0.7f + noise * 0.3f) * br;
     if (!janusMusicVisualActive()) target *= 0.15f;
-    if (target > spectrum[i]) spectrum[i] = spectrum[i] * 0.3f + target * 0.7f; 
+    if (target > spectrum[i]) spectrum[i] = spectrum[i] * 0.3f + target * 0.7f;
     else spectrum[i] = spectrum[i] * 0.88f + target * 0.12f;
     if (spectrum[i] > 1.0f) spectrum[i] = 1.0f;
   }

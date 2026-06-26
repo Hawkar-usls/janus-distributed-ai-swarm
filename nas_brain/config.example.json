@@ -1,0 +1,9 @@
+{
+  "host": "0.0.0.0",
+  "port": 5000,
+  "upstream": "http://YOUR_NAS_HOST:YOUR_NAS_PORT",
+  "data_dir": "./runtime",
+  "observer_only": true,
+  "miner_control": false,
+  "stratum_proxy": false
+}

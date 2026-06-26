@@ -1,0 +1,10 @@
+{
+  "schema": "janus/swarm_sense/example/v1",
+  "source": "Buzz",
+  "node_id": "ExampleWorker",
+  "kind": "worker",
+  "hash_rate": 0,
+  "best_bits": 0,
+  "rssi": -60,
+  "observer_only": true
+}

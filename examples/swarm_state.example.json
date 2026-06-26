@@ -1,0 +1,9 @@
+{
+  "schema": "janus/swarm_state/example/v1",
+  "observer_only": true,
+  "wire_hash_submit_frozen": true,
+  "miner_control": false,
+  "nodes_known": 3,
+  "nodes_live": 2,
+  "summary": "Sanitized example only."
+}
