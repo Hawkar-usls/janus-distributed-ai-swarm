@@ -5,6 +5,7 @@ on:
     paths:
       - 'firmware/anchor/**'
       - 'firmware/golcron/**'
+      - 'tools/assemble_swarm_sketches.py'
       - '.github/workflows/validate-anchor-golcron.yml'
   workflow_dispatch:
 
@@ -45,17 +46,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/Anchor /tmp/Golcron
-          cat firmware/anchor/Anchor.ino firmware/anchor/Anchor_part_*.ino > /tmp/Anchor/Anchor.ino
-          cat firmware/golcron/Golcron.ino firmware/golcron/Golcron_part_*.ino > /tmp/Golcron/Golcron.ino
+          python3 tools/assemble_swarm_sketches.py --output-root /tmp
           test -s /tmp/Anchor/Anchor.ino
           test -s /tmp/Golcron/Golcron.ino
-          echo "Anchor lines: $(wc -l < /tmp/Anchor/Anchor.ino)"
-          echo "Golcron lines: $(wc -l < /tmp/Golcron/Golcron.ino)"
-          grep -n 'void setup()' /tmp/Anchor/Anchor.ino
-          grep -n 'void loop()' /tmp/Anchor/Anchor.ino
-          grep -n 'void setup()' /tmp/Golcron/Golcron.ino
-          grep -n 'void loop()' /tmp/Golcron/Golcron.ino
 
       - name: Compile Anchor v1.20 for ESP32-S3
         shell: bash
