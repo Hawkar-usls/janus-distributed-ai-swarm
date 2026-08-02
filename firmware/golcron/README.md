@@ -1,7 +1,15 @@
 # Golcron v1.5 — BH Pixel Cosmos / Adaptive Unseen Paths
 
-Open `Golcron.ino` from this folder as one Arduino sketch. Arduino IDE compiles
-`Golcron.ino` and all numbered `Golcron_part_*.ino` tabs together in filename order.
+The public source is split into ordered fragments to keep reviews manageable.
+Before opening it in Arduino IDE, assemble the IDE-ready single file from the
+repository root:
+
+```bash
+python tools/assemble_swarm_sketches.py --target golcron
+```
+
+Then open `build/Golcron/Golcron.ino`. GitHub Actions uses the same assembler
+before compilation.
 
 ## Correct board
 
