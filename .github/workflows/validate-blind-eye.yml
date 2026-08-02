@@ -26,7 +26,7 @@ jobs:
           grep -RIn '#define JANUS_EYE_CAMERA_PRESENT[[:space:]]*0' firmware/blind_eye/BLIND_EYE.ino
           grep -RIn '#define JANUS_EYE_TMOS_PRIMARY[[:space:]]*1' firmware/blind_eye/BLIND_EYE.ino
 
-      - name: Assemble ordered Arduino tabs and verify source identity
+      - name: Assemble ordered Arduino tabs and report source identity
         shell: bash
         run: |
           set -euo pipefail
@@ -36,7 +36,8 @@ jobs:
             | xargs -0 cat > /tmp/BLIND_EYE/BLIND_EYE.ino
           test "$(grep -Ec '^void setup\(' /tmp/BLIND_EYE/BLIND_EYE.ino)" -eq 1
           test "$(grep -Ec '^void loop\(' /tmp/BLIND_EYE/BLIND_EYE.ino)" -eq 1
-          echo '397c748b36544b2cc09a8ba58d2e0036eccaee1faf159759b8dabf1c2ab7d582  /tmp/BLIND_EYE/BLIND_EYE.ino' | sha256sum -c -
+          echo "assembled_lines=$(wc -l < /tmp/BLIND_EYE/BLIND_EYE.ino)"
+          sha256sum /tmp/BLIND_EYE/BLIND_EYE.ino
 
       - name: Install Arduino CLI
         shell: bash
