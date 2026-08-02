@@ -4,7 +4,6 @@ void sendNodeEntropy() {
     lastEntropyDbg = millis();
     Serial.printf("[COLONY] TX entropy worker=%u\n", colonyWorkerId);
   }
-  static uint32_t dbgLastEntropyTx = 0;
   EntropyReport er{};
   er.magic[0] = 'E'; er.magic[1] = 'R';
   er.worker_id = colonyWorkerId;
