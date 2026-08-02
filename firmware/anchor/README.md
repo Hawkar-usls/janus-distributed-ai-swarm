@@ -1,7 +1,15 @@
 # Anchor v1.20 — S/2 Safe Queue
 
-Open `Anchor.ino` from this folder as one Arduino sketch. Arduino IDE compiles
-`Anchor.ino` and all numbered `Anchor_part_*.ino` tabs together in filename order.
+The public source is split into ordered fragments to keep reviews manageable.
+Before opening it in Arduino IDE, assemble the IDE-ready single file from the
+repository root:
+
+```bash
+python tools/assemble_swarm_sketches.py --target anchor
+```
+
+Then open `build/Anchor/Anchor.ino`. GitHub Actions uses the same assembler before
+compiling, so the checked source and the downloadable Arduino sketch are identical.
 
 ## Board
 
@@ -19,7 +27,7 @@ The public source deliberately contains placeholders:
 #define JANUS_WIFI_PASS "YOUR_PASS"
 ```
 
-Set local credentials before flashing and do not commit them.
+Set local credentials in the assembled sketch before flashing and do not commit them.
 
 ## Current behavior
 
