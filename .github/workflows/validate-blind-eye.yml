@@ -1,0 +1,66 @@
+name: Validate Blind Eye
+
+on:
+  pull_request:
+    paths:
+      - 'firmware/blind_eye/**'
+      - '.github/workflows/validate-blind-eye.yml'
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify public source and hardware profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIn -E 'Toy Castle|Alkarnet' firmware/blind_eye
+          grep -RIn 'YOUR_WIFI' firmware/blind_eye/BLIND_EYE_040.ino
+          grep -RIn 'YOUR_PASS' firmware/blind_eye/BLIND_EYE_040.ino
+          grep -RIn '#define JANUS_EYE_CAMERA_PRESENT[[:space:]]*0' firmware/blind_eye/BLIND_EYE.ino
+          grep -RIn '#define JANUS_EYE_TMOS_PRIMARY[[:space:]]*1' firmware/blind_eye/BLIND_EYE.ino
+
+      - name: Assemble ordered Arduino tabs and verify source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/BLIND_EYE
+          find firmware/blind_eye -maxdepth 1 -type f -name 'BLIND_EYE*.ino' -print0 \
+            | sort -z \
+            | xargs -0 cat > /tmp/BLIND_EYE/BLIND_EYE.ino
+          test "$(grep -Ec '^void setup\(' /tmp/BLIND_EYE/BLIND_EYE.ino)" -eq 1
+          test "$(grep -Ec '^void loop\(' /tmp/BLIND_EYE/BLIND_EYE.ino)" -eq 1
+          echo '397c748b36544b2cc09a8ba58d2e0036eccaee1faf159759b8dabf1c2ab7d582  /tmp/BLIND_EYE/BLIND_EYE.ino' | sha256sum -c -
+
+      - name: Install Arduino CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Install ESP32 core and libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init
+          arduino-cli config set library.enable_unsafe_install true
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install M5Unified
+          arduino-cli lib install ArduinoJson
+          arduino-cli lib install --git-url https://github.com/m5stack/M5-STHS34PF80.git
+          arduino-cli core list
+          arduino-cli lib list
+
+      - name: Compile Blind Eye v2.15A for ESP32-S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli compile --warnings all --fqbn esp32:esp32:esp32s3 /tmp/BLIND_EYE
