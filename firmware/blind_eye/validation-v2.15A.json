@@ -1,0 +1,42 @@
+{
+  "version": "v2.15A_TMOS_PRIMARY_NO_CAMERA",
+  "hardware": "M5Stack AtomS3R + STHS34PF80 TMOS/PIR; physical camera absent",
+  "arduino_project": "ordered multi-tab sketch",
+  "source_tabs": 19,
+  "concatenated_logical_lines": 4922,
+  "concatenated_sha256": "6f4de99fc710beff9fe30c09efda8fef33be2e25b94f87aa1fe01e6b0e251137",
+  "single_setup": true,
+  "single_loop": true,
+  "credentials_public_placeholders": true,
+  "camera_present_macro": 0,
+  "tmos_primary": true,
+  "tmos_odr_hz": 15,
+  "now_hold_ms": 900,
+  "quiet_room_artifact_fix": true,
+  "synthetic_aperture_not_camera": true,
+  "miner_math_changed": false,
+  "hardware_log_check": {
+    "tmos_ready": true,
+    "camera_absent_reported": true,
+    "clear_reaches_1_00": true,
+    "artifact_stays_0_00": true,
+    "bad_frames_total": 0,
+    "bad_frame_streak": 0,
+    "tmos_read_error": 0,
+    "espnow_tx_ok_growing": true,
+    "event_aperture_frames_observed": 4,
+    "seek_without_buzz_job_is_normal": true
+  },
+  "full_ci_build": {
+    "status": "PASS",
+    "fqbn": "esp32:esp32:esp32s3",
+    "esp32_core": "3.3.11",
+    "arduino_cli": "1.5.1",
+    "program_bytes": 1162307,
+    "program_max_bytes": 1310720,
+    "program_percent": 88,
+    "global_bytes": 53248,
+    "global_max_bytes": 327680,
+    "global_percent": 16
+  }
+}
