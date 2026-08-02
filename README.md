@@ -1,4 +1,4 @@
-﻿# JANUS Distributed AI Swarm
+# JANUS Distributed AI Swarm
 
 Public firmware surface for the current JANUS ESP32 / M5Stack swarm.
 
@@ -24,7 +24,7 @@ large vendor archives, databases, or model checkpoints.
 | Gladius | `firmware/gladius/Gladius.ino` | Experimental brother miner, TailGEX/bandit method search, direct Buzz protection |
 | Golcron / Holocron | `firmware/golcron/Golcron.ino` | TTGO T-Display adaptive unseen-path S/2 worker with autonomous Star Forge learning and BH pixel cosmos |
 | Zim Geek | `firmware/zim_geek/Zim.ino` | Solo/worker scout, Stratum-aware explorer, Tranception-lite candidate node |
-| Blind Eye | `firmware/blind_eye/BLIND_EYE.ino` | Presence/sensor eye, motion/memory mirror and swarm status source |
+| Blind Eye | `firmware/blind_eye/BLIND_EYE.ino` | v2.15A AtomS3R TMOS-primary camera-absent eye: RF/IMU/mic fusion, 900 ms truth hold, synthetic E/F aperture, Blackboard/Kenshi/Tachyon and Buzz worker |
 | Pyramid | `firmware/pyramid/ATOM_MATRIX_Pyramid.ino` | Stable visual/swarm pyramid node |
 | Beacon A1 | `firmware/beacon/Beacon_A1.ino` | Legacy Beacon preserve candidate and launcher fallback |
 | Legacy bodies | `firmware/esp32_swarm/`, `firmware/legacy/` | Older Stick/TRON/Slick bodies retained for compatibility and review |
@@ -73,9 +73,9 @@ They should be tested independently before a future merged
 
 ## Repository Layout
 
-- `firmware/`: active and compatibility sketches. Anchor and Golcron are stored
-  as ordered review fragments and assembled into one IDE-ready `.ino` by
-  `tools/assemble_swarm_sketches.py`.
+- `firmware/`: active and compatibility sketches. Anchor, Golcron and Blind Eye
+  are stored as ordered Arduino tabs. Anchor and Golcron can also be assembled
+  into IDE-ready `.ino` files by `tools/assemble_swarm_sketches.py`.
 - `tools/assemble_swarm_sketches.py`: creates `build/Anchor/Anchor.ino` and
   `build/Golcron/Golcron.ino`; CI compiles those exact outputs.
 - `docs/`: architecture, technical rules and current swarm notes.
@@ -86,10 +86,10 @@ They should be tested independently before a future merged
 
 ## Quick Start
 
-1. For Anchor or Golcron, run `python tools/assemble_swarm_sketches.py`; for
-   single-file nodes, open their primary `.ino` directly.
-2. Open the generated sketch under `build/` and use the board settings documented
-   next to that firmware.
+1. Open the primary `.ino` for multi-tab nodes such as Blind Eye. For Anchor or
+   Golcron, you may also run `python tools/assemble_swarm_sketches.py` and open
+   the generated sketch under `build/`.
+2. Use the board settings documented next to that firmware.
 3. Keep local Wi-Fi, wallet, API and NAS values in ignored files.
 4. Flash one node at a time and verify serial logs before moving to the next.
 5. After mixed-generation updates, check Buzz and Core2 visibility before
