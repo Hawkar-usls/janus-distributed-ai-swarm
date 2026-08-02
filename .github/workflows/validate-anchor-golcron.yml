@@ -1,0 +1,63 @@
+name: Validate Anchor and Golcron
+
+on:
+  pull_request:
+    paths:
+      - 'firmware/anchor/**'
+      - 'firmware/golcron/**'
+      - 'tools/assemble_swarm_sketches.py'
+      - '.github/workflows/validate-anchor-golcron.yml'
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify public source contains placeholders only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIn --exclude='README.md' -E 'Toy Castle|Alkarnet' firmware/anchor firmware/golcron
+          grep -RIn 'YOUR_WIFI' firmware/anchor/Anchor.ino
+          grep -RIn 'YOUR_PASS' firmware/anchor/Anchor.ino
+
+      - name: Install Arduino CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Install Espressif ESP32 core
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli core list
+
+      - name: Assemble single-file Arduino sketches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/assemble_swarm_sketches.py --output-root /tmp
+          test -s /tmp/Anchor/Anchor.ino
+          test -s /tmp/Golcron/Golcron.ino
+
+      - name: Compile Anchor v1.20 for ESP32-S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli compile --warnings all --fqbn esp32:esp32:esp32s3 /tmp/Anchor
+
+      - name: Compile Golcron v1.5 for classic ESP32
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli compile --warnings all --fqbn esp32:esp32:esp32 /tmp/Golcron

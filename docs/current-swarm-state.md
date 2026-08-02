@@ -1,6 +1,6 @@
 ﻿# Current JANUS Swarm State
 
-Last updated: 2026-06-17.
+Last updated: 2026-08-02.
 
 ## Node Roles
 
@@ -11,8 +11,9 @@ Last updated: 2026-06-17.
 | BH / BlackStar | AtomS3R class | Black-hole observer | Gargantua/BlackStar visualization, BH corpus, silicon trace and lens telemetry |
 | ADV Elite | Cardputer ADV | Ship / sky-anchor | Elite game node, Beacon functions, LoRa/GNSS anchor, SD corpus |
 | Yaks Gate | StickS3 | Gate pilot | IR local optical beacon, Murph/maze/BlackStar escape data, NAS fallback |
-| Anchor | ESP32-S3 | Stable brother | Baseline miner, direct Buzz heartbeat/share protection |
+| Anchor | ESP32-S3 | Stable brother | v1.20 Buzz S/2 worker, callback-safe ESP-NOW receive queue, discovery-ping handling, Gladius twin split, RF Dome and direct Buzz recovery |
 | Gladius | ESP32-S3 | Experimental brother | TailGEX/bandit miner, direct Buzz protection, method scout |
+| Golcron / Holocron | TTGO T-Display ESP32 | Astrolabe worker / visual charm | v1.5 adaptive non-overlapping nonce slices, autonomous Star Forge path learning, S/2 submit path and BH pixel-cosmos display |
 | Zim | ESP32-S3 Geek | Scout | Solo/worker scout, Stratum-aware node, Tranception-lite candidate |
 | Blind Eye | sensor node | Eye / motion memory | Presence, motion, memory mirror, swarm status source |
 | Pyramid | Atom Matrix | Stable visual node | Preserved stable pyramid firmware |
@@ -26,6 +27,9 @@ Last updated: 2026-06-17.
 - Core2 treats Gargantua Lab as a dedicated galaxy tab/study target.
 - Yaks Gate uses BH/BlackStar guidance and IR only as local optical signaling.
 - Anchor and Gladius must not disappear from Buzz/Core2 after transient radio loss.
+- Anchor v1.20 uses Buzz `S/2`, a deferred receive queue and direct/twin recovery without changing pool semantics.
+- Golcron starts mining automatically after a real Buzz `J/B` range arrives. It learns between disjoint untouched slices and never intentionally resets progress when planning the next path.
+- Golcron's BH-style pixel cosmos, screen state and telemetry frame are UI only; they do not alter mining truth.
 - Buzz must tolerate disconnect/reconnect churn without dropping to permanent zero hash.
 - ADV Elite must publish real sensor values only; no fake ENV placeholders.
 - PEA4 is staged as a large terminal and observer, not a pool authority.
@@ -53,10 +57,15 @@ Allowed adaptive choices:
 - batch size / local compute pressure
 - local corpus selection
 
+Golcron's adaptive learner is inside this boundary: it chooses the order of
+non-overlapping slices and a coprime local traversal, but it does not reinterpret
+work already checked.
+
 Forbidden without an explicit protocol migration:
 
 - changing SHA256/SHA256d math
 - changing pool target interpretation
+- changing header bytes other than the assigned nonce field
 - submitting fake/reject pressure to the pool
 - increasing submit pressure from observer-only nodes
 - mixing sensor prediction with current sensor truth

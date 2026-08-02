@@ -2,10 +2,10 @@
 
 Public firmware surface for the current JANUS ESP32 / M5Stack swarm.
 
-This repository tracks the active swarm shape as of June 2026: Core2 station,
+This repository tracks the active swarm shape as of August 2026: Core2 station,
 Buzz pool master, BlackHole/BH observer, Cardputer ADV Elite, Yaks Gate,
-Anchor/Gladius brothers, Zim, Blind Eye, Pyramid, legacy body nodes, and the new
-PEA4 ESP32-P4 Titan bring-up.
+Anchor/Gladius brothers, Golcron/Holocron astrolabe, Zim, Blind Eye, Pyramid,
+legacy body nodes, and the PEA4 ESP32-P4 Titan bring-up.
 
 The repo intentionally stores source sketches, docs, examples and review notes.
 It does not store private credentials, raw runtime dumps, stock firmware images,
@@ -20,8 +20,9 @@ large vendor archives, databases, or model checkpoints.
 | BH / BlackStar | `firmware/blackhole_bh/ATOM_BH.ino` | Black-hole visual/miner observer, silicon trace/lens model, BH study target |
 | ADV Elite | `firmware/adv_elite/ADV_Elite.ino` | Cardputer ADV Elite game node, Beacon tab, LoRa/GNSS sky-anchor, SD miner corpus |
 | Yaks Gate | `firmware/yaks_gate/` | StickS3 gate pilot, IR local beacon, Murph/maze/BlackStar escape telemetry |
-| Anchor | `firmware/anchor/Anchor.ino` | Stable brother miner, baseline method, direct Buzz heartbeat/share protection |
+| Anchor | `firmware/anchor/Anchor.ino` | v1.20 stable brother miner: Buzz S/2 shares, callback-safe ESP-NOW queue, Gladius twin split and RF Dome |
 | Gladius | `firmware/gladius/Gladius.ino` | Experimental brother miner, TailGEX/bandit method search, direct Buzz protection |
+| Golcron / Holocron | `firmware/golcron/Golcron.ino` | TTGO T-Display adaptive unseen-path S/2 worker with autonomous Star Forge learning and BH pixel cosmos |
 | Zim Geek | `firmware/zim_geek/Zim.ino` | Solo/worker scout, Stratum-aware explorer, Tranception-lite candidate node |
 | Blind Eye | `firmware/blind_eye/BLIND_EYE.ino` | Presence/sensor eye, motion/memory mirror and swarm status source |
 | Pyramid | `firmware/pyramid/ATOM_MATRIX_Pyramid.ino` | Stable visual/swarm pyramid node |
@@ -72,7 +73,11 @@ They should be tested independently before a future merged
 
 ## Repository Layout
 
-- `firmware/`: active and compatibility sketches.
+- `firmware/`: active and compatibility sketches. Anchor and Golcron are stored
+  as ordered review fragments and assembled into one IDE-ready `.ino` by
+  `tools/assemble_swarm_sketches.py`.
+- `tools/assemble_swarm_sketches.py`: creates `build/Anchor/Anchor.ino` and
+  `build/Golcron/Golcron.ino`; CI compiles those exact outputs.
 - `docs/`: architecture, technical rules and current swarm notes.
 - `docs/current/`: latest LastSwarm working notes copied from the private lab.
 - `audits/`: previous public inventory/static audit reports.
@@ -81,8 +86,10 @@ They should be tested independently before a future merged
 
 ## Quick Start
 
-1. Open the relevant `.ino` in Arduino IDE.
-2. Use the board settings documented next to that sketch or in `docs/current/`.
+1. For Anchor or Golcron, run `python tools/assemble_swarm_sketches.py`; for
+   single-file nodes, open their primary `.ino` directly.
+2. Open the generated sketch under `build/` and use the board settings documented
+   next to that firmware.
 3. Keep local Wi-Fi, wallet, API and NAS values in ignored files.
 4. Flash one node at a time and verify serial logs before moving to the next.
 5. After mixed-generation updates, check Buzz and Core2 visibility before
