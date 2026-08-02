@@ -1,0 +1,31 @@
+{
+  "version": "v2.15A_TMOS_PRIMARY_NO_CAMERA",
+  "hardware": "M5Stack AtomS3R + STHS34PF80 TMOS/PIR; physical camera absent",
+  "arduino_project": "ordered multi-tab sketch",
+  "source_tabs": 19,
+  "concatenated_logical_lines": 4923,
+  "concatenated_sha256": "397c748b36544b2cc09a8ba58d2e0036eccaee1faf159759b8dabf1c2ab7d582",
+  "single_setup": true,
+  "single_loop": true,
+  "credentials_public_placeholders": true,
+  "camera_present_macro": 0,
+  "tmos_primary": true,
+  "tmos_odr_hz": 15,
+  "now_hold_ms": 900,
+  "quiet_room_artifact_fix": true,
+  "synthetic_aperture_not_camera": true,
+  "miner_math_changed": false,
+  "hardware_log_check": {
+    "tmos_ready": true,
+    "camera_absent_reported": true,
+    "clear_reaches_1_00": true,
+    "artifact_stays_0_00": true,
+    "bad_frames_total": 0,
+    "bad_frame_streak": 0,
+    "tmos_read_error": 0,
+    "espnow_tx_ok_growing": true,
+    "event_aperture_frames_observed": 4,
+    "seek_without_buzz_job_is_normal": true
+  },
+  "full_ci_build": "pending repository workflow result"
+}
