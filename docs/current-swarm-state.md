@@ -1,4 +1,4 @@
-﻿# Current JANUS Swarm State
+# Current JANUS Swarm State
 
 Last updated: 2026-08-02.
 
@@ -15,7 +15,7 @@ Last updated: 2026-08-02.
 | Gladius | ESP32-S3 | Experimental brother | TailGEX/bandit miner, direct Buzz protection, method scout |
 | Golcron / Holocron | TTGO T-Display ESP32 | Astrolabe worker / visual charm | v1.5 adaptive non-overlapping nonce slices, autonomous Star Forge path learning, S/2 submit path and BH pixel-cosmos display |
 | Zim | ESP32-S3 Geek | Scout | Solo/worker scout, Stratum-aware node, Tranception-lite candidate |
-| Blind Eye | sensor node | Eye / motion memory | Presence, motion, memory mirror, swarm status source |
+| Blind Eye | AtomS3R + STHS34PF80 TMOS/PIR | TMOS-primary eye / motion memory / Buzz worker | v2.15A camera-absent hardware profile, 15 Hz TMOS truth, 900 ms anti-flicker hold, RF/IMU/mic fusion, synthetic E/F aperture, Blackboard/Kenshi/Tachyon |
 | Pyramid | Atom Matrix | Stable visual node | Preserved stable pyramid firmware |
 | Beacon A1 | Cardputer/launcher image | Legacy Beacon | Preserve candidate and fallback image |
 | PEA4 | ESP32-P4 + companion ESP32-S3 | Titan terminal | Large UI, camera/sensor preprocessing, archive, NAS edge, observer-only |
@@ -30,6 +30,10 @@ Last updated: 2026-08-02.
 - Anchor v1.20 uses Buzz `S/2`, a deferred receive queue and direct/twin recovery without changing pool semantics.
 - Golcron starts mining automatically after a real Buzz `J/B` range arrives. It learns between disjoint untouched slices and never intentionally resets progress when planning the next path.
 - Golcron's BH-style pixel cosmos, screen state and telemetry frame are UI only; they do not alter mining truth.
+- Blind Eye v2.15A treats the physically missing camera as a normal hardware profile and uses TMOS/PIR as its primary eye.
+- Blind Eye separates `clear` from `artifact`: a valid empty room must approach `clear=1` and must not accumulate an artifact/ghost score.
+- Blind Eye `E/F` frames are synthetic thermal-aperture maps from real scalar TMOS/RF telemetry, not camera pixels.
+- Blind Eye waits in `SEEK` with `H=0` until a real Buzz `J/B` assignment arrives; this is a normal idle state.
 - Buzz must tolerate disconnect/reconnect churn without dropping to permanent zero hash.
 - ADV Elite must publish real sensor values only; no fake ENV placeholders.
 - PEA4 is staged as a large terminal and observer, not a pool authority.
