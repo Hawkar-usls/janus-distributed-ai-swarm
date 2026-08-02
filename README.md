@@ -73,9 +73,11 @@ They should be tested independently before a future merged
 
 ## Repository Layout
 
-- `firmware/`: active and compatibility sketches. Some active nodes use multiple
-  `.ino` tabs in one folder; open the folder's primary sketch and Arduino IDE
-  compiles all tabs together.
+- `firmware/`: active and compatibility sketches. Anchor and Golcron are stored
+  as ordered review fragments and assembled into one IDE-ready `.ino` by
+  `tools/assemble_swarm_sketches.py`.
+- `tools/assemble_swarm_sketches.py`: creates `build/Anchor/Anchor.ino` and
+  `build/Golcron/Golcron.ino`; CI compiles those exact outputs.
 - `docs/`: architecture, technical rules and current swarm notes.
 - `docs/current/`: latest LastSwarm working notes copied from the private lab.
 - `audits/`: previous public inventory/static audit reports.
@@ -84,8 +86,10 @@ They should be tested independently before a future merged
 
 ## Quick Start
 
-1. Open the relevant primary `.ino` in Arduino IDE.
-2. Use the board settings documented next to that sketch or in `docs/current/`.
+1. For Anchor or Golcron, run `python tools/assemble_swarm_sketches.py`; for
+   single-file nodes, open their primary `.ino` directly.
+2. Open the generated sketch under `build/` and use the board settings documented
+   next to that firmware.
 3. Keep local Wi-Fi, wallet, API and NAS values in ignored files.
 4. Flash one node at a time and verify serial logs before moving to the next.
 5. After mixed-generation updates, check Buzz and Core2 visibility before
