@@ -1,4 +1,4 @@
-﻿# Project Map
+# Project Map
 
 This repository is a focused public surface for the current JANUS distributed
 AI/swarm firmware drop.
@@ -14,14 +14,15 @@ AI/swarm firmware drop.
 - `firmware/gladius/Gladius.ino`
 - `firmware/golcron/Golcron.ino` — Golcron v1.5 adaptive unseen-path worker and BH pixel cosmos charm
 - `firmware/zim_geek/Zim.ino`
-- `firmware/blind_eye/BLIND_EYE.ino`
+- `firmware/blind_eye/BLIND_EYE.ino` — Blind Eye v2.15A TMOS-primary, camera-absent truth sensor, RF fusion and event aperture
 - `firmware/pyramid/ATOM_MATRIX_Pyramid.ino`
 - `firmware/pea4/PEA4.ino`
 - `firmware/PEA4_JANUS_SHELL/PEA4_JANUS_SHELL.ino`
 - `firmware/p4_dual_swarm_core/JANUS_P4_DUAL_SWARM_CORE_v1_1.ino`
 
-The Anchor and Golcron folders are multi-tab Arduino sketches. Open their
-primary `.ino`; Arduino compiles the numbered tabs in the same folder together.
+The Anchor, Golcron and Blind Eye folders are multi-tab Arduino sketches. Open
+their primary `.ino`; Arduino compiles the numbered tabs in the same folder
+together.
 
 ## Compatibility / Preserve Firmware
 
