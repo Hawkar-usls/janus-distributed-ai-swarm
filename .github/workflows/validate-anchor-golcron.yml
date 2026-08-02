@@ -41,19 +41,21 @@ jobs:
           arduino-cli core install esp32:esp32
           arduino-cli core list
 
-      - name: Prepare Arduino sketch folders
+      - name: Assemble single-file Arduino sketches
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/Anchor /tmp/Golcron
-          cp firmware/anchor/*.ino /tmp/Anchor/
-          cp firmware/golcron/*.ino /tmp/Golcron/
-          test -f /tmp/Anchor/Anchor.ino
-          test -f /tmp/Golcron/Golcron.ino
-          echo 'Anchor tabs:'
-          find /tmp/Anchor -maxdepth 1 -name '*.ino' -printf '%f\n' | sort
-          echo 'Golcron tabs:'
-          find /tmp/Golcron -maxdepth 1 -name '*.ino' -printf '%f\n' | sort
+          cat firmware/anchor/Anchor.ino firmware/anchor/Anchor_part_*.ino > /tmp/Anchor/Anchor.ino
+          cat firmware/golcron/Golcron.ino firmware/golcron/Golcron_part_*.ino > /tmp/Golcron/Golcron.ino
+          test -s /tmp/Anchor/Anchor.ino
+          test -s /tmp/Golcron/Golcron.ino
+          echo "Anchor lines: $(wc -l < /tmp/Anchor/Anchor.ino)"
+          echo "Golcron lines: $(wc -l < /tmp/Golcron/Golcron.ino)"
+          grep -n 'void setup()' /tmp/Anchor/Anchor.ino
+          grep -n 'void loop()' /tmp/Anchor/Anchor.ino
+          grep -n 'void setup()' /tmp/Golcron/Golcron.ino
+          grep -n 'void loop()' /tmp/Golcron/Golcron.ino
 
       - name: Compile Anchor v1.20 for ESP32-S3
         shell: bash
