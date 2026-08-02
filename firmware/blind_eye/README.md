@@ -53,6 +53,13 @@ Observed on the physical node:
 - ESP-NOW traffic continued with increasing successful transmissions.
 - Four event aperture frames were emitted after a TMOS hardware-motion flag during warmup.
 
-Concatenated public sketch SHA-256:
+## CI validation
 
-`397c748b36544b2cc09a8ba58d2e0036eccaee1faf159759b8dabf1c2ab7d582`
+The ordered tabs are concatenated and compiled in GitHub Actions for `esp32:esp32:esp32s3` with ESP32 Arduino core 3.3.11, M5Unified 0.2.19, ArduinoJson 7.4.3 and M5-STHS34PF80.
+
+- assembled source: 4922 lines
+- program storage: 1,162,307 bytes / 1,310,720 bytes (88%)
+- global memory: 53,248 bytes / 327,680 bytes (16%)
+- assembled public sketch SHA-256:
+
+`6f4de99fc710beff9fe30c09efda8fef33be2e25b94f87aa1fe01e6b0e251137`
