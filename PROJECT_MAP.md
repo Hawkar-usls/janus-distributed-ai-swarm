@@ -10,14 +10,18 @@ AI/swarm firmware drop.
 - `firmware/blackhole_bh/ATOM_BH.ino`
 - `firmware/adv_elite/ADV_Elite.ino`
 - `firmware/yaks_gate/`
-- `firmware/anchor/Anchor.ino`
+- `firmware/anchor/Anchor.ino` — Anchor v1.20 S/2 safe-queue stable brother
 - `firmware/gladius/Gladius.ino`
+- `firmware/golcron/Golcron.ino` — Golcron v1.5 adaptive unseen-path worker and BH pixel cosmos charm
 - `firmware/zim_geek/Zim.ino`
 - `firmware/blind_eye/BLIND_EYE.ino`
 - `firmware/pyramid/ATOM_MATRIX_Pyramid.ino`
 - `firmware/pea4/PEA4.ino`
 - `firmware/PEA4_JANUS_SHELL/PEA4_JANUS_SHELL.ino`
 - `firmware/p4_dual_swarm_core/JANUS_P4_DUAL_SWARM_CORE_v1_1.ino`
+
+The Anchor and Golcron folders are multi-tab Arduino sketches. Open their
+primary `.ino`; Arduino compiles the numbered tabs in the same folder together.
 
 ## Compatibility / Preserve Firmware
 
