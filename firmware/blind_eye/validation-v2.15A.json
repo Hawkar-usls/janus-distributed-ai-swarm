@@ -3,8 +3,8 @@
   "hardware": "M5Stack AtomS3R + STHS34PF80 TMOS/PIR; physical camera absent",
   "arduino_project": "ordered multi-tab sketch",
   "source_tabs": 19,
-  "concatenated_logical_lines": 4923,
-  "concatenated_sha256": "397c748b36544b2cc09a8ba58d2e0036eccaee1faf159759b8dabf1c2ab7d582",
+  "concatenated_logical_lines": 4922,
+  "concatenated_sha256": "6f4de99fc710beff9fe30c09efda8fef33be2e25b94f87aa1fe01e6b0e251137",
   "single_setup": true,
   "single_loop": true,
   "credentials_public_placeholders": true,
@@ -27,5 +27,16 @@
     "event_aperture_frames_observed": 4,
     "seek_without_buzz_job_is_normal": true
   },
-  "full_ci_build": "pending repository workflow result"
+  "full_ci_build": {
+    "status": "PASS",
+    "fqbn": "esp32:esp32:esp32s3",
+    "esp32_core": "3.3.11",
+    "arduino_cli": "1.5.1",
+    "program_bytes": 1162307,
+    "program_max_bytes": 1310720,
+    "program_percent": 88,
+    "global_bytes": 53248,
+    "global_max_bytes": 327680,
+    "global_percent": 16
+  }
 }
