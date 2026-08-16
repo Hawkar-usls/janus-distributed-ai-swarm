@@ -1,0 +1,75 @@
+name: Habitat Objective Lease Fencing v1
+
+on:
+  pull_request:
+    paths:
+      - 'tools/habitat_git_swarm_client.py'
+      - 'tools/habitat_git_swarm_recovery.py'
+      - 'tools/habitat_objective_lease_fencing.py'
+      - 'tests/test_habitat_git_swarm_recovery_gauntlet.py'
+      - 'tests/test_habitat_objective_lease_fencing_v1.py'
+      - '.janus/OBJECTIVE_LEASE_FENCING.json'
+      - '.github/workflows/validate-habitat-objective-lease-fencing-v1.yml'
+  push:
+    branches:
+      - feature/habitat-objective-lease-fencing-v1
+
+permissions:
+  contents: read
+
+jobs:
+  fencing:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Validate contract
+        run: python -m json.tool .janus/OBJECTIVE_LEASE_FENCING.json >/dev/null
+      - name: Compile fencing surface
+        run: python -m py_compile tools/habitat_objective_lease_fencing.py tests/test_habitat_objective_lease_fencing_v1.py
+      - name: Replay parent swarm client tests
+        run: python -m unittest -v tests.test_habitat_git_swarm_client
+      - name: Replay parent recovery gauntlet
+        run: python -m unittest -v tests.test_habitat_git_swarm_recovery_gauntlet
+      - name: Run objective fencing adversarial tests
+        run: python -m unittest -v tests.test_habitat_objective_lease_fencing_v1
+      - name: Enforce no network/source mutation widening
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          path = Path('tools/habitat_objective_lease_fencing.py')
+          tree = ast.parse(path.read_text(encoding='utf-8'))
+          forbidden = {'aiohttp','httpx','requests','socket','subprocess','urllib','shutil','ftplib','paramiko'}
+          imported = set()
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Import):
+                  imported.update(a.name.split('.')[0] for a in node.names)
+              elif isinstance(node, ast.ImportFrom) and node.module:
+                  imported.add(node.module.split('.')[0])
+          assert imported.isdisjoint(forbidden), imported
+          PY
+      - name: Enforce fencing claim ceiling
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('.janus/OBJECTIVE_LEASE_FENCING.json').read_text(encoding='utf-8'))
+          assert p['parent_recovery']['head'] == '649cc94016cd9d0aba4a8aabf1eb74577c691c49'
+          assert p['bindings']['boot_controller_head'] == '9622241625eb6e6ee56f0fe955bdcf5a2a7bc607'
+          assert p['bindings']['git_membership_proof'] is False
+          assert p['lease']['lease_id_is_fencing_token'] is True
+          assert p['lease']['renew_after_expiry'] is False
+          assert p['lease']['stale_takeover_gets_new_fencing_token'] is True
+          assert p['coordination_ceiling']['continuous_execution_fencing_until_commit'] is False
+          assert p['claim_ceiling']['source_writeback'] is False
+          assert p['claim_ceiling']['external_effect'] is False
+          assert p['claim_ceiling']['authority_delta'] == 0
+          assert p['claim_ceiling']['mass_effect_budget_delta'] == 0
+          PY
