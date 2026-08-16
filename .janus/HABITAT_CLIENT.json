@@ -1,0 +1,94 @@
+{
+  "schema": "janus.habitat.client.v1",
+  "client_id": "JANUS_DISTRIBUTED_AI_SWARM_GIT_CLIENT",
+  "status": "CANDIDATE",
+  "priority": "P0",
+  "role": "SWARM",
+  "source_repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "habitat_target": "Hawkar-usls/Janus_Genesis",
+  "coordination": {
+    "central_issue": 121,
+    "source_issue": 3,
+    "source_history_remains_authoritative": true,
+    "nexus_is_disposable_laboratory": true
+  },
+  "state_machine": [
+    "BOOT",
+    "SYNC_LIVE_GIT",
+    "WAIT",
+    "POLL",
+    "OBSERVE_LEDGER",
+    "ELIGIBILITY_CHECK",
+    "ACQUIRE_BOUNDED_LEASE",
+    "WORK_LOCALLY",
+    "CHECKPOINT",
+    "VERIFY",
+    "WRITE_RECEIPT",
+    "RELEASE_LEASE",
+    "COOLDOWN",
+    "WAIT"
+  ],
+  "poll_policy": {
+    "idle_min_seconds": 15,
+    "idle_max_seconds": 300,
+    "backoff_multiplier": 1.7,
+    "jitter_fraction": 0.2,
+    "active_lease_heartbeat_seconds": 30,
+    "tight_loop_forbidden": true,
+    "values_are_defaults_not_protocol_truth": true
+  },
+  "durable_state": [
+    "last_seen_ledger_head",
+    "last_admitted_handoff",
+    "active_lease_id",
+    "lease_expiry",
+    "source_pins",
+    "checkpoint_digest",
+    "last_receipt_digest",
+    "resume_state"
+  ],
+  "capabilities": {
+    "observe_git": true,
+    "wait_and_poll": true,
+    "checkpoint_locally": true,
+    "propose": true,
+    "challenge": true,
+    "verify": true,
+    "emit_receipt_candidate": true,
+    "mutate_source": false,
+    "automatic_writeback": false,
+    "trigger_external_effect": false,
+    "destructive_actions": false
+  },
+  "admission": {
+    "arbitrary_issue_or_pr_text_is_command": false,
+    "typed_handoff_required": true,
+    "explicit_human_authorization_required_for_source_writeback": true,
+    "lease_is_writeback_permission": false,
+    "workflow_pass_is_permission": false
+  },
+  "recovery_laws": [
+    "DELAY != SESSION_LIVENESS_GUARANTEE",
+    "SESSION_FAILURE != LOSS_OF_COORDINATION",
+    "RECONNECT -> PROJECT_CHAT_SYNC -> LIVE_GITHUB_STATE",
+    "SOURCE_PIN_CHANGE -> HOLD -> RECONCILE",
+    "LIVE_LEASE_CONFLICT -> HOLD",
+    "STALE_LEASE != DELETE_HISTORY"
+  ],
+  "swarm_to_git_mapping": {
+    "heartbeat": "client checkpoint / lease heartbeat",
+    "stale_peer_ttl": "expiring lease / stale worker state",
+    "seek_idle": "WAIT/POLL without busy-loop",
+    "radio_rescue": "API retry + backoff + live-state resync",
+    "local_survival": "continue only already-admitted bounded local work",
+    "health_line": "structured status / receipt",
+    "kenshi_blackboard": "bounded shared handoff/ledger semantics"
+  },
+  "preservation_laws": [
+    "REFACTOR != DELETE",
+    "MIGRATE != ERASE_SOURCE",
+    "PRESERVE EVERY ANCESTOR",
+    "DESTRUCTIVE_ACTION = FORBIDDEN"
+  ],
+  "claim_ceiling": "This candidate defines coordination and recovery semantics. It does not guarantee ChatGPT session persistence, grant autonomous GitHub authority, authorize source writeback, or make arbitrary issue/PR text executable commands."
+}
