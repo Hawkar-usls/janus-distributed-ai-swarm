@@ -1,0 +1,59 @@
+{
+  "schema": "janus.habitat.swarm_recovery_gauntlet.v1",
+  "artifact_id": "JANUS-HABITAT-SWARM-RECOVERY-GAUNTLET-v1.0",
+  "status": "IMPLEMENTATION_CANDIDATE",
+  "roadmap": "Hawkar-usls/Janus_Genesis#121",
+  "frozen_baseline": {
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "pull_request": 4,
+    "commit_sha": "23cf9c1ab512a765464e403f0c556f857edf137d",
+    "baseline_mutated_by_this_gauntlet": false
+  },
+  "p0_gates": {
+    "LEASE_CONFLICT_TESTS": "IMPLEMENTATION_CANDIDATE",
+    "SESSION_DROP_RECOVERY_TEST": "IMPLEMENTATION_CANDIDATE"
+  },
+  "arbitration": {
+    "backend": "SQLITE_LOCAL_COORDINATION_METADATA_ONLY",
+    "transaction_boundary": "BEGIN_IMMEDIATE",
+    "task_identity": "task_id",
+    "live_lease_conflict": "FAIL_CLOSED",
+    "stale_lease_takeover": "ALLOWED_AFTER_EXPIRY_ONLY",
+    "release_binding": [
+      "task_id",
+      "lease_id",
+      "holder_id"
+    ],
+    "two_processes_same_live_task": "EXACTLY_ONE_ACQUIRES",
+    "old_holder_release_after_stale_takeover": "NO_EFFECT"
+  },
+  "session_drop_recovery": {
+    "durable_worker_state": true,
+    "durable_shared_lease": true,
+    "same_holder_live_lease_exact_pins": "RESUME",
+    "source_pin_change": "HOLD",
+    "expired_lease": "HOLD",
+    "automatic_reacquire_required_for_resume": false
+  },
+  "fail_closed": {
+    "corrupt_persisted_source_pins": true,
+    "forged_holder_release": true,
+    "live_conflicting_holder": true
+  },
+  "transport_boundary": {
+    "github_write_transport": false,
+    "source_writeback": false,
+    "source_delete": false,
+    "history_rewrite": false,
+    "external_effects": false,
+    "destructive_source_effects": false
+  },
+  "authority_boundary": {
+    "lease_is_permission": false,
+    "lease_is_source_writeback_authority": false,
+    "ci_green_is_merge_permission": false,
+    "authority_delta": 0,
+    "mass_effect_budget_delta": 0
+  },
+  "claim_ceiling": "This candidate tests and implements local durable lease arbitration and session-drop recovery semantics for the existing transport-neutral Habitat SWARM client. It does not implement GitHub writes, source mutation, source writeback, command execution, destructive source cleanup, or merge authority."
+}
