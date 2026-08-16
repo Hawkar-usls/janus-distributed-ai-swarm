@@ -1,0 +1,60 @@
+name: Validate Habitat Git Swarm Recovery Gauntlet
+
+on:
+  pull_request:
+    paths:
+      - "tools/habitat_git_swarm_client.py"
+      - "tools/habitat_git_swarm_recovery.py"
+      - "tests/test_habitat_git_swarm_client.py"
+      - "tests/test_habitat_git_swarm_recovery_gauntlet.py"
+      - ".janus/HABITAT_CLIENT.json"
+      - ".janus/HABITAT_RECOVERY_GAUNTLET.json"
+      - ".github/workflows/validate-habitat-git-swarm-recovery-gauntlet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-gauntlet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR state
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate machine-readable contracts
+        run: |
+          python -m json.tool .janus/HABITAT_CLIENT.json >/dev/null
+          python -m json.tool .janus/HABITAT_RECOVERY_GAUNTLET.json >/dev/null
+
+      - name: Compile recovery surface
+        run: |
+          python -m py_compile tools/habitat_git_swarm_client.py
+          python -m py_compile tools/habitat_git_swarm_recovery.py
+          python -m py_compile tests/test_habitat_git_swarm_client.py
+          python -m py_compile tests/test_habitat_git_swarm_recovery_gauntlet.py
+
+      - name: Replay frozen baseline client tests
+        run: python -m unittest -v tests.test_habitat_git_swarm_client
+
+      - name: Run lease conflict and session-drop gauntlet
+        run: python -m unittest -v tests.test_habitat_git_swarm_recovery_gauntlet
+
+      - name: Enforce transport and authority boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eq 'requests\.|urllib\.request|httpx\.|curl[[:space:]]|wget[[:space:]]|git[[:space:]]+(push|fetch|clone)|gh[[:space:]]' tools/habitat_git_swarm_recovery.py
+          grep -F '"github_write_transport": false' .janus/HABITAT_RECOVERY_GAUNTLET.json >/dev/null
+          grep -F '"source_writeback": false' .janus/HABITAT_RECOVERY_GAUNTLET.json >/dev/null
+          grep -F '"external_effects": false' .janus/HABITAT_RECOVERY_GAUNTLET.json >/dev/null
+          grep -F '"authority_delta": 0' .janus/HABITAT_RECOVERY_GAUNTLET.json >/dev/null
+          echo 'RECOVERY_GAUNTLET_GITHUB_WRITE_TRANSPORT=ABSENT'
+          echo 'RECOVERY_GAUNTLET_SOURCE_WRITEBACK=FALSE'
+          echo 'RECOVERY_GAUNTLET_EXTERNAL_EFFECTS=FALSE'
