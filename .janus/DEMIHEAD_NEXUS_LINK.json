@@ -1,0 +1,44 @@
+{
+  "schema": "janus.nexus.reciprocal_source_edge.v1",
+  "link_id": "SWARM_EDGE_DEMIHEAD_NEXUS_V2_2_RECIPROCAL_EDGE",
+  "status": "PROPOSED_RECIPROCAL_SOURCE_MARKER",
+  "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "source_head": "SWARM_EDGE",
+  "source_role": "EDGE_PERIPHERAL_NERVOUS_SYSTEM_TELEMETRY_SOURCE",
+  "source_baseline_sha": "43eb173e28f4a8b3e396efc1466db1da02b3c1c7",
+  "demihead": {
+    "repository": "Hawkar-usls/Demi_Head",
+    "contract_id": "NEXUS_V2_2_SWARM_EDGE_OBSERVATION_FROZEN_CONTRACT",
+    "contract_path": "contracts/NEXUS_V2_2_SWARM_EDGE_OBSERVATION_FROZEN_CONTRACT.json",
+    "contract_blob_sha": "3c024bafc55bc02d95d4abfce76aedda5817aef0",
+    "target_head": "OBSERVER"
+  },
+  "edge": {
+    "payload": "TELEMETRY_SAMPLE",
+    "route": ["SWARM_EDGE", "OBSERVER", "TELEMETRY_SAMPLE"],
+    "direction": "SOURCE_TO_DEMIHEAD",
+    "live_cross_repository_transport": false,
+    "route_receipt_is_delivery": false
+  },
+  "reciprocity_checks": {
+    "demihead_contract_must_name_this_repository": true,
+    "demihead_contract_source_sha_must_equal_source_baseline_sha": true,
+    "demihead_contract_route_must_equal_edge_route": true,
+    "source_semantics_drift_requires_revalidation": true,
+    "stale_or_degraded_state_must_remain_visible": true,
+    "promotion_must_not_rewrite_source_baseline_history": true
+  },
+  "authority_boundary": {
+    "edge_telemetry_is_command": false,
+    "stale_is_current_truth": false,
+    "source_mutation_allowed": false,
+    "external_effect_authority": false,
+    "authority_delta": 0,
+    "mass_effect_budget_delta": 0,
+    "write_back_default": "DENY"
+  },
+  "topology_health": {
+    "validator": "Hawkar-usls/Demi_Head:tools/janus_demihead_topology_health.py",
+    "central_ci_receipt_required": true
+  }
+}
