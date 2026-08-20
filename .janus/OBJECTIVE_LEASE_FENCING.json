@@ -1,0 +1,64 @@
+{
+  "schema": "janus.habitat.objective_lease_fencing_contract.v1",
+  "artifact_id": "JANUS-HABITAT-OBJECTIVE-LEASE-FENCING-2026-08-16-v1.0",
+  "parent_recovery": {
+    "pull_request": 5,
+    "head": "649cc94016cd9d0aba4a8aabf1eb74577c691c49",
+    "state": "DEDICATED_RECOVERY_PASS"
+  },
+  "bindings": {
+    "boot_controller_head": "9622241625eb6e6ee56f0fe955bdcf5a2a7bc607",
+    "demiurge_supervisor_head": "74c8a9dc090dba4d3bd7d497e1ff75223e6fe6c0",
+    "semantics": "LEASE_EQUALITY_BINDING_TOKENS",
+    "git_membership_proof": false
+  },
+  "lease": {
+    "task_id": "demiurge-objective:<objective_id>",
+    "exclusive_per_task": true,
+    "lease_id_is_fencing_token": true,
+    "renew_before_expiry": true,
+    "renew_after_expiry": false,
+    "stale_takeover_gets_new_fencing_token": true,
+    "old_release_can_delete_replacement": false,
+    "current_owner_check": true,
+    "explicit_human_handoff_authorization_required_for_acquire": true
+  },
+  "renewal": {
+    "transaction": "BEGIN_IMMEDIATE",
+    "compare_and_swap_fields": [
+      "task_id",
+      "lease_id",
+      "holder_id",
+      "source_pins_json",
+      "expires_at"
+    ],
+    "same_lease_id_after_renewal": true,
+    "stale_lease_resurrection": false
+  },
+  "coordination_ceiling": {
+    "cross_process_same_sqlite_objective_acquisition_exclusive": true,
+    "continuous_execution_fencing_until_commit": false,
+    "cross_host_shared_filesystem_validated": false,
+    "distributed_consensus": false,
+    "source_writeback_permission": false,
+    "external_effect_permission": false
+  },
+  "laws": [
+    "LEASE_ID = FENCING_TOKEN",
+    "STALE_LEASE != RENEWABLE_LEASE",
+    "STALE_TAKEOVER -> NEW_FENCING_TOKEN",
+    "OLD_FENCING_TOKEN != CURRENT_OWNER",
+    "LEASE != SOURCE_WRITEBACK_PERMISSION",
+    "LEASE != EXTERNAL_EFFECT_PERMISSION",
+    "LEASE_BINDING_TOKEN != GIT_MEMBERSHIP_PROOF",
+    "CI_GREEN != MERGE_PERMISSION"
+  ],
+  "claim_ceiling": {
+    "source_writeback": false,
+    "external_effect": false,
+    "distributed_exactly_once": false,
+    "continuous_commit_fence_in_boot_controller": false,
+    "authority_delta": 0,
+    "mass_effect_budget_delta": 0
+  }
+}

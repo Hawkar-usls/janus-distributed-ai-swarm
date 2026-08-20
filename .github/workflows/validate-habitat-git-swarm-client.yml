@@ -1,0 +1,39 @@
+name: Validate Habitat Git Swarm Client
+
+on:
+  pull_request:
+    paths:
+      - '.janus/HABITAT_CLIENT.json'
+      - 'docs/HABITAT_GIT_SWARM_CLIENT.md'
+      - 'tools/habitat_git_swarm_client.py'
+      - 'tests/test_habitat_git_swarm_client.py'
+      - '.github/workflows/validate-habitat-git-swarm-client.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.janus/HABITAT_CLIENT.json'
+      - 'docs/HABITAT_GIT_SWARM_CLIENT.md'
+      - 'tools/habitat_git_swarm_client.py'
+      - 'tests/test_habitat_git_swarm_client.py'
+      - '.github/workflows/validate-habitat-git-swarm-client.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate client contract JSON
+        run: python -m json.tool .janus/HABITAT_CLIENT.json >/dev/null
+      - name: Compile reference client
+        run: python -m py_compile tools/habitat_git_swarm_client.py
+      - name: Run recovery and authority tests
+        run: python -m unittest -v tests/test_habitat_git_swarm_client.py
