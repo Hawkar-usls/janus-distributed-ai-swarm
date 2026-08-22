@@ -1,0 +1,42 @@
+{
+  "schema": "janus.swarm.genome_ledger.binding_receipt.v1",
+  "date": "2026-08-22",
+  "status": "BOUND_AND_VALIDATED",
+  "source": {
+    "repository": "Hawkar-usls/Janus-Demiurge",
+    "merge_commit": "fbda1cddf70a3a9333395ee8918b72c92d9c892a",
+    "canonical_module": "swarm_genome_ledger.py",
+    "canonical_module_blob_sha": "06a9b3c21167916d741525d88cb82773ab571e87"
+  },
+  "consumer": {
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "pull_request": 11,
+    "merge_commit": "33b82df41292790e8aebf848aa41f0ce285ce9b4",
+    "runtime_adapter": "tools/swarm_genome_ledger.py",
+    "spiral_controller": "tools/demiurge_spiral_swarm.py"
+  },
+  "validation": {
+    "workflow": "Validate Demiurge Spiral Swarm",
+    "workflow_run_id": 32568345550,
+    "conclusion": "success",
+    "binding_contracts": "PASS",
+    "spiral_genome_regressions": "PASS",
+    "transport_neutral_spiral_genome_smoke": "PASS"
+  },
+  "activated_semantics": [
+    "EVERY_SPIRAL_TURN_HAS_GENEALOGY",
+    "DUAL_IDENTITY_AND_EVIDENCE_STRANDS",
+    "ANCESTRY_IS_APPEND_ONLY",
+    "FAILURE_REMAINS_IN_LINEAGE",
+    "EXPLICIT_CROSS_ENTITY_PARENTAGE",
+    "ANCESTOR_TO_DESCENDANT_TRAVERSAL",
+    "CURRENT_TO_ORIGIN_TRAVERSAL"
+  ],
+  "safety": {
+    "sensor_truth_changed": false,
+    "sha256_or_target_math_changed": false,
+    "pool_or_submit_semantics_changed": false,
+    "external_effect_authority_added": false,
+    "physical_device_flash_performed": false
+  }
+}
