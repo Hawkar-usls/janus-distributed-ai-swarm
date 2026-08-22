@@ -1,0 +1,77 @@
+name: Validate Demiurge Spiral Swarm
+
+on:
+  push:
+    branches:
+      - main
+      - feature/demiurge-spiral-swarm-v1
+    paths:
+      - '.janus/DEMIURGE_SPIRAL_LINK.json'
+      - 'tools/demiurge_spiral_swarm.py'
+      - 'tests/test_demiurge_spiral_swarm.py'
+      - 'docs/swarm-critical-rules.md'
+      - '.github/workflows/validate-demiurge-spiral-swarm.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.janus/DEMIURGE_SPIRAL_LINK.json'
+      - 'tools/demiurge_spiral_swarm.py'
+      - 'tests/test_demiurge_spiral_swarm.py'
+      - 'docs/swarm-critical-rules.md'
+      - '.github/workflows/validate-demiurge-spiral-swarm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  spiral-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate binding contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(Path('.janus/DEMIURGE_SPIRAL_LINK.json').read_text(encoding='utf-8'))
+          required = {
+              'NO_LEARNING_ENTITY_DELETION',
+              'FAILURE_BECOMES_LESSON',
+              'IDENTITY_PERSISTS_ACROSS_TURNS',
+              'ITERATION_IS_SPIRAL_NOT_RING',
+              'ACTIVE_FRONTIER_MAY_CHANGE_WITHOUT_ERASING_LINEAGE',
+              'BOUNDED_WORKING_MEMORY_REQUIRES_ARCHIVE_OR_SUMMARY',
+          }
+          assert contract['status'] == 'BOUND_CANDIDATE'
+          assert contract['source']['repository'] == 'Hawkar-usls/Janus-Demiurge'
+          assert contract['source']['canonical_module'] == 'spiral_evolution.py'
+          assert set(contract['laws']) == required
+          assert contract['safety_boundaries']['sha256_and_pool_truth_unchanged'] is True
+          assert contract['safety_boundaries']['submit_semantics_unchanged'] is True
+          assert contract['safety_boundaries']['external_effect_authority_added'] is False
+          print('binding-contract=PASS')
+          PY
+
+      - name: Run spiral regression tests
+        run: python -m unittest discover -s tests -p 'test_demiurge_spiral_swarm.py' -v
+
+      - name: Run transport-neutral spiral smoke scenario
+        run: |
+          python tools/demiurge_spiral_swarm.py --demo --output /tmp/JANUS_SWARM_SPIRAL_SMOKE.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          receipt = json.loads(Path('/tmp/JANUS_SWARM_SPIRAL_SMOKE.json').read_text(encoding='utf-8'))
+          assert receipt['model'] == 'SPIRAL_ACCUMULATIVE_NO_LEARNING_ENTITY_DELETION'
+          assert len(receipt['chronicle']) == 4
+          assert len(receipt['entities']['anchor-01']['turns']) == 3
+          print('spiral-smoke=PASS')
+          PY
