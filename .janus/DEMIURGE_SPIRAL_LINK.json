@@ -1,0 +1,41 @@
+{
+  "schema": "janus.swarm.demiurge_spiral_link.v1",
+  "status": "BOUND_CANDIDATE",
+  "source": {
+    "repository": "Hawkar-usls/Janus-Demiurge",
+    "canonical_ref": "main",
+    "canonical_module": "spiral_evolution.py",
+    "canonical_module_blob_sha": "c87417dc5d0f91f81103e946923b343fc3419812",
+    "extended_ref": "feature/demiurge-spiral-everywhere-v2"
+  },
+  "consumer": {
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "role": "DISTRIBUTED_SWARM_SPIRAL_CONSUMER",
+    "adapter": "tools/demiurge_spiral_swarm.py",
+    "test": "tests/test_demiurge_spiral_swarm.py"
+  },
+  "laws": [
+    "NO_LEARNING_ENTITY_DELETION",
+    "FAILURE_BECOMES_LESSON",
+    "IDENTITY_PERSISTS_ACROSS_TURNS",
+    "ITERATION_IS_SPIRAL_NOT_RING",
+    "ACTIVE_FRONTIER_MAY_CHANGE_WITHOUT_ERASING_LINEAGE",
+    "BOUNDED_WORKING_MEMORY_REQUIRES_ARCHIVE_OR_SUMMARY"
+  ],
+  "swarm_binding": {
+    "node_identity": "PERSISTENT",
+    "stale_node": "ARCHIVE_KNOWN_ROSTER_NOT_ERASE",
+    "failed_attempt": "INTEGRATED_LESSON",
+    "recovery": "RECOVER_AND_ASCEND_NOT_ROLLBACK_ERASE",
+    "replacement_body": "NEW_TURN_SAME_LINEAGE_WHEN_IDENTITY_CONTINUES",
+    "working_window": "BOUNDED_ACTIVE_PLUS_APPEND_ONLY_ARCHIVE"
+  },
+  "safety_boundaries": {
+    "sensor_truth_unchanged": true,
+    "sha256_and_pool_truth_unchanged": true,
+    "submit_semantics_unchanged": true,
+    "external_effect_authority_added": false,
+    "device_flash_performed_by_contract": false,
+    "terminal_or_demihead_bypass": false
+  }
+}
