@@ -1,0 +1,36 @@
+{
+  "schema": "janus.repository.swarm_genome_ledger_link.v1",
+  "status": "BOUND_CANDIDATE",
+  "source": {
+    "repository": "Hawkar-usls/Janus-Demiurge",
+    "canonical_ref": "main",
+    "canonical_module": "swarm_genome_ledger.py",
+    "canonical_module_blob_sha": "06a9b3c21167916d741525d88cb82773ab571e87",
+    "canonical_protocol": "protocol/SWARM_GENOME_LEDGER-v1.json"
+  },
+  "consumer": {
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "runtime_adapter": "tools/swarm_genome_ledger.py",
+    "spiral_controller": "tools/demiurge_spiral_swarm.py"
+  },
+  "model": "DUAL_STRAND_SPIRAL_GENEALOGY",
+  "laws": [
+    "EVERY_SPIRAL_TURN_HAS_GENEALOGY",
+    "ANCESTRY_IS_APPEND_ONLY",
+    "FAILURE_REMAINS_IN_LINEAGE",
+    "ACTIVE_FRONTIER_DOES_NOT_ERASE_ANCESTORS",
+    "CROSS_ENTITY_DERIVATION_REQUIRES_EXPLICIT_PARENT",
+    "ANCESTOR_AND_DESCENDANT_TRAVERSAL_ARE_BIDIRECTIONALLY_INDEXED"
+  ],
+  "strands": {
+    "identity_state": "what the entity is now",
+    "evidence_provenance": "why it became that state, including failures and lessons"
+  },
+  "safety_boundaries": {
+    "architectural_metaphor_not_biological_claim": true,
+    "sensor_truth_unchanged": true,
+    "sha256_and_target_math_unchanged": true,
+    "pool_and_submit_semantics_unchanged": true,
+    "external_effect_authority_added": false
+  }
+}
