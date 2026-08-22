@@ -5,20 +5,27 @@ on:
     branches:
       - main
       - feature/demiurge-spiral-swarm-v1
+      - feature/swarm-genome-ledger-v1
     paths:
       - '.janus/DEMIURGE_SPIRAL_LINK.json'
+      - '.janus/SWARM_GENOME_LEDGER_LINK.json'
       - 'tools/demiurge_spiral_swarm.py'
+      - 'tools/swarm_genome_ledger.py'
       - 'tests/test_demiurge_spiral_swarm.py'
       - 'docs/swarm-critical-rules.md'
+      - 'docs/SWARM_GENOME_LEDGER.md'
       - '.github/workflows/validate-demiurge-spiral-swarm.yml'
   pull_request:
     branches:
       - main
     paths:
       - '.janus/DEMIURGE_SPIRAL_LINK.json'
+      - '.janus/SWARM_GENOME_LEDGER_LINK.json'
       - 'tools/demiurge_spiral_swarm.py'
+      - 'tools/swarm_genome_ledger.py'
       - 'tests/test_demiurge_spiral_swarm.py'
       - 'docs/swarm-critical-rules.md'
+      - 'docs/SWARM_GENOME_LEDGER.md'
       - '.github/workflows/validate-demiurge-spiral-swarm.yml'
 
 permissions:
@@ -35,14 +42,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate binding contract
+      - name: Validate binding contracts
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
-          contract = json.loads(Path('.janus/DEMIURGE_SPIRAL_LINK.json').read_text(encoding='utf-8'))
-          required = {
+          spiral = json.loads(Path('.janus/DEMIURGE_SPIRAL_LINK.json').read_text(encoding='utf-8'))
+          genome = json.loads(Path('.janus/SWARM_GENOME_LEDGER_LINK.json').read_text(encoding='utf-8'))
+          spiral_required = {
               'NO_LEARNING_ENTITY_DELETION',
               'FAILURE_BECOMES_LESSON',
               'IDENTITY_PERSISTS_ACROSS_TURNS',
@@ -50,28 +58,51 @@ jobs:
               'ACTIVE_FRONTIER_MAY_CHANGE_WITHOUT_ERASING_LINEAGE',
               'BOUNDED_WORKING_MEMORY_REQUIRES_ARCHIVE_OR_SUMMARY',
           }
-          assert contract['status'] == 'BOUND_CANDIDATE'
-          assert contract['source']['repository'] == 'Hawkar-usls/Janus-Demiurge'
-          assert contract['source']['canonical_module'] == 'spiral_evolution.py'
-          assert set(contract['laws']) == required
-          assert contract['safety_boundaries']['sha256_and_pool_truth_unchanged'] is True
-          assert contract['safety_boundaries']['submit_semantics_unchanged'] is True
-          assert contract['safety_boundaries']['external_effect_authority_added'] is False
-          print('binding-contract=PASS')
+          genome_required = {
+              'EVERY_SPIRAL_TURN_HAS_GENEALOGY',
+              'ANCESTRY_IS_APPEND_ONLY',
+              'FAILURE_REMAINS_IN_LINEAGE',
+              'ACTIVE_FRONTIER_DOES_NOT_ERASE_ANCESTORS',
+              'CROSS_ENTITY_DERIVATION_REQUIRES_EXPLICIT_PARENT',
+              'ANCESTOR_AND_DESCENDANT_TRAVERSAL_ARE_BIDIRECTIONALLY_INDEXED',
+          }
+          assert spiral['status'] == 'BOUND_CANDIDATE'
+          assert spiral['source']['repository'] == 'Hawkar-usls/Janus-Demiurge'
+          assert spiral['source']['canonical_module'] == 'spiral_evolution.py'
+          assert set(spiral['laws']) == spiral_required
+          assert genome['status'] == 'BOUND_CANDIDATE'
+          assert genome['source']['repository'] == 'Hawkar-usls/Janus-Demiurge'
+          assert genome['source']['canonical_module'] == 'swarm_genome_ledger.py'
+          assert genome['model'] == 'DUAL_STRAND_SPIRAL_GENEALOGY'
+          assert set(genome['laws']) == genome_required
+          assert spiral['safety_boundaries']['sha256_and_pool_truth_unchanged'] is True
+          assert spiral['safety_boundaries']['submit_semantics_unchanged'] is True
+          assert genome['safety_boundaries']['architectural_metaphor_not_biological_claim'] is True
+          assert genome['safety_boundaries']['pool_and_submit_semantics_unchanged'] is True
+          assert genome['safety_boundaries']['external_effect_authority_added'] is False
+          print('binding-contracts=PASS')
           PY
 
-      - name: Run spiral regression tests
+      - name: Compile spiral and genome adapters
+        run: python -m py_compile tools/demiurge_spiral_swarm.py tools/swarm_genome_ledger.py
+
+      - name: Run spiral/genome regression tests
         run: python -m unittest discover -s tests -p 'test_demiurge_spiral_swarm.py' -v
 
-      - name: Run transport-neutral spiral smoke scenario
+      - name: Run transport-neutral spiral genome smoke scenario
         run: |
-          python tools/demiurge_spiral_swarm.py --demo --output /tmp/JANUS_SWARM_SPIRAL_SMOKE.json
+          python tools/demiurge_spiral_swarm.py --demo --output /tmp/JANUS_SWARM_SPIRAL_GENOME_SMOKE.json
           python - <<'PY'
           import json
           from pathlib import Path
-          receipt = json.loads(Path('/tmp/JANUS_SWARM_SPIRAL_SMOKE.json').read_text(encoding='utf-8'))
-          assert receipt['model'] == 'SPIRAL_ACCUMULATIVE_NO_LEARNING_ENTITY_DELETION'
-          assert len(receipt['chronicle']) == 4
+          receipt = json.loads(Path('/tmp/JANUS_SWARM_SPIRAL_GENOME_SMOKE.json').read_text(encoding='utf-8'))
+          assert receipt['model'] == 'SPIRAL_ACCUMULATIVE_WITH_SHARED_GENOME'
+          assert len(receipt['chronicle']) == 5
           assert len(receipt['entities']['anchor-01']['turns']) == 3
-          print('spiral-smoke=PASS')
+          assert len(receipt['entities']['scout-ghost']['turns']) == 2
+          assert len(receipt['genome']['nodes']) == 5
+          assert receipt['genome']['model'] == 'DUAL_STRAND_SPIRAL_GENEALOGY'
+          scout_latest = receipt['genome']['entities']['scout-ghost'][-1]
+          assert len(receipt['genome']['nodes'][scout_latest]['parent_ids']) >= 1
+          print('spiral-genome-smoke=PASS')
           PY

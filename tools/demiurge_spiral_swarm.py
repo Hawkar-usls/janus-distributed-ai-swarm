@@ -17,6 +17,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from swarm_genome_ledger import SwarmGenomeLedger
+
 
 SPIRAL_LAWS = (
     "NO_LEARNING_ENTITY_DELETION",
@@ -161,10 +163,11 @@ class PreservingWindow:
 
 
 class SwarmSpiralController:
-    """Lossless learning/lifecycle controller for heterogeneous swarm nodes."""
+    """Lossless lifecycle controller plus one shared swarm genome genealogy."""
 
     def __init__(self, working_window: int = 32):
         self.ledgers: Dict[str, SpiralLedger] = {}
+        self.genome = SwarmGenomeLedger()
         self.frontier = PreservingWindow(working_window)
         self.chronicle: List[Dict[str, Any]] = []
 
@@ -183,6 +186,8 @@ class SwarmSpiralController:
         constraints: Optional[Iterable[str]] = None,
         promoted: bool = True,
         outcome: Optional[str] = None,
+        genome_parent_ids: Optional[Iterable[str]] = None,
+        genome_relation: str = "SPIRAL_ASCENT",
     ) -> SpiralTurn:
         ledger = self.ledger(entity_id)
         before = ledger.active_state
@@ -196,15 +201,41 @@ class SwarmSpiralController:
             promoted=promoted,
             outcome=outcome,
         )
+        genome_node = self.genome.register_turn(
+            turn,
+            extra_parent_ids=genome_parent_ids,
+            relation=genome_relation,
+        )
         event = {
             "entity_id": entity_id,
             "turn": turn.turn,
             "outcome": turn.outcome,
             "fingerprint": turn.fingerprint,
+            "genome_node_id": genome_node.genome_id,
         }
         self.frontier.append(event)
         self.chronicle.append(event)
         return turn
+
+    def derive(
+        self,
+        entity_id: str,
+        candidate_state: Any,
+        *,
+        parent_genome_ids: Iterable[str],
+        relation: str = "DERIVED_FROM",
+        lessons: Optional[Iterable[str]] = None,
+        constraints: Optional[Iterable[str]] = None,
+    ) -> SpiralTurn:
+        return self.integrate(
+            entity_id,
+            candidate_state,
+            lessons=lessons,
+            constraints=constraints,
+            promoted=True,
+            genome_parent_ids=parent_genome_ids,
+            genome_relation=relation,
+        )
 
     def record_failure(
         self,
@@ -251,15 +282,20 @@ class SwarmSpiralController:
     def validate(self) -> None:
         if len(self.chronicle) != sum(len(x.turns) for x in self.ledgers.values()):
             raise ValueError("global chronicle lost or duplicated a turn")
+        if len(self.genome.nodes) != len(self.chronicle):
+            raise ValueError("genome ledger lost or duplicated a spiral turn")
         for ledger in self.ledgers.values():
             ledger.validate()
+        self.genome.validate()
 
     def to_dict(self) -> Dict[str, Any]:
+        self.validate()
         return {
-            "schema": "janus.swarm.spiral_state.v1",
-            "model": "SPIRAL_ACCUMULATIVE_NO_LEARNING_ENTITY_DELETION",
+            "schema": "janus.swarm.spiral_state.v2",
+            "model": "SPIRAL_ACCUMULATIVE_WITH_SHARED_GENOME",
             "laws": list(SPIRAL_LAWS),
             "entities": {key: value.to_dict() for key, value in sorted(self.ledgers.items())},
+            "genome": self.genome.to_dict(),
             "frontier": {
                 "active": _jsonable(self.frontier.active),
                 "archive": _jsonable(self.frontier.archive),
@@ -287,22 +323,33 @@ def _demo(output: Optional[str]) -> Dict[str, Any]:
         {"status": "RECOVERED", "role": "ANCHOR", "rescue_count": 1},
         "ESP-NOW rescue succeeded; recovery is a new turn, not a history reset.",
     )
+    anchor_parent = swarm.genome.by_entity["anchor-01"][-1]
+    swarm.derive(
+        "scout-ghost",
+        {"status": "FRESH", "role": "SCOUT"},
+        parent_genome_ids=[anchor_parent],
+        relation="SPECIALIZED_FROM",
+        lessons=["Scout identity inherits explicit ancestry without replacing its parent."],
+    )
     swarm.mark_stale("scout-ghost", "no fresh heartbeat")
     swarm.validate()
     if output:
         swarm.save(output)
+    scout_latest = swarm.genome.by_entity["scout-ghost"][-1]
     return {
         "status": "PASS",
         "entities": len(swarm.ledgers),
         "turns": len(swarm.chronicle),
+        "genome_nodes": len(swarm.genome.nodes),
+        "scout_origin_paths": swarm.genome.trace_to_origins(scout_latest),
         "archived_frontier_events": len(swarm.frontier.archive),
         "laws": list(SPIRAL_LAWS),
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="JANUS swarm spiral runtime smoke runner")
-    parser.add_argument("--demo", action="store_true", help="run deterministic spiral smoke scenario")
+    parser = argparse.ArgumentParser(description="JANUS swarm spiral/genome runtime smoke runner")
+    parser.add_argument("--demo", action="store_true", help="run deterministic spiral/genome smoke scenario")
     parser.add_argument("--output", help="optional JSON receipt path")
     args = parser.parse_args()
     if not args.demo:
