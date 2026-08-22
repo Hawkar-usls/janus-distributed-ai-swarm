@@ -1,0 +1,45 @@
+{
+  "schema": "janus.swarm.spiral.binding_receipt.v1",
+  "date": "2026-08-22",
+  "status": "REPOSITORY_BOUND_AND_SMOKE_EXECUTED",
+  "source": {
+    "repository": "Hawkar-usls/Janus-Demiurge",
+    "canonical_ref": "main",
+    "canonical_module": "spiral_evolution.py",
+    "canonical_module_blob_sha": "c87417dc5d0f91f81103e946923b343fc3419812"
+  },
+  "consumer": {
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "merge_commit": "7c30dbdc04b10a61c1b0e1f74aeb18280ca83310",
+    "pull_request": 10,
+    "binding_contract": ".janus/DEMIURGE_SPIRAL_LINK.json",
+    "runtime_adapter": "tools/demiurge_spiral_swarm.py"
+  },
+  "validation": {
+    "workflow": "Validate Demiurge Spiral Swarm",
+    "workflow_run_id": 32567308593,
+    "job_id": 97017708080,
+    "conclusion": "success",
+    "binding_contract": "PASS",
+    "spiral_regression_tests": "PASS",
+    "transport_neutral_smoke": "PASS"
+  },
+  "activated_semantics": [
+    "NO_LEARNING_ENTITY_DELETION",
+    "FAILURE_BECOMES_LESSON",
+    "IDENTITY_PERSISTS_ACROSS_TURNS",
+    "ITERATION_IS_SPIRAL_NOT_RING",
+    "STALE_NODE_TO_KNOWN_ROSTER_NOT_ERASE",
+    "RECOVERY_IS_NEW_ASCENT_NOT_HISTORY_ERASURE",
+    "BOUNDED_ACTIVE_WINDOW_WITH_ARCHIVE"
+  ],
+  "safety": {
+    "sensor_truth_changed": false,
+    "sha256_or_target_math_changed": false,
+    "pool_or_submit_semantics_changed": false,
+    "external_effect_authority_added": false,
+    "physical_device_flash_performed": false,
+    "live_device_runtime_started": false,
+    "reason_live_device_runtime_not_started": "No connected Remote Desktop Commander device was available; repository binding and CI smoke were executed without pretending to have deployed hardware."
+  }
+}
