@@ -6,7 +6,7 @@
   "last_reviewed": "2026-08-22",
   "maturity": "ACTIVE_ENGINEERING",
   "completion_status": "ONGOING_DEVELOPMENT",
-  "summary": "Public ESP32/M5Stack firmware collection for heterogeneous telemetry, observer, UI and experimental worker nodes with explicit protocol, recovery and cumulative spiral-evolution boundaries.",
+  "summary": "Public ESP32/M5Stack firmware collection for heterogeneous telemetry, observer, UI and experimental worker nodes with explicit protocol, recovery, cumulative spiral-evolution and shared genome-lineage boundaries.",
   "implemented_scope": [
     "public firmware sketches for multiple ESP32/M5Stack nodes",
     "ESP-NOW protocol/ABI handling",
@@ -14,7 +14,8 @@
     "source assembly for selected multi-tab sketches",
     "CI compilation/static checks for selected public build paths",
     "credential separation through examples/ignored local configuration",
-    "Demiurge spiral binding for persistent learning identity, failed-attempt lessons, stale-node lineage and recovery ascent"
+    "Demiurge spiral binding for persistent learning identity, failed-attempt lessons, stale-node lineage and recovery ascent",
+    "SWARM_GENOME_LEDGER joining per-entity SpiralLedgers into one append-only bidirectionally traversable genealogy"
   ],
   "invariants": [
     "sensor truth must be distinguishable from prediction, memory and UI fiction",
@@ -22,7 +23,10 @@
     "adaptive work scheduling must not alter SHA-256, target math, pool difficulty or submit semantics",
     "recovery and stale-node handling must remain inspectable",
     "learning identities and their failed attempts must not be silently erased; bounded active windows require archive or durable summary",
-    "recovery advances lineage as a new spiral turn rather than erasing the failed turn through rollback semantics"
+    "recovery advances lineage as a new spiral turn rather than erasing the failed turn through rollback semantics",
+    "every admitted spiral turn is indexed into the shared genome genealogy",
+    "cross-entity specialization or synthesis names explicit parent genome nodes instead of replacing them",
+    "DNA/genome language is an architecture metaphor for lineage and paired identity/evidence strands, not a biological claim"
   ],
   "not_claimed": [
     "artificial general intelligence",
@@ -35,5 +39,6 @@
   "technical_boundaries": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/technical-boundaries.md",
   "critical_rules": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/swarm-critical-rules.md",
   "demiurge_spiral_binding": ".janus/DEMIURGE_SPIRAL_LINK.json",
+  "swarm_genome_binding": ".janus/SWARM_GENOME_LEDGER_LINK.json",
   "visibility_policy": "https://github.com/Hawkar-usls/Janus/blob/main/portfolio-visibility.json"
 }
