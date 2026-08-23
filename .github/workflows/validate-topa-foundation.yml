@@ -6,6 +6,7 @@ on:
     paths:
       - '.janus/TOPA_FOUNDATION.json'
       - 'tools/topa_epistemic_router.py'
+      - 'tools/kenshi_swarm_runtime.py'
       - 'tests/test_topa_epistemic_router.py'
       - '.github/workflows/validate-topa-foundation.yml'
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - '.janus/TOPA_FOUNDATION.json'
       - 'tools/topa_epistemic_router.py'
+      - 'tools/kenshi_swarm_runtime.py'
       - 'tests/test_topa_epistemic_router.py'
       - '.github/workflows/validate-topa-foundation.yml'
   workflow_dispatch:
@@ -43,5 +45,7 @@ jobs:
           PY
       - name: Run TOPA router self-test
         run: python tools/topa_epistemic_router.py
+      - name: Run Kenshi plus TOPA composite self-test
+        run: python tools/kenshi_swarm_runtime.py
       - name: Run TOPA unit tests
         run: python -m unittest tests/test_topa_epistemic_router.py
