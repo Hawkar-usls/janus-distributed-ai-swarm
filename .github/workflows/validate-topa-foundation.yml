@@ -1,0 +1,47 @@
+name: Validate TOPA Runtime Foundation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.janus/TOPA_FOUNDATION.json'
+      - 'tools/topa_epistemic_router.py'
+      - 'tests/test_topa_epistemic_router.py'
+      - '.github/workflows/validate-topa-foundation.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.janus/TOPA_FOUNDATION.json'
+      - 'tools/topa_epistemic_router.py'
+      - 'tests/test_topa_epistemic_router.py'
+      - '.github/workflows/validate-topa-foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate TOPA binding
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('.janus/TOPA_FOUNDATION.json'))
+          assert p['status']=='ACTIVE_RUNTIME_EPISTEMIC_FOUNDATION'
+          assert p['canonical_foundation']['repository']=='Hawkar-usls/Janus_Genesis'
+          assert p['canonical_foundation']['path']=='.janus/TOPA_FOUNDATION.json'
+          assert p['kenshi_binding']['rule']=='SYNC_STATE_NOT_IDENTITY'
+          assert p['runtime_gate']['unresolved_allowed'] is True
+          assert p['runtime_gate']['same_source_multi_agent_counts_as_independent_replication'] is False
+          print('JANUS_TOPA_RUNTIME_BINDING=PASS')
+          PY
+      - name: Run TOPA router self-test
+        run: python tools/topa_epistemic_router.py
+      - name: Run TOPA unit tests
+        run: python -m unittest tests/test_topa_epistemic_router.py
