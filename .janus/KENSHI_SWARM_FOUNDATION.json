@@ -12,7 +12,9 @@
     "Hawkar-usls/janus-meta-registry:data/JANUS-NEXUS-P0-SWARM-HABITAT-CLIENT-2026-08-16-v1.0.json"
   ],
   "runtime_role": "PRIMARY_RUNTIME_CONSUMER",
+  "primary_entrypoint": "tools/kenshi_swarm_runtime.py",
   "runtime_components": {
+    "composite_runtime": "tools/kenshi_swarm_runtime.py",
     "blackboard": "tools/kenshi_swarm_blackboard.py",
     "spiral_controller": "tools/demiurge_spiral_swarm.py",
     "genome_ledger": "tools/swarm_genome_ledger.py",
@@ -30,7 +32,7 @@
     "PEER_MESSAGE_IS_ROUTING_CONTEXT_NOT_EMPIRICAL_EVIDENCE",
     "SAME_SOURCE_MULTI_AGENT_IS_NOT_INDEPENDENT_REPLICATION"
   ],
-  "binding_rule": "BLACKBOARD_EVENTS_MAY_BIND_TO_GENOME_NODES_BUT_MUST_NOT_REPLACE_AGENT_LINEAGE",
+  "binding_rule": "BLACKBOARD_EVENT -> LOCAL_WORK -> SPIRAL_TURN -> GENOME_NODE -> CAUSAL_ACK/GENOME_BIND; NONE OF THESE MAY REPLACE AGENT LINEAGE",
   "authority_boundary": {
     "blackboard_event_is_command": false,
     "lease_grants_source_writeback": false,
