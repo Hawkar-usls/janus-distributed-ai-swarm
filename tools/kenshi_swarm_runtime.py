@@ -2,9 +2,9 @@
 """Primary Kenshi-founded JANUS swarm runtime.
 
 This composes the persistent-local-agent blackboard with the existing spiral
-controller and SWARM_GENOME_LEDGER. A blackboard event can become context for a
-new spiral turn, and the resulting genome node is acknowledged back onto the
-blackboard without mutating or deduplicating either agent identity.
+controller, SWARM_GENOME_LEDGER and TOPA epistemic foundation. Blackboard state
+can be shared without identity collapse; TOPA validates claim envelopes without
+turning coordination, consensus or symbolic context into world truth.
 """
 from __future__ import annotations
 
@@ -14,12 +14,14 @@ from typing import Any, Dict, Iterable, Optional
 
 from demiurge_spiral_swarm import SwarmSpiralController
 from kenshi_swarm_blackboard import KenshiSwarmBlackboard
+from topa_epistemic_router import TOPAEpistemicRouter
 
 
 class KenshiSpiralSwarmRuntime:
     def __init__(self, *, blackboard_window: int = 128, spiral_window: int = 32):
         self.blackboard = KenshiSwarmBlackboard(active_window=blackboard_window)
         self.spiral = SwarmSpiralController(working_window=spiral_window)
+        self.topa = TOPAEpistemicRouter()
 
     def register_agent(self, agent_id: str, role: str, *, lineage_id: Optional[str] = None, local_state: Any = None) -> Dict[str, Any]:
         agent = self.blackboard.register_agent(agent_id, role, lineage_id=lineage_id, local_state=local_state)
@@ -57,6 +59,10 @@ class KenshiSpiralSwarmRuntime:
             source_bound=source_bound,
             parent_event_ids=parent_event_ids,
         )
+
+    def assess_claim(self, record: Dict[str, Any], *, strict: bool = True) -> Dict[str, Any]:
+        """Apply TOPA before a claim is promoted into shared factual state."""
+        return self.topa.validate(record) if strict else self.topa.assess(record)
 
     def handoff(self, sender_id: str, recipients: Iterable[str], payload: Any, *, parent_event_ids: Optional[Iterable[str]] = None):
         return self.blackboard.handoff(sender_id, recipients, payload, parent_event_ids=parent_event_ids)
@@ -129,15 +135,20 @@ class KenshiSpiralSwarmRuntime:
         self.validate()
         return {
             "schema": "janus.swarm.kenshi_spiral_runtime.v1",
-            "model": "KENSHI_LOCAL_AGENTS_PLUS_BLACKBOARD_PLUS_SPIRAL_GENOME",
+            "model": "KENSHI_LOCAL_AGENTS_PLUS_BLACKBOARD_PLUS_SPIRAL_GENOME_PLUS_TOPA",
             "foundation": "Hawkar-usls/Janus_Genesis:.janus/KENSHI_SWARM_FOUNDATION.json",
+            "epistemic_foundation": "Hawkar-usls/Janus_Genesis:.janus/TOPA_FOUNDATION.json",
             "core_rule": "SYNC_STATE_NOT_IDENTITY",
+            "epistemic_core_rule": self.topa.core_rule,
             "blackboard": self.blackboard.to_dict(),
             "spiral": self.spiral.to_dict(),
+            "topa": self.topa.to_dict(),
             "epistemic_boundary": {
                 "blackboard_event_is_empirical_evidence": False,
                 "causal_ack_proves_scientific_truth": False,
                 "same_source_multi_agent_is_independent_replication": False,
+                "topa_assessment_proves_scientific_truth": False,
+                "unresolved_is_valid": True,
             },
         }
 
@@ -153,17 +164,30 @@ def self_test() -> None:
     runtime.register_agent("B", "SCOUT", lineage_id="L-B", local_state={"phase": 0})
     observation = runtime.emit("A", "OBSERVATION", {"fact": "x", "source": "s"}, source_bound=True)
     handoff = runtime.handoff("A", ["B"], {"request": "verify x"}, parent_event_ids=[observation.event_id])
+    assessment = runtime.assess_claim({
+        "claim_id": "C-A",
+        "origin_agent_id": "A",
+        "claim_text": "x was observed in source s",
+        "claim_kind": "OBSERVED",
+        "source_pointers": ["s"],
+        "alternative_hypotheses": [],
+        "falsification_tests": ["inspect an independent source"],
+        "status": "SOURCE_BOUND_OBSERVATION",
+        "confidence": "MEDIUM",
+    })
     result = runtime.commit_turn(
         "B",
         {"role": "SCOUT", "status": "ACTIVE", "local_state": {"phase": 1}},
         trigger_event_ids=[handoff.event_id],
         lessons=["Peer handoff changed the local work frontier without replacing identity."],
     )
+    assert assessment["admissible"] is True
+    assert assessment["world_truth_implied"] is False
     assert result["genome_node_id"] in runtime.spiral.genome.by_entity["B"]
     assert runtime.blackboard.agents["A"]["lineage_id"] == "L-A"
     assert runtime.blackboard.agents["B"]["lineage_id"] == "L-B"
     runtime.validate()
-    print("JANUS_KENSHI_SPIRAL_RUNTIME_SELF_TEST=PASS")
+    print("JANUS_KENSHI_TOPA_SPIRAL_RUNTIME_SELF_TEST=PASS")
 
 
 if __name__ == "__main__":
