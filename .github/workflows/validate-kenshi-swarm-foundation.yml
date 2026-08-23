@@ -1,0 +1,44 @@
+name: Validate Kenshi Swarm Foundation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.janus/KENSHI_SWARM_FOUNDATION.json'
+      - 'tools/kenshi_swarm_blackboard.py'
+      - 'tests/test_kenshi_swarm_blackboard.py'
+      - '.github/workflows/validate-kenshi-swarm-foundation.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.janus/KENSHI_SWARM_FOUNDATION.json'
+      - 'tools/kenshi_swarm_blackboard.py'
+      - 'tests/test_kenshi_swarm_blackboard.py'
+      - '.github/workflows/validate-kenshi-swarm-foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate contract JSON
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('.janus/KENSHI_SWARM_FOUNDATION.json'))
+          assert p['status']=='ACTIVE_RUNTIME_FOUNDATION'
+          assert p['canonical_foundation']['repository']=='Hawkar-usls/Janus_Genesis'
+          assert 'SYNC_STATE_NOT_IDENTITY' in p['foundation_laws']
+          assert 'FACTS_MAY_CLUSTER__AGENTS_MUST_NOT' in p['foundation_laws']
+          PY
+      - name: Run blackboard self-test and unit tests
+        run: |
+          python tools/kenshi_swarm_blackboard.py
+          python -m unittest tests.test_kenshi_swarm_blackboard
