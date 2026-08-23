@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Primary Kenshi-founded JANUS swarm runtime.
 
-This composes the persistent-local-agent blackboard with the existing spiral
-controller, SWARM_GENOME_LEDGER and TOPA epistemic foundation. Blackboard state
-can be shared without identity collapse; TOPA validates claim envelopes without
-turning coordination, consensus or symbolic context into world truth.
+Persistent local agents share bounded state through the Kenshi blackboard while
+TOPA v1.2 preserves raw provenance, channel identity and frozen prediction
+semantics. Shared state never implies shared identity or world truth.
 """
 from __future__ import annotations
 
@@ -26,39 +25,16 @@ class KenshiSpiralSwarmRuntime:
     def register_agent(self, agent_id: str, role: str, *, lineage_id: Optional[str] = None, local_state: Any = None) -> Dict[str, Any]:
         agent = self.blackboard.register_agent(agent_id, role, lineage_id=lineage_id, local_state=local_state)
         if not self.spiral.ledger(agent_id).turns:
-            state = {
-                "role": role,
-                "status": agent["status"],
-                "local_state": agent["local_state"],
-                "lineage_id": agent["lineage_id"],
-            }
-            turn = self.spiral.integrate(
-                agent_id,
-                state,
-                lessons=["Kenshi-founded local identity registered without collapsing into shared state."],
-                promoted=True,
-                outcome="REGISTERED_AND_ASCENDED",
-            )
+            state = {"role": role, "status": agent["status"], "local_state": agent["local_state"], "lineage_id": agent["lineage_id"]}
+            turn = self.spiral.integrate(agent_id, state, lessons=["Kenshi-founded local identity registered without collapsing into shared state."], promoted=True, outcome="REGISTERED_AND_ASCENDED")
             node_id = self.spiral.genome.by_entity[agent_id][-1]
-            event = self.blackboard.append_event(
-                agent_id,
-                "STATE_DELTA",
-                {"registration": True, "state": state},
-                genome_node_ids=[node_id],
-            )
+            event = self.blackboard.append_event(agent_id, "STATE_DELTA", {"registration": True, "state": state}, genome_node_ids=[node_id])
             self.blackboard.bind_genome(agent_id, node_id, parent_event_ids=[event.event_id])
             return {"agent": agent, "turn": turn.to_dict(), "genome_node_id": node_id, "event_id": event.event_id}
         return {"agent": agent, "turn": None, "genome_node_id": self.spiral.genome.by_entity[agent_id][-1]}
 
     def emit(self, agent_id: str, kind: str, payload: Any, *, recipients: Optional[Iterable[str]] = None, source_bound: bool = False, parent_event_ids: Optional[Iterable[str]] = None):
-        return self.blackboard.append_event(
-            agent_id,
-            kind,
-            payload,
-            recipient_ids=recipients,
-            source_bound=source_bound,
-            parent_event_ids=parent_event_ids,
-        )
+        return self.blackboard.append_event(agent_id, kind, payload, recipient_ids=recipients, source_bound=source_bound, parent_event_ids=parent_event_ids)
 
     def assess_claim(self, record: Dict[str, Any], *, strict: bool = True) -> Dict[str, Any]:
         """Apply TOPA before a claim is promoted into shared factual state."""
@@ -67,63 +43,24 @@ class KenshiSpiralSwarmRuntime:
     def handoff(self, sender_id: str, recipients: Iterable[str], payload: Any, *, parent_event_ids: Optional[Iterable[str]] = None):
         return self.blackboard.handoff(sender_id, recipients, payload, parent_event_ids=parent_event_ids)
 
-    def commit_turn(
-        self,
-        agent_id: str,
-        candidate_state: Any,
-        *,
-        trigger_event_ids: Iterable[str],
-        lessons: Optional[Iterable[str]] = None,
-        constraints: Optional[Iterable[str]] = None,
-        promoted: bool = True,
-        outcome: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    def commit_turn(self, agent_id: str, candidate_state: Any, *, trigger_event_ids: Iterable[str], lessons: Optional[Iterable[str]] = None, constraints: Optional[Iterable[str]] = None, promoted: bool = True, outcome: Optional[str] = None) -> Dict[str, Any]:
         trigger_ids = [str(x) for x in trigger_event_ids]
         known = {e.event_id for e in self.blackboard.events}
         unknown = [event_id for event_id in trigger_ids if event_id not in known]
         if unknown:
             raise ValueError(f"unknown trigger events: {unknown}")
-
-        turn = self.spiral.integrate(
-            agent_id,
-            candidate_state,
-            lessons=lessons,
-            constraints=constraints,
-            promoted=promoted,
-            outcome=outcome,
-        )
+        turn = self.spiral.integrate(agent_id, candidate_state, lessons=lessons, constraints=constraints, promoted=promoted, outcome=outcome)
         node_id = self.spiral.genome.by_entity[agent_id][-1]
         ack = self.blackboard.append_event(
-            agent_id,
-            "CAUSAL_ACK",
-            {
-                "workflow_route": "BLACKBOARD_CONTEXT_TO_SPIRAL_TURN",
-                "trigger_event_ids": trigger_ids,
-                "genome_node_id": node_id,
-                "turn": turn.turn,
-                "outcome": turn.outcome,
-                "scientific_truth_implied": False,
-            },
-            parent_event_ids=trigger_ids,
-            genome_node_ids=[node_id],
+            agent_id, "CAUSAL_ACK",
+            {"workflow_route": "BLACKBOARD_CONTEXT_TO_SPIRAL_TURN", "trigger_event_ids": trigger_ids, "genome_node_id": node_id, "turn": turn.turn, "outcome": turn.outcome, "scientific_truth_implied": False},
+            parent_event_ids=trigger_ids, genome_node_ids=[node_id],
         )
         bind = self.blackboard.bind_genome(agent_id, node_id, parent_event_ids=[ack.event_id])
-        return {
-            "turn": turn.to_dict(),
-            "genome_node_id": node_id,
-            "causal_ack_event_id": ack.event_id,
-            "genome_bind_event_id": bind.event_id,
-        }
+        return {"turn": turn.to_dict(), "genome_node_id": node_id, "causal_ack_event_id": ack.event_id, "genome_bind_event_id": bind.event_id}
 
     def record_failure(self, agent_id: str, attempted_state: Any, lesson: str, *, trigger_event_ids: Iterable[str]) -> Dict[str, Any]:
-        return self.commit_turn(
-            agent_id,
-            attempted_state,
-            trigger_event_ids=trigger_event_ids,
-            lessons=[lesson],
-            promoted=False,
-            outcome="INTEGRATED_LESSON",
-        )
+        return self.commit_turn(agent_id, attempted_state, trigger_event_ids=trigger_event_ids, lessons=[lesson], promoted=False, outcome="INTEGRATED_LESSON")
 
     def validate(self) -> None:
         self.blackboard.validate()
@@ -134,7 +71,7 @@ class KenshiSpiralSwarmRuntime:
     def to_dict(self) -> Dict[str, Any]:
         self.validate()
         return {
-            "schema": "janus.swarm.kenshi_spiral_runtime.v1",
+            "schema": "janus.swarm.kenshi_spiral_runtime.v1.2",
             "model": "KENSHI_LOCAL_AGENTS_PLUS_BLACKBOARD_PLUS_SPIRAL_GENOME_PLUS_TOPA",
             "foundation": "Hawkar-usls/Janus_Genesis:.janus/KENSHI_SWARM_FOUNDATION.json",
             "epistemic_foundation": "Hawkar-usls/Janus_Genesis:.janus/TOPA_FOUNDATION.json",
@@ -148,6 +85,8 @@ class KenshiSpiralSwarmRuntime:
                 "causal_ack_proves_scientific_truth": False,
                 "same_source_multi_agent_is_independent_replication": False,
                 "topa_assessment_proves_scientific_truth": False,
+                "raw_provenance_may_be_erased_during_handoff": False,
+                "prediction_may_be_redefined_after_outcome": False,
                 "unresolved_is_valid": True,
             },
         }
@@ -167,27 +106,28 @@ def self_test() -> None:
     assessment = runtime.assess_claim({
         "claim_id": "C-A",
         "origin_agent_id": "A",
+        "raw_claim_text": "x was observed in source s",
         "claim_text": "x was observed in source s",
         "claim_kind": "OBSERVED",
+        "provenance_channel": "DIRECT_OBSERVATION",
+        "firsthand_status": "FIRSTHAND",
+        "event_time": "self-test",
+        "event_location": "source-s",
         "source_pointers": ["s"],
         "alternative_hypotheses": [],
         "falsification_tests": ["inspect an independent source"],
         "status": "SOURCE_BOUND_OBSERVATION",
         "confidence": "MEDIUM",
     })
-    result = runtime.commit_turn(
-        "B",
-        {"role": "SCOUT", "status": "ACTIVE", "local_state": {"phase": 1}},
-        trigger_event_ids=[handoff.event_id],
-        lessons=["Peer handoff changed the local work frontier without replacing identity."],
-    )
+    result = runtime.commit_turn("B", {"role": "SCOUT", "status": "ACTIVE", "local_state": {"phase": 1}}, trigger_event_ids=[handoff.event_id], lessons=["Peer handoff changed the local work frontier without replacing identity or provenance."])
     assert assessment["admissible"] is True
     assert assessment["world_truth_implied"] is False
+    assert assessment["raw_ledger_rewritten"] is False
     assert result["genome_node_id"] in runtime.spiral.genome.by_entity["B"]
     assert runtime.blackboard.agents["A"]["lineage_id"] == "L-A"
     assert runtime.blackboard.agents["B"]["lineage_id"] == "L-B"
     runtime.validate()
-    print("JANUS_KENSHI_TOPA_SPIRAL_RUNTIME_SELF_TEST=PASS")
+    print("JANUS_KENSHI_TOPA_SPIRAL_RUNTIME_V1_2_SELF_TEST=PASS")
 
 
 if __name__ == "__main__":
