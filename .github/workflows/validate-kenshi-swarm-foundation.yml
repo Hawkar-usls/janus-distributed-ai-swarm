@@ -6,14 +6,18 @@ on:
     paths:
       - '.janus/KENSHI_SWARM_FOUNDATION.json'
       - 'tools/kenshi_swarm_blackboard.py'
+      - 'tools/kenshi_swarm_runtime.py'
       - 'tests/test_kenshi_swarm_blackboard.py'
+      - 'tests/test_kenshi_swarm_runtime.py'
       - '.github/workflows/validate-kenshi-swarm-foundation.yml'
   push:
     branches: [main]
     paths:
       - '.janus/KENSHI_SWARM_FOUNDATION.json'
       - 'tools/kenshi_swarm_blackboard.py'
+      - 'tools/kenshi_swarm_runtime.py'
       - 'tests/test_kenshi_swarm_blackboard.py'
+      - 'tests/test_kenshi_swarm_runtime.py'
       - '.github/workflows/validate-kenshi-swarm-foundation.yml'
   workflow_dispatch:
 
@@ -35,10 +39,12 @@ jobs:
           p=json.load(open('.janus/KENSHI_SWARM_FOUNDATION.json'))
           assert p['status']=='ACTIVE_RUNTIME_FOUNDATION'
           assert p['canonical_foundation']['repository']=='Hawkar-usls/Janus_Genesis'
+          assert p['primary_entrypoint']=='tools/kenshi_swarm_runtime.py'
           assert 'SYNC_STATE_NOT_IDENTITY' in p['foundation_laws']
           assert 'FACTS_MAY_CLUSTER__AGENTS_MUST_NOT' in p['foundation_laws']
           PY
-      - name: Run blackboard self-test and unit tests
+      - name: Run blackboard and composite runtime tests
         run: |
           python tools/kenshi_swarm_blackboard.py
-          python -m unittest tests.test_kenshi_swarm_blackboard
+          python tools/kenshi_swarm_runtime.py
+          python -m unittest tests.test_kenshi_swarm_blackboard tests.test_kenshi_swarm_runtime
