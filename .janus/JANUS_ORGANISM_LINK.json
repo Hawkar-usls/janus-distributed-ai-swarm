@@ -1,0 +1,16 @@
+{
+  "schema": "janus.organism.member_link.v1",
+  "organism_id": "JANUS_FEDERATED_ORGANISM",
+  "canonical_manifest": "Hawkar-usls/Janus:organism/JANUS_ORGANISM_v1.json",
+  "member_repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "organ_key": "sensorimotor_mesh",
+  "role": "SENSORIMOTOR_AND_EMBEDDED_MESH",
+  "consumes": ["BOUNDED_COMMAND", "CONFIG", "RECOVERY_POLICY"],
+  "emits": ["TELEMETRY", "HEARTBEAT", "DEVICE_STATE", "PROTOCOL_RECEIPT"],
+  "routes_to": ["guardian_cortex", "memory", "gateway", "orchestrator"],
+  "authority": "LOCAL_DEVICE_AND_TELEMETRY_SCOPE",
+  "evidence_authority": true,
+  "authority_delta": 0,
+  "cross_repo_write_default": "DENY",
+  "claim_boundary": ["SENSOR_TRUTH != PREDICTION", "TELEMETRY != WORLD_MODEL", "NODE_NAME != INTELLIGENCE_CLAIM"]
+}
