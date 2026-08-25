@@ -1,0 +1,47 @@
+{
+  "artifact_id": "JANUS-LEGACY-HIVE-BUZZ-PROTOCOL-LINEAGE-2026-08-25",
+  "status": "SANITIZED_HISTORICAL_PROTOCOL_LINEAGE",
+  "sources": [
+    {
+      "name": "ONE(2) mod_hive_nexus.py",
+      "sha256": "5226ae44d7d624a1b4e38d3dee921731e4cc77e17e4c8694d47aeb841322cea7",
+      "role": "early LAN discovery and JSON-ingestion swarm precursor"
+    },
+    {
+      "name": "JANUS_BUZZ_COLONY_MASTER_AUDIO_v36_8_RESCUE_PRIME_FULL.ino",
+      "sha256": "37cb1e5647ac0c549bed8b1562df3cd4b2e1398dd24ee882c495d0f967fe2f8a",
+      "role": "later embedded colony-master and recovery lineage"
+    }
+  ],
+  "preserved_mechanisms": {
+    "hive_nexus": [
+      "LAN node discovery",
+      "master/worker topology",
+      "JSON state ingestion and memory linkage"
+    ],
+    "buzz_v36_8": [
+      "ESP-NOW JobPacket / ShareResponse / EntropyReport packet roles",
+      "broadcast current work to voluntary workers",
+      "queue remote share responses before upstream relay",
+      "worker entropy/RSSI/ACK telemetry",
+      "cryptographically exact Merkle-root construction and explicit byte-order handling in the historical Stratum path",
+      "separate recovery behavior for brownout/deep-battery audio state",
+      "dual-core separation of UI/audio-facing and vault/miner responsibilities"
+    ]
+  },
+  "important_distinction": "The audio/UI and mining functions document historical co-residency on one embedded node; they are not required semantics of the modern JANUS swarm protocol.",
+  "security_boundary": [
+    "The older Hive transport had no authentication/signatures/replay prevention and is not a secure modern protocol.",
+    "Raw historical firmware is not published by this receipt because local credentials/private endpoints may be embedded in archived revisions.",
+    "Modern nodes must use current repository fencing, authority ceilings and verifier rules rather than inheriting old trust assumptions.",
+    "Historical accepted-share behavior demonstrates implementation lineage, not a claim of mining advantage."
+  ],
+  "modern_reusable_pattern": [
+    "typed packet families",
+    "independent verification before relay",
+    "health/entropy telemetry separated from factual authority",
+    "node role separation",
+    "recovery from partial subsystem failure without rewriting shared truth"
+  ],
+  "cross_registry": "Hawkar-usls/janus-meta-registry::data/JANUS-ONE-NOV2025-JAN2026-ARCHAEOLOGY-v1.0/60-hive-nexus-swarm-early-protocol.json"
+}
