@@ -1,4 +1,4 @@
-name: validate-adv-elite-rc1
+name: validate-adv-elite-rc2
 
 on:
   push:
@@ -43,6 +43,8 @@ jobs:
           arduino-cli lib install "M5Unit-ENV"
           arduino-cli lib install "TinyGPSPlus"
           arduino-cli lib install "RadioLib"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "ESP8266Audio"
 
       - name: Normalize sketch name for case-sensitive runner
         run: |
@@ -60,7 +62,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
-              | tail -n 25 \
+              | tail -n 40 \
               | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
               | while IFS= read -r line; do echo "::error::$line"; done
             exit "$status"
