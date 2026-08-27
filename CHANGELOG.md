@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-27 - Autonomous specialist doctrine from Zim experiment
+
+- Added `docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md` as a mandatory design rule for future swarm-node upgrades.
+- Froze `PRIMARY_MISSION + BOUNDED_SIDE_QUESTS` as the default heterogeneous-node architecture: each node protects its specialization while accepting only bounded coordinator side-work.
+- Added `SELF_TESTED_ACCELERATION_ONLY`: fast paths must prove required equivalence against a trusted reference, benchmark better, retain cross-checks where practical and fall back on mismatch.
+- Promoted the Zim-style Quiet Canary resource hierarchy: optional UI/logging/background study/side-work degrades before the primary mission.
+- Froze `IMMUTABLE_TRUTH_CORE + LEARNABLE_POLICY_AROUND_IT` for safe online learning.
+- Added versioned/throttled persistence and autonomy-without-information-isolation requirements.
+- Preserved current Zim behavior as an observation target rather than normalizing it into an obedient worker.
+- Added `docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md`, binding the generalizable Zim properties into the ADV_Elite rebuild architecture without deciding the still-separate learned-candidate auto-promotion question.
+- Added a pull-request checklist and `.janus/AUTONOMOUS_SPECIALIST_DOCTRINE.json` binding so the doctrine is visible during future node reviews.
+
 ## 2026-06-17 - Sync public repo with current distributed swarm
 
 - Expanded public firmware map from the older eight-node drop to the current
