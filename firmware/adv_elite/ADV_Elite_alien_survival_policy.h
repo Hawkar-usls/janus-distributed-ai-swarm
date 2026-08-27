@@ -1,6 +1,14 @@
 #pragma once
 #include <stdint.h>
 
+// Arduino defines sq(x) as a macro. The Alien runtime intentionally owns a
+// tiny local helper with that historical name, so remove the global macro
+// before the runtime class is parsed. No ADV_Elite module relies on Arduino's
+// sq macro; explicit multiplication remains clearer in truth-critical code.
+#ifdef sq
+#undef sq
+#endif
+
 namespace janus_adv_elite {
 
 // Architecture contract for the final ADV_Elite A-mode.
