@@ -1,0 +1,72 @@
+name: Build ADV Elite monolithic 2bek
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-adv-monolith.yml'
+      - 'firmware/adv_elite/ADV_Elite.ino'
+      - 'firmware/adv_elite/ADV_Elite_mode_contract.h'
+      - 'firmware/adv_elite/ADV_Elite_illumination_policy.h'
+      - 'firmware/adv_elite/ADV_Elite_alien_survival_runtime.h'
+      - 'firmware/adv_elite/ADV_Elite_alien_survival_policy.h'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  monolith:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inline local ADV headers into 2bek.ino
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('firmware/adv_elite')
+          inline_names = {
+              'ADV_Elite_mode_contract.h',
+              'ADV_Elite_illumination_policy.h',
+              'ADV_Elite_alien_survival_runtime.h',
+              'ADV_Elite_alien_survival_policy.h',
+          }
+
+          def inline_file(path: Path, stack=()):
+              if path.name in stack:
+                  raise RuntimeError(f'cyclic include: {stack} -> {path.name}')
+              out = []
+              for line in path.read_text(encoding='utf-8').splitlines(keepends=True):
+                  s = line.strip()
+                  if s == '#pragma once':
+                      continue
+                  if s.startswith('#include "') and s.endswith('"'):
+                      name = s[len('#include "'):-1]
+                      if name in inline_names:
+                          out.append(f'\n// ===== BEGIN INLINED {name} =====\n')
+                          out.append(inline_file(root / name, stack + (path.name,)))
+                          out.append(f'// ===== END INLINED {name} =====\n\n')
+                          continue
+                  out.append(line)
+              return ''.join(out)
+
+          body = inline_file(root / 'ADV_Elite.ino')
+          banner = '''/*\n  JANUS ADV_ELITE RC2 — MONOLITHIC 2bek FIRST-FLASH SOURCE\n  Auto-generated from the canonical modular ADV_Elite sources.\n  Local ADV_Elite_*.h dependencies are inlined into this one sketch.\n  Place as: C:\\ArduinoWork\\2bek\\2bek.ino\n*/\n\n'''
+          out_dir = root / '2bek'
+          out_dir.mkdir(parents=True, exist_ok=True)
+          (out_dir / '2bek.ino').write_text(banner + body, encoding='utf-8')
+          PY
+
+      - name: Commit monolithic sketch
+        run: |
+          git config user.name "JANUS Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/2bek/2bek.ino
+          if git diff --cached --quiet; then
+            echo "2bek.ino already current"
+            exit 0
+          fi
+          git commit -m "build(adv): generate monolithic 2bek first-flash sketch"
+          git push
