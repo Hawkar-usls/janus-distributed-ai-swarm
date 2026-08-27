@@ -1,6 +1,20 @@
 #pragma once
 #include <stdint.h>
 
+// RC2 compile guards.
+// Arduino defines sq(x) as a macro; the Alien runtime owns a private sq(float)
+// helper, so remove the macro before that header is parsed.
+#ifdef sq
+#undef sq
+#endif
+
+// Compatibility alias for the single RC2 pet-clamp typo in ADV_Elite.ino.
+// Semantics are exactly Arduino constrain(); this can disappear when that
+// source line is rewritten during the next source-format pass.
+#ifndef comstrain
+#define comstrain constrain
+#endif
+
 namespace janus_adv_elite {
 
 // One foreground view at a time. JANUS core/background organs remain alive.
