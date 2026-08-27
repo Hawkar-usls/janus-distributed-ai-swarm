@@ -102,7 +102,7 @@ Hardware, RF, power, thermal, and unattended-operation risks depend on the physi
 
 ## License
 
-Current maintained revisions: **JANUS Distributed AI Swarm Source-Available Evaluation License v1.0**.
+Current maintained revisions: **JANUS Distributed AI Swarm Source-Available Evaluation License v1.1**.
 
 Commercial, production, OEM, white-label, hosted, sublicensing, and acquisition rights require a separate written agreement unless a specific file states otherwise.
 
