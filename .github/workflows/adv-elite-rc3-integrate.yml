@@ -1,0 +1,167 @@
+name: integrate-adv-elite-rc3
+
+on:
+  push:
+    branches: [chatgpt/adv-elite-rc3-pixel-radio]
+    paths:
+      - '.github/workflows/adv-elite-rc3-integrate.yml'
+      - 'firmware/adv_elite/ADV_Elite_alien_survival_runtime.h'
+      - 'firmware/adv_elite/ADV_Elite_wifi_manager.h'
+      - 'firmware/adv_elite/ADV_Elite_primary_credential.h'
+      - 'firmware/adv_elite/partitions.csv'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/adv-elite-rc3-pixel-radio
+
+      - name: Integrate RC3 adapters into canonical ADV source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('firmware/adv_elite/ADV_Elite.ino')
+          s = p.read_text(encoding='utf-8')
+
+          def once(old, new, label):
+              global s
+              if new in s:
+                  return
+              if old not in s:
+                  raise SystemExit(f'PATCH MISS: {label}')
+              s = s.replace(old, new, 1)
+
+          once(
+              '#include "ADV_Elite_alien_survival_runtime.h"',
+              '#include "ADV_Elite_alien_survival_runtime.h"\n#include "ADV_Elite_wifi_manager.h"\n#include "ADV_Elite_primary_credential.h"',
+              'headers')
+
+          once(
+              'AlienSurvivalRuntime alien;\nAlienPerformanceGovernor alienGovernor;\nPreferences prefs;',
+              'AlienSurvivalRuntime alien;\nAlienPerformanceGovernor alienGovernor;\nAdvWifiManager advWifi;\nPreferences prefs;',
+              'wifi global')
+
+          once(
+              'if(!brainWaveEnabled||hardMute||masterVolume==0||radioState.engineRunning||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;',
+              'if(!brainWaveEnabled||hardMute||masterVolume==0||mode.mode==ForegroundMode::RADIO_R||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;',
+              'brainwave exclusive modes')
+
+          marker = '// -------------------------- BrainWave synthesis core --------------------------'
+          lease = r'''
+// -------------------------- exclusive foreground audio lease --------------------------
+bool radioAudioLease=false;
+bool brainWaveBeforeRadio=true;
+void acquireRadioAudioLease(){
+  if(radioAudioLease)return;
+  brainWaveBeforeRadio=brainWaveEnabled;
+  brainWaveEnabled=false;
+  radioStopEngine();
+  M5Cardputer.Speaker.stop();
+  radioAudioLease=true;
+  lastBrainNoteMs=millis();
+}
+void releaseRadioAudioLease(){
+  if(!radioAudioLease)return;
+  radioSetPlaying(false);
+  M5Cardputer.Speaker.stop();
+  radioAudioLease=false;
+  brainWaveEnabled=brainWaveBeforeRadio;
+  lastBrainNoteMs=millis();
+  applyVolume();
+}
+
+'''
+          if 'bool radioAudioLease=false;' not in s:
+              if marker not in s: raise SystemExit('PATCH MISS: audio lease marker')
+              s = s.replace(marker, lease + marker, 1)
+
+          once(
+              'void drawRadio(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);',
+              'void drawRadio(){auto& d=M5Cardputer.Display;if(advWifi.overlayActive()){advWifi.draw(d);return;}d.fillScreen(TFT_BLACK);',
+              'radio wifi overlay')
+          once(
+              'd.setCursor(2,78);d.print("SPACE play/pause   hold R refresh");',
+              'd.setCursor(2,78);d.print("SPACE play/pause  N WiFi  hold R refresh");',
+              'radio wifi hint')
+
+          once(
+              'struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;',
+              'struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,n=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;',
+              'edge n')
+
+          once(
+              'M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();handleCodeBuffer(ks);',
+              'M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();if(!advWifi.passwordEntry())handleCodeBuffer(ks);bool topHome=M5Cardputer.BtnA.wasPressed();',
+              'input prelude')
+
+          old_keys = "bool nEnter=ks.enter,nEsc=ks.esc,nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
+          new_keys = "bool nEnter=ks.enter,nEsc=ks.fn&&keyNow('`','~'),nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nN=keyNow('n','N'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
+          once(old_keys, new_keys, 'legacy key state')
+
+          once(
+              'if(rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R)radioSetPlaying(false);mode.escapeToHome();statusLine="HOME";}',
+              'if(topHome||rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R){releaseRadioAudioLease();advWifi.leaveRadio();}mode.escapeToHome();statusLine="HOME";}',
+              'universal home')
+
+          once(
+              'if(rising(nEnter,prevKey.enter)){hardMute=!hardMute;',
+              'if(!advWifi.overlayActive()&&rising(nEnter,prevKey.enter)){hardMute=!hardMute;',
+              'enter reserved during wifi UI')
+
+          once(
+              'if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);statusLine="RADIO";if(!radioState.count)radioRefreshCatalog();}',
+              'if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);acquireRadioAudioLease();advWifi.enterRadio();statusLine="RADIO";if(advWifi.connected()&&!radioState.count)radioRefreshCatalog();}',
+              'radio entry lease')
+
+          once(
+              "bool left=ks.left||keyNow('a','A'),right=ks.right||keyNow('d','D'),up=ks.up||keyNow('w','W'),down=ks.down||keyNow('s','S');",
+              "bool left=ks.fn&&keyNow(',','<'),right=ks.fn&&keyNow('/','?'),up=ks.fn&&keyNow(';',':'),down=ks.fn&&keyNow('.','>');",
+              'physical fn arrows')
+
+          old_radio = 'else if(mode.mode==ForegroundMode::RADIO_R){if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}'
+          new_radio = '''else if(mode.mode==ForegroundMode::RADIO_R){
+    if(advWifi.overlayActive()){
+      if(advWifi.passwordEntry()&&M5Cardputer.Keyboard.isChange()&&M5Cardputer.Keyboard.isPressed()&&!ks.fn){for(char c:ks.word)advWifi.onChar(c);if(ks.del)advWifi.onBackspace();}
+      if(rising(up,prevKey.up))advWifi.onUp();if(rising(down,prevKey.down))advWifi.onDown();if(rising(nEnter,prevKey.enter))advWifi.onEnter();
+      prevKey.left=left;prevKey.right=right;prevKey.space=nSpace;
+    }else{
+      if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(rising(nN,prevKey.n)){radioSetPlaying(false);advWifi.forceScan();}if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}
+    }
+  }'''
+          once(old_radio, new_radio, 'radio wifi input')
+
+          once(
+              'if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}',
+              'if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}if(mode.mode!=ForegroundMode::RADIO_R)prevKey.n=nN;',
+              'n edge update')
+
+          once(
+              'loadPet();alien.begin();buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();',
+              'loadPet();alien.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();',
+              'wifi boot')
+
+          once(
+              'alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();',
+              'advWifi.tick();if(mode.mode==ForegroundMode::RADIO_R&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();',
+              'wifi loop')
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit integrated source
+        run: |
+          git config user.name "JANUS RC3 Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/ADV_Elite.ino
+          if git diff --cached --quiet; then
+            echo "RC3 already integrated"
+          else
+            git commit -m "ADV Elite RC3: integrate radio audio lease, Fn controls and Wi-Fi fallback"
+            git push
+          fi
