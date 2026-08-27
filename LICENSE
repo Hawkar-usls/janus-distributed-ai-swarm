@@ -1,9 +1,92 @@
-MIT License
+JANUS Distributed AI Swarm Source-Available Evaluation License v1.0
 
-Copyright (c) 2026 Hawkar-usls / JANUS project
+Copyright (c) 2026 Hawkar-usls / JANUS project. All rights reserved except for the limited permissions expressly granted below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+1. SCOPE
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+This license applies to copyrightable source code, firmware, scripts, documentation, schemas, protocol descriptions, designs, tests, and other material in repository revisions that contain this license, except where a file or third-party notice expressly states another license.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+This is a source-available evaluation license. It is not an open-source license.
+
+2. LIMITED EVALUATION GRANT
+
+Subject to this license, you may:
+
+- view and inspect the Materials;
+- run an unmodified copy internally for non-production technical evaluation;
+- perform internal security, interoperability, hardware, partnership, procurement, research, or due-diligence assessment;
+- make the minimum temporary or internal copies reasonably necessary for those permitted evaluation activities.
+
+This permission is non-exclusive, non-transferable, non-sublicensable, revocable upon material breach, and limited to evaluation.
+
+3. RIGHTS NOT GRANTED
+
+Without a separate written agreement from the copyright holder, you may not:
+
+- use the Materials or substantial derivatives in production or in a live commercial service;
+- sell, sublicense, rent, white-label, host for third parties, monetize, or otherwise commercially exploit the Materials;
+- redistribute modified or unmodified copies outside permitted internal evaluation;
+- create or distribute derivative works based on protected source code, documentation, visual assets, protocol expression, or other copyrightable expression in the Materials;
+- use substantial protected expression from the Materials to build or operate a competing commercial product or service;
+- remove or obscure copyright, provenance, safety, or licensing notices;
+- represent the Materials as your own original work.
+
+4. COMMERCIAL, OEM, AND ACQUISITION RIGHTS
+
+Commercial deployment, OEM use, hosted services, white-label use, integration into a commercial distributed-compute platform, resale, sublicensing, exclusive field-of-use rights, or acquisition/assignment of project IP require a separate signed agreement with the copyright holder.
+
+Access to this public repository, a fork, a clone, participation in evaluation, or access to documentation does not transfer ownership of JANUS, JANUS HELIOS, other JANUS repositories, seller know-how, future inventions, personal accounts, credentials, partner relationships, or trademarks.
+
+5. PATENTS, IDEAS, KNOW-HOW, AND TRADEMARKS
+
+No patent license, covenant not to sue, trademark license, trade-secret license, or other implied intellectual-property license is granted.
+
+Copyright protects copyrightable expression; it does not by itself create an exclusive right over every abstract idea, algorithm, architecture, workflow, protocol concept, or business model described by the Materials. Any patent, trademark, contractual, database, trade-secret, or other rights are separate legal questions.
+
+No patent or registered-trademark status is claimed unless separately documented by a verified filing or registration.
+
+6. HISTORICAL MIT-LICENSED REVISIONS
+
+This license does not retroactively revoke rights that were validly granted under the MIT License for historical repository revisions published under that license.
+
+The last repository snapshot before this relicensing step was commit:
+
+b644af87de104b405427a8c0ae3c35c8d192507c
+
+Recipients who obtained material from an MIT-licensed historical revision may continue to exercise the rights granted for that historical material under the applicable MIT terms.
+
+However, new material and modifications first published in revisions carrying this Source-Available Evaluation License are not offered under MIT merely because an earlier ancestor was MIT-licensed. Historical MIT rights do not automatically extend to later proprietary additions or modifications.
+
+See LICENSE_HISTORY.md for the repository licensing timeline.
+
+7. THIRD-PARTY MATERIAL
+
+Third-party libraries, SDKs, board-support packages, vendor components, fonts, media, or other external material retain their own licenses. This license does not override third-party terms. See THIRD_PARTY_NOTICES.md and the relevant upstream projects before redistribution or commercial deployment.
+
+8. CONTRIBUTIONS
+
+A contribution does not transfer ownership of pre-existing project Materials. Contributors must have the right to submit their contribution and must identify material subject to a separate license. Acceptance of a contribution does not grant commercial rights to the project as a whole.
+
+A future commercial or acquisition transaction should perform a complete contribution and chain-of-title review and obtain any additional assignments or licenses required for the exact closing snapshot.
+
+9. SECURITY, HARDWARE, AND REGULATED DEPLOYMENT
+
+This license does not certify or authorize unattended hardware deployment, financial activity, cryptocurrency/mining operations, gambling, safety-critical use, regulated services, or production distributed-compute operation. Such deployments require separate engineering, security, legal, regulatory, privacy, safety, and commercial review as applicable.
+
+10. TERMINATION
+
+Rights under this license terminate automatically upon material breach. On termination, you must stop uses that depend on this license and delete evaluation copies not required by law or immutable compliance records.
+
+Termination of this evaluation license does not purport to terminate independent rights previously and validly granted under an applicable historical MIT-licensed revision.
+
+11. NO WARRANTY
+
+THE MATERIALS ARE PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, SECURITY, AVAILABILITY, OR FITNESS FOR PRODUCTION OR REGULATED DEPLOYMENT.
+
+12. SEPARATE AGREEMENTS CONTROL
+
+A separately signed agreement with the copyright holder may grant additional rights and, to the extent of a conflict, controls for that contracting party.
+
+13. RESERVATION OF RIGHTS
+
+All rights not expressly granted are reserved.
