@@ -6,7 +6,7 @@
   "last_reviewed": "2026-08-27",
   "maturity": "ACTIVE_ENGINEERING",
   "completion_status": "ONGOING_DEVELOPMENT",
-  "summary": "Public ESP32/M5Stack firmware collection for heterogeneous telemetry, observer, UI and experimental worker nodes with explicit protocol, recovery, cumulative spiral-evolution and shared genome-lineage boundaries.",
+  "summary": "Public ESP32/M5Stack firmware collection for heterogeneous telemetry, observer, UI and experimental specialist nodes with explicit protocol, recovery, protected primary missions, bounded coordinator side-work, cumulative spiral-evolution and shared genome-lineage boundaries.",
   "licensing": {
     "current": "JANUS_DISTRIBUTED_AI_SWARM_SOURCE_AVAILABLE_EVALUATION_LICENSE_V1_0",
     "open_source_current": false,
@@ -35,12 +35,21 @@
     "credential separation through examples/ignored local configuration",
     "Demiurge spiral binding for persistent learning identity, failed-attempt lessons, stale-node lineage and recovery ascent",
     "SWARM_GENOME_LEDGER joining per-entity SpiralLedgers into one append-only bidirectionally traversable genealogy",
-    "Buzz coordinator/worker distribution lineage relevant to generalized HELIOS swarm orchestration"
+    "Buzz coordinator/worker distribution lineage relevant to generalized HELIOS swarm orchestration",
+    "AUTONOMOUS_SPECIALIST_DOCTRINE requiring protected primary missions, bounded side-quests, safe local autonomy, self-tested acceleration, persistent learning with flash-wear guards and continued swarm visibility",
+    "ADV_Elite architecture adoption of the generalizable Zim specialist properties without copying mining-specific lore or treating SHA rarity as intelligence",
+    "pull-request review checklist enforcing primary-mission, side-work-budget, immutable-truth, acceleration, persistence and autonomy checks"
   ],
   "invariants": [
     "sensor truth must be distinguishable from prediction, memory and UI fiction",
     "observer-only nodes must not increase submit pressure",
     "adaptive work scheduling must not alter SHA-256, target math, pool difficulty or submit semantics",
+    "every upgraded node declares a protected primary mission",
+    "coordinator side-work is explicitly bounded and must not silently starve the node's specialization",
+    "new acceleration paths must prove required semantic equivalence against a trusted reference before promotion and retain a safe fallback",
+    "online learning is restricted to a bounded safe policy space around immutable truth, protocol and user-control semantics",
+    "useful local learning may persist across reboot only with versioning, throttled writes and a known-good fallback",
+    "autonomous local policy does not remove heartbeat, health, provenance or trusted swarm visibility",
     "recovery and stale-node handling must remain inspectable",
     "learning identities and their failed attempts must not be silently erased; bounded active windows require archive or durable summary",
     "recovery advances lineage as a new spiral turn rather than erasing the failed turn through rollback semantics",
@@ -48,6 +57,14 @@
     "cross-entity specialization or synthesis names explicit parent genome nodes instead of replacing them",
     "DNA/genome language is an architecture metaphor for lineage and paired identity/evidence strands, not a biological claim"
   ],
+  "autonomous_specialist_doctrine": {
+    "document": "docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md",
+    "machine_readable": "docs/JANUS_AUTONOMOUS_SPECIALIST_DOCTRINE_2026-08-27.json",
+    "reference_experiment": "ZimGeek autonomy and Buzz leaderboard behavior",
+    "canonical_formula": "PRIMARY_MISSION + BOUNDED_SIDE_QUESTS + LOCAL_AUTONOMY + SHARED_STATE",
+    "zim_keep_unchanged": true,
+    "adv_elite_profile": "docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md"
+  },
   "transaction_truth": {
     "complete_chain_of_title_claimed_without_closing_review": false,
     "automated_sbom_scan_claimed_complete": false,
@@ -67,6 +84,7 @@
   "review_start": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/PROJECT_MAP.md",
   "technical_boundaries": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/technical-boundaries.md",
   "critical_rules": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/swarm-critical-rules.md",
+  "autonomous_specialist_rules": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md",
   "demiurge_spiral_binding": ".janus/DEMIURGE_SPIRAL_LINK.json",
   "swarm_genome_binding": ".janus/SWARM_GENOME_LEDGER_LINK.json",
   "visibility_policy": "https://github.com/Hawkar-usls/Janus/blob/main/portfolio-visibility.json"
