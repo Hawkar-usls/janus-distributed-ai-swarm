@@ -1,0 +1,25 @@
+{
+  "schema": "janus.repo.binding.v1",
+  "binding": "AUTONOMOUS_SPECIALIST_DOCTRINE",
+  "status": "ACTIVE_MANDATORY_DESIGN_RULE",
+  "created_at": "2026-08-27T17:18:00+03:00",
+  "canonical_rule": "PRIMARY_MISSION + BOUNDED_SIDE_QUESTS + LOCAL_AUTONOMY + SHARED_STATE",
+  "human_readable": "docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md",
+  "machine_readable": "docs/JANUS_AUTONOMOUS_SPECIALIST_DOCTRINE_2026-08-27.json",
+  "adv_elite_profile": "docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md",
+  "review_enforcement": ".github/PULL_REQUEST_TEMPLATE.md",
+  "reference_experiment": {
+    "node": "ZimGeek",
+    "decision": "KEEP_UNCHANGED_AND_OBSERVE",
+    "lesson": "Autonomous specialist behavior can coexist with swarm contribution; overall node strength and coordinator-attributed work should remain distinguishable."
+  },
+  "required_principles": [
+    "PRIMARY_MISSION_BOUNDED_SIDE_QUESTS",
+    "SELF_TESTED_ACCELERATION_ONLY",
+    "QUIET_CANARY_RESOURCE_HIERARCHY",
+    "IMMUTABLE_TRUTH_CORE_LEARNABLE_POLICY",
+    "PERSISTENT_LEARNING_FLASH_WEAR_GUARD",
+    "AUTONOMY_WITHOUT_INFORMATION_ISOLATION"
+  ],
+  "claim_boundary": "This doctrine does not claim mining superiority, SHA predictability, AGI, precognition or hidden causality."
+}
