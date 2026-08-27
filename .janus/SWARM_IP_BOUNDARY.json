@@ -1,0 +1,47 @@
+{
+  "schema": "janus.swarm.ip-boundary.v1",
+  "artifact_id": "JANUS-DISTRIBUTED-AI-SWARM-IP-BOUNDARY-2026-08-27-v1.0",
+  "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "current_license": "JANUS_DISTRIBUTED_AI_SWARM_SOURCE_AVAILABLE_EVALUATION_LICENSE_V1_1",
+  "current_open_source": false,
+  "historical_license": {
+    "license": "MIT",
+    "last_snapshot": "b644af87de104b405427a8c0ae3c35c8d192507c",
+    "rights_retroactively_revoked": false,
+    "first_source_available_relicense_commit": "a1df4ee660f523bf014d739726458ecd1c909587"
+  },
+  "commercial_boundary": {
+    "public_viewing": true,
+    "internal_evaluation": true,
+    "production_use_without_written_agreement": false,
+    "commercial_use_without_written_agreement": false,
+    "white_label_without_written_agreement": false,
+    "oem_without_written_agreement": false,
+    "sublicensing_without_written_agreement": false,
+    "acquisition_assignment_without_written_agreement": false
+  },
+  "helios_relationship": {
+    "repository": "Hawkar-usls/Janus-HELIOS",
+    "classification": "BACKGROUND_ENGINEERING_AND_LINEAGE",
+    "entire_swarm_repository_included_in_helios_sale_by_default": false,
+    "access_to_swarm_grants_helios_ownership": false,
+    "access_to_helios_grants_swarm_ownership": false,
+    "exact_background_ip_scope_required_in_transaction": true
+  },
+  "copyright_truth": {
+    "protects_specific_expression": true,
+    "abstract_ideas_monopolized_by_copyright": false,
+    "patent_status_claimed": false,
+    "trade_secret_status_claimed_for_public_material": false
+  },
+  "provenance": {
+    "owner_identity_in_public_repository": "Hawkar-usls / JANUS project",
+    "ai_assisted_development_disclosed": true,
+    "third_party_dependencies_exist": true,
+    "third_party_register": "THIRD_PARTY_NOTICES.md",
+    "complete_chain_of_title_claimed_without_closing_review": false,
+    "closing_sbom_required": true,
+    "closing_contribution_review_required": true
+  },
+  "invariant": "HISTORICAL_MIT_IS_NOT_ERASED; LATER_SOURCE_AVAILABLE_ADDITIONS_ARE_NOT_AUTOMATICALLY_MIT; COMMERCIAL_RIGHTS_REQUIRE_EXACT_WRITTEN_SCOPE; HELIOS_AND_SWARM_REMAIN_SEPARATE_ASSETS_UNLESS_EXPRESSLY_INCLUDED."
+}
