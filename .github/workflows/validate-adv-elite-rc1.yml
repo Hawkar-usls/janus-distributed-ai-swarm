@@ -1,22 +1,92 @@
-name: validate-adv-elite-rc2
+name: validate-and-build-adv-elite-rc3
 
 on:
   push:
-    paths:
-      - 'firmware/adv_elite/**'
-      - '.github/workflows/validate-adv-elite-rc1.yml'
-  pull_request:
+    branches: [chatgpt/adv-elite-rc3-pixel-radio]
     paths:
       - 'firmware/adv_elite/**'
       - '.github/workflows/validate-adv-elite-rc1.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   compile:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/adv-elite-rc3-pixel-radio
+
+      - name: Integrate RC3 into ADV source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('firmware/adv_elite/ADV_Elite.ino')
+          s=p.read_text(encoding='utf-8')
+          def once(old,new,label):
+            global s
+            if new in s: return
+            if old not in s: raise SystemExit('PATCH MISS: '+label)
+            s=s.replace(old,new,1)
+
+          once('#include "ADV_Elite_alien_survival_runtime.h"',
+               '#include "ADV_Elite_alien_survival_runtime.h"\n#include "ADV_Elite_wifi_manager.h"\n#include "ADV_Elite_primary_credential.h"','headers')
+          once('AlienSurvivalRuntime alien;\nAlienPerformanceGovernor alienGovernor;\nPreferences prefs;',
+               'AlienSurvivalRuntime alien;\nAlienPerformanceGovernor alienGovernor;\nAdvWifiManager advWifi;\nPreferences prefs;','wifi-global')
+          once('if(!brainWaveEnabled||hardMute||masterVolume==0||radioState.engineRunning||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;',
+               'if(!brainWaveEnabled||hardMute||masterVolume==0||mode.mode==ForegroundMode::RADIO_R||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;','brainwave-radio-lease')
+
+          marker='// -------------------------- BrainWave synthesis core --------------------------'
+          lease='''// -------------------------- exclusive foreground audio lease --------------------------\nbool radioAudioLease=false;\nbool brainWaveBeforeRadio=true;\nvoid acquireRadioAudioLease(){if(radioAudioLease)return;brainWaveBeforeRadio=brainWaveEnabled;brainWaveEnabled=false;radioStopEngine();M5Cardputer.Speaker.stop();radioAudioLease=true;lastBrainNoteMs=millis();}\nvoid releaseRadioAudioLease(){if(!radioAudioLease)return;radioSetPlaying(false);M5Cardputer.Speaker.stop();radioAudioLease=false;brainWaveEnabled=brainWaveBeforeRadio;lastBrainNoteMs=millis();applyVolume();}\n\n'''
+          if 'bool radioAudioLease=false;' not in s:
+            if marker not in s: raise SystemExit('PATCH MISS: lease marker')
+            s=s.replace(marker,lease+marker,1)
+
+          once('void drawRadio(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);',
+               'void drawRadio(){auto& d=M5Cardputer.Display;if(advWifi.overlayActive()){advWifi.draw(d);return;}d.fillScreen(TFT_BLACK);','radio-overlay')
+          once('d.setCursor(2,78);d.print("SPACE play/pause   hold R refresh");',
+               'd.setCursor(2,78);d.print("SPACE play/pause  N WiFi  hold R refresh");','radio-hint')
+          once('struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;',
+               'struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,n=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;','edge-n')
+          once('M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();handleCodeBuffer(ks);',
+               'M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();if(!advWifi.passwordEntry())handleCodeBuffer(ks);bool topHome=M5Cardputer.BtnA.wasPressed();','input-prelude')
+
+          old="bool nEnter=ks.enter,nEsc=ks.esc,nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
+          new="bool nEnter=ks.enter,nEsc=ks.fn&&keyNow('`','~'),nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nN=keyNow('n','N'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
+          once(old,new,'key-state')
+          once('if(rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R)radioSetPlaying(false);mode.escapeToHome();statusLine="HOME";}',
+               'if(topHome||rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R){releaseRadioAudioLease();advWifi.leaveRadio();}mode.escapeToHome();statusLine="HOME";}','home')
+          once('if(rising(nEnter,prevKey.enter)){hardMute=!hardMute;',
+               'if(!advWifi.overlayActive()&&rising(nEnter,prevKey.enter)){hardMute=!hardMute;','enter-ui')
+          once('if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);statusLine="RADIO";if(!radioState.count)radioRefreshCatalog();}',
+               'if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);acquireRadioAudioLease();advWifi.enterRadio();statusLine="RADIO";if(advWifi.connected()&&!radioState.count)radioRefreshCatalog();}','radio-entry')
+          once("bool left=ks.left||keyNow('a','A'),right=ks.right||keyNow('d','D'),up=ks.up||keyNow('w','W'),down=ks.down||keyNow('s','S');",
+               "bool left=ks.fn&&keyNow(',','<'),right=ks.fn&&keyNow('/','?'),up=ks.fn&&keyNow(';',':'),down=ks.fn&&keyNow('.','>');",'fn-arrows')
+
+          old='else if(mode.mode==ForegroundMode::RADIO_R){if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}'
+          new='''else if(mode.mode==ForegroundMode::RADIO_R){if(advWifi.overlayActive()){if(advWifi.passwordEntry()&&M5Cardputer.Keyboard.isChange()&&M5Cardputer.Keyboard.isPressed()&&!ks.fn){for(char c:ks.word)advWifi.onChar(c);if(ks.del)advWifi.onBackspace();}if(rising(up,prevKey.up))advWifi.onUp();if(rising(down,prevKey.down))advWifi.onDown();if(rising(nEnter,prevKey.enter))advWifi.onEnter();prevKey.left=left;prevKey.right=right;prevKey.space=nSpace;}else{if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(rising(nN,prevKey.n)){radioSetPlaying(false);advWifi.forceScan();}if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}}'''
+          once(old,new,'radio-input')
+          once('if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}',
+               'if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}if(mode.mode!=ForegroundMode::RADIO_R)prevKey.n=nN;','edge-update')
+          once('loadPet();alien.begin();buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();',
+               'loadPet();alien.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();','wifi-boot')
+          once('alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();',
+               'advWifi.tick();if(mode.mode==ForegroundMode::RADIO_R&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();','wifi-loop')
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Persist integrated source on RC3 branch
+        run: |
+          git config user.name "JANUS RC3 Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/ADV_Elite.ino
+          if ! git diff --cached --quiet; then
+            git commit -m "ADV Elite RC3: integrate pixel-radio runtime"
+            git push
+          fi
 
       - name: Checkout pinned M5Cardputer ADV keyboard layer
         uses: actions/checkout@v4
@@ -46,24 +116,45 @@ jobs:
           arduino-cli lib install "ArduinoJson"
           arduino-cli lib install "ESP8266Audio"
 
-      - name: Normalize sketch name for case-sensitive runner
-        run: |
-          mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
+      - name: Normalize sketch name
+        run: mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
 
-      - name: Compile ADV Elite
+      - name: Compile ADV Elite RC3
         shell: bash
         run: |
-          set +e
+          set -o pipefail
+          rm -rf .adv_build && mkdir .adv_build
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --warnings all \
             --library _vendor/M5Cardputer \
+            --output-dir "$PWD/.adv_build" \
             firmware/adv_elite 2>&1 | tee /tmp/adv_compile.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
-              | tail -n 40 \
-              | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
-              | while IFS= read -r line; do echo "::error::$line"; done
-            exit "$status"
-          fi
+
+      - name: Merge 8MB factory base image
+        shell: bash
+        run: |
+          set -euo pipefail
+          BOOT=$(find .adv_build -maxdepth 1 -type f -name '*.bootloader.bin' | head -1)
+          PART=$(find .adv_build -maxdepth 1 -type f -name '*.partitions.bin' | head -1)
+          APP=$(find .adv_build -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' | head -1)
+          BOOTAPP=$(find "$HOME/.arduino15" -type f -name 'boot_app0.bin' | head -1)
+          ESPTOOL=$(find "$HOME/.arduino15" -type f -name 'esptool.py' | head -1)
+          test -n "$BOOT" && test -n "$PART" && test -n "$APP" && test -n "$BOOTAPP" && test -n "$ESPTOOL"
+          python3 "$ESPTOOL" --chip esp32s3 merge_bin \
+            -o .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin \
+            --flash_size 8MB \
+            0x0 "$BOOT" 0x8000 "$PART" 0xe000 "$BOOTAPP" 0x10000 "$APP"
+          truncate -s 8388608 .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin
+          sha256sum .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin > .adv_build/SHA256SUMS.txt
+          cp firmware/adv_elite/partitions.csv .adv_build/partitions.csv
+
+      - name: Upload factory base
+        uses: actions/upload-artifact@v4
+        with:
+          name: ADV-Elite-RC3-factory-base
+          path: |
+            .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin
+            .adv_build/SHA256SUMS.txt
+            .adv_build/partitions.csv
+          if-no-files-found: error
