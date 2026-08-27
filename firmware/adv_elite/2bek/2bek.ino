@@ -1,6 +1,7 @@
 /*
   JANUS ADV_ELITE RC2 — MONOLITHIC 2bek FIRST-FLASH SOURCE
   Auto-generated from the canonical modular ADV_Elite sources.
+  Keyboard router compatible with legacy + current M5Cardputer APIs.
   Local ADV_Elite_*.h dependencies are inlined into this one sketch.
   Place as: C:\ArduinoWork\2bek\2bek.ino
 */
@@ -1709,7 +1710,11 @@ void handleCodeBuffer(const Keyboard_Class::KeysState& ks){
 void processInput(){
   M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();handleCodeBuffer(ks);
   bool any=M5Cardputer.Keyboard.isPressed();if(any)userActivity();
-  bool nEnter=ks.enter,nEsc=ks.esc,nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');
+  bool nEnter=ks.enter;
+  bool nEsc=ks.fn && keyNow('`','~');
+  bool nSpace=ks.space;
+  bool nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I');
+  bool nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');
   if(rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R)radioSetPlaying(false);mode.escapeToHome();statusLine="HOME";}
   if(rising(nEnter,prevKey.enter)){hardMute=!hardMute;if(hardMute)radioStopEngine();applyVolume();if(!hardMute&&radioState.desiredPlaying)radioStartEngine();statusLine=hardMute?"MUTE":"AUDIO ON";witness("AUDIO_MUTE",hardMute?"on":"off");saveUiSettings();}
   if(rising(nMinus,prevKey.minus)){masterVolume=masterVolume>8?masterVolume-8:0;applyVolume();saveUiSettings();}
@@ -1722,7 +1727,12 @@ void processInput(){
   if(mode.mode==ForegroundMode::HOME){if(rising(nO,prevKey.o)){mode.enter(ForegroundMode::VISUALIZER_O);statusLine="OSCILLOSCOPE";}if(rising(nZ,prevKey.z)){mode.enter(ForegroundMode::ZIM_VIEW_Z);statusLine="RESOURCE VIEW";}if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);statusLine="RADIO";if(!radioState.count)radioRefreshCatalog();}if(rising(nD,prevKey.d)){mode.enter(ForegroundMode::TAMAGOTCHI_D);statusLine="PET";}if(rising(nA,prevKey.a)){mode.enter(ForegroundMode::ALIEN_SURVIVAL_A);alien.enter();statusLine="ALIEN SURVIVAL";witness("MODE","alien_survival","CONTROL_STATE");}}
   else{prevKey.o=nO;prevKey.z=nZ;prevKey.r=nR;prevKey.d=nD;prevKey.a=nA;}
 
-  bool left=ks.left||keyNow('a','A'),right=ks.right||keyNow('d','D'),up=ks.up||keyNow('w','W'),down=ks.down||keyNow('s','S');
+  // Compatible with both legacy and current M5Cardputer keyboard APIs.
+  // Legacy library has no ks.left/right/up/down/esc fields; Fn-layer is decoded here.
+  bool left=(ks.fn&&keyNow(',','<'))||keyNow('a','A');
+  bool right=(ks.fn&&keyNow('/','?'))||keyNow('d','D');
+  bool up=(ks.fn&&keyNow(';',':'))||keyNow('w','W');
+  bool down=(ks.fn&&keyNow('.','>'))||keyNow('s','S');
   if(mode.mode==ForegroundMode::VISUALIZER_O){if(rising(left,prevKey.left))mode.visualizerPrev();if(rising(right,prevKey.right))mode.visualizerNext();if(rising(up,prevKey.up))visualGain=constrain(visualGain*1.25f,0.5f,4.0f);if(rising(down,prevKey.down))visualGain=constrain(visualGain/1.25f,0.5f,4.0f);if(longHold(nO,holdO)){deskVisualizerEnabled=!deskVisualizerEnabled;statusLine=deskVisualizerEnabled?"DESK VIS ON":"DESK VIS OFF";saveUiSettings();}}
   else if(mode.mode==ForegroundMode::ZIM_VIEW_Z){if(longHold(nZ,holdZ))zimExtended=!zimExtended;prevKey.left=left;prevKey.right=right;prevKey.up=up;prevKey.down=down;prevKey.space=nSpace;}
   else if(mode.mode==ForegroundMode::RADIO_R){if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}
