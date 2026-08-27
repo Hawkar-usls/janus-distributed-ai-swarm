@@ -37,6 +37,10 @@ jobs:
           arduino-cli lib install "TinyGPSPlus"
           arduino-cli lib install "RadioLib"
 
+      - name: Normalize sketch name for case-sensitive runner
+        run: |
+          mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
+
       - name: Compile ADV Elite
         run: |
           arduino-cli compile \
