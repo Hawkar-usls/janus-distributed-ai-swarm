@@ -1,0 +1,181 @@
+{
+  "schema": "janus.adv_elite.donor_transplant_manifest.v1",
+  "version": "1.0",
+  "date": "2026-08-27",
+  "target": {
+    "name": "ADV_Elite",
+    "cardinality": 1,
+    "rule": "ONE_ADV_ONE_BODY_ONE_JANUS_ORGAN"
+  },
+  "donor": {
+    "name": "JANUS CARDPUTER ADV ELITE ZERO v0.20 SKY ANCHOR",
+    "path": "firmware/adv_elite/ADV_Elite.ino",
+    "role": "TECHNICAL_ORGAN_DONOR_ONLY",
+    "not_authority_for": [
+      "Janus cognition",
+      "M2R semantics",
+      "anomaly semantics",
+      "House/Love policy",
+      "final UI architecture"
+    ]
+  },
+  "transplant_keep": [
+    {
+      "organ": "A9_BUZZ_WORKER",
+      "keep": [
+        "real Buzz jobs",
+        "exact SHA256d computation",
+        "full target comparison",
+        "share validity",
+        "strategy/sector/lane accounting",
+        "random baseline",
+        "near-hit diagnostics"
+      ],
+      "boundary": "LEARN_AROUND_SHA_NOT_SHA_ITSELF"
+    },
+    {
+      "organ": "A9_CORPUS",
+      "keep": [
+        "SD-first persistence",
+        "NVS fallback",
+        "checksum validation",
+        "session JSONL",
+        "save/prune accounting",
+        "reboot-surviving strategy statistics"
+      ]
+    },
+    {
+      "organ": "ESPNOW_RESCUE",
+      "keep": [
+        "TX-fail streak recovery",
+        "master-stale recovery",
+        "rescue cooldown",
+        "diagnostic counters"
+      ]
+    },
+    {
+      "organ": "REAL_ONLY_ENV",
+      "keep": [
+        "freshness TTL",
+        "finite checks",
+        "physical plausibility bounds",
+        "explicit stale/not-current state"
+      ]
+    },
+    {
+      "organ": "CAP_GNSS_LORA_1262",
+      "keep": [
+        "TinyGPSPlus GNSS",
+        "fix freshness",
+        "satellite count",
+        "HDOP",
+        "course/speed",
+        "SX1262 RadioLib hardware support",
+        "graceful LoRa absence/failure"
+      ],
+      "rewrite_policy": [
+        "J is the manual LoRa ON/OFF gate",
+        "House never auto-enables LoRa",
+        "Love = House AND LoRa-active",
+        "raw GNSS is trusted-swarm only by default",
+        "external/public outputs redact raw coordinates by default"
+      ]
+    },
+    {
+      "organ": "PN_SKY_ANCHOR_TELEMETRY",
+      "keep": [
+        "P/N packet concept",
+        "GNSS provenance",
+        "derived sky/anchor state",
+        "packet integrity/signature concept"
+      ],
+      "remove": [
+        "game route reachability",
+        "galaxy/system state",
+        "game-derived SkyLock terms"
+      ]
+    },
+    {
+      "organ": "SWARMSENSE_SELF_TELEMETRY",
+      "keep": [
+        "free heap",
+        "loop jitter",
+        "radio mode",
+        "hashrate",
+        "job age",
+        "prediction error",
+        "entropy",
+        "resource telemetry"
+      ]
+    },
+    {
+      "organ": "IMU_CALIBRATION",
+      "keep": [
+        "multi-sample zero calibration",
+        "calibration diagnostics"
+      ],
+      "rewrite_role": "WORLD_SELF_SENSOR_NOT_GAME_FLIGHT_CONTROL"
+    },
+    {
+      "organ": "ILLUMINATION_CONTROL",
+      "keep": [
+        "[ decreases brightness",
+        "] increases brightness",
+        "L toggles onboard LED independently"
+      ],
+      "canonical_policy": "SHARED_BRIGHTNESS_AXIS_WITH_INDEPENDENT_LED_GATE"
+    }
+  ],
+  "illumination": {
+    "levels": [0, 8, 16, 28, 44, 64, 90, 125, 170, 220],
+    "shared_index": true,
+    "display_brightness": "levels[index]",
+    "led_brightness": "led_enabled ? levels[index] : 0",
+    "controls": {
+      "[": "index--",
+      "]": "index++",
+      "L": "toggle led_enabled only"
+    },
+    "invariants": [
+      "DISPLAY_AND_LED_BRIGHTNESS_ADVANCE_ON_THE_SAME_STEP_AXIS",
+      "L_DOES_NOT_CHANGE_DISPLAY_BRIGHTNESS",
+      "L_DOES_NOT_CHANGE_BRIGHTNESS_INDEX",
+      "LED_REENABLE_RESTORES_CURRENT_DISPLAY_STEP",
+      "ANOMALY_WHITE_OBEYS_SHARED_BRIGHTNESS",
+      "HOUSE_AMBER_OBEYS_SHARED_BRIGHTNESS",
+      "LED_OFF_WINS_OVER_ALL_LED_COLORS"
+    ],
+    "implementation_source": "firmware/adv_elite/ADV_Elite_illumination_policy.h"
+  },
+  "do_not_transplant": [
+    "flight mechanics",
+    "galaxy map/game world",
+    "stations/docking",
+    "pirates/enemies/combat",
+    "weapons",
+    "asteroids/rocks as game objects",
+    "ore/cargo/credits/economy",
+    "factions",
+    "missions",
+    "hyperspace",
+    "cockpit game state",
+    "PilotLink game-only state"
+  ],
+  "protected_truth_core": [
+    "SHA256/SHA256d semantics never change",
+    "share target/verifier/header truth never changes",
+    "prediction never overwrites observation",
+    "stale data is not current data",
+    "old SHA-home cognitive curriculum remains retired",
+    "Theta is evaluated inside M2R against real future holdout"
+  ],
+  "acceptance_tests": [
+    "For every brightness index, display and enabled LED receive the same canonical brightness value",
+    "With L off, LED output remains zero while [ ] still change display and stored shared index",
+    "With L re-enabled, LED immediately returns at the current shared brightness step",
+    "Anomaly white and House amber change colour/state only; they do not bypass the shared brightness axis",
+    "Brightness index and LED-enabled state survive reboot through final ADV_Elite persistence layer",
+    "No game-only variable is emitted as OBSERVED_REAL"
+  ],
+  "status": "TRANSPLANT_POLICY_FROZEN_FOR_FINAL_ADV_ELITE_COMPOSITION"
+}
