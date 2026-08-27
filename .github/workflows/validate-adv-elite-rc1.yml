@@ -49,9 +49,19 @@ jobs:
           mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
 
       - name: Compile ADV Elite
+        shell: bash
         run: |
+          set +e
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --warnings all \
             --library _vendor/M5Cardputer \
-            firmware/adv_elite
+            firmware/adv_elite 2>&1 | tee /tmp/adv_compile.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
+              | tail -n 25 \
+              | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
+              | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
