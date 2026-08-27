@@ -79,6 +79,94 @@ Candidate areas:
 
 No speedup may change sensor truth, SHA validity, packet ABI or user gates.
 
+## Event Cadence Oracle — Borrowed From Zim NotifyOracle
+
+Zim's useful `NotifyOracle` idea is not about predicting SHA. It learns the cadence of an external event stream and avoids starting expensive work immediately before the next likely event.
+
+ADV_Elite should generalize this into a lightweight `EVENT_CADENCE_ORACLE` feeding its local attention/M2R context.
+
+Candidate event streams:
+- periodic swarm heartbeats;
+- Buzz job/update cadence;
+- GNSS fix cadence;
+- sensor refresh cadence;
+- gateway/outbox acknowledgement cadence;
+- recurring local environment transitions when enough real history exists.
+
+The oracle may predict **when a new observation is likely**, allowing resource scheduling such as delaying a low-priority batch or increasing sampling around an expected transition.
+
+It must not claim access to future information. Forecasts are ordinary time-series estimates, timestamped before the event and scored afterward.
+
+## White Raven Pattern — Tiny Local Learner
+
+ADV_Elite should preserve a small local learner independently of heavy NAS/Habitat models.
+
+Its role is bounded policy adaptation, not replacement of M2R or sensor truth.
+
+Possible inputs:
+- prediction error;
+- anomaly rate;
+- peer disagreement;
+- resource pressure;
+- queue/outbox pressure;
+- sensor freshness;
+- M2R/Theta calibration statistics;
+- user mode state.
+
+Possible outputs are only pre-approved safe policy choices:
+- resource budget profile;
+- sampling cadence within bounds;
+- side-quest budget;
+- memory retrieval priority;
+- compression/batch policy;
+- model/Theta weighting inside allowed ranges.
+
+The local learner should expose `model_version`, `updates`, `confidence`, loss/reward metric and persisted-state version to Witness/swarm telemetry where useful.
+
+## Advisory Home Cortex Pattern
+
+Trusted swarm policy is advisory unless the node's declared primary mission explicitly delegates authority.
+
+For ADV_Elite:
+
+```text
+SWARM POLICY -> context / recommendation
+ADV LOCAL STATE + USER GATES -> final local decision
+```
+
+Buzz/Core/NAS must not silently steal the ADV primary mission or override `1488`, `112269`, `J`, `ENTER`, `L` or other frozen user controls.
+
+## P/N Silicon-Body Self Trace
+
+Borrow Zim's principle of observing the body of computation, not just its output.
+
+ADV_Elite should expose a bounded self-state trace such as:
+- loop jitter;
+- heap/stack reserve;
+- thermal/load proxy or real temperature when trustworthy;
+- radio health;
+- queue pressure;
+- storage/outbox debt;
+- compute batch pressure;
+- current model/version;
+- power/battery where trustworthy.
+
+This becomes part of `SELF` in `WORLD + SWARM + SELF` and may be predicted/scored by M2R.
+
+Self-state telemetry is observational context; it never changes protocol truth by itself.
+
+## Display/Brain Decoupling
+
+Borrow the architectural lesson from Zim HARD BLACKOUT:
+
+```text
+DISPLAY != BRAIN
+```
+
+A future ADV display-sleep/hard-off path may reduce or stop rendering while sensors, anomaly detection, Witness, local cognition and swarm health continue.
+
+This is separate from the existing brightness controls and should only be implemented when Cardputer ADV hardware behavior is verified. Wake must be cold-safe and must not accidentally fire another control action.
+
 ## IMMUTABLE TRUTH CORE + LEARNABLE POLICY
 
 ADV_Elite immutable core includes at minimum:
@@ -98,6 +186,7 @@ Learnable policy may include bounded versions of:
 - Theta contribution weight;
 - sensor-fusion weights;
 - sampling cadence;
+- event-cadence estimates;
 - memory retrieval priority;
 - side-quest scheduling/budget;
 - miner batch/resource scheduling;
@@ -126,6 +215,7 @@ Recommended telemetry fields:
 - current load/heap/thermal proxy;
 - learner/model version;
 - confidence/error where meaningful;
+- event-cadence forecast/error where meaningful;
 - stale/unknown flags;
 - Witness/archive debt;
 - current House/Love/LoRa/M2R/audio/LED state.
@@ -138,6 +228,11 @@ Borrow:
 - independent local operation;
 - measured resource throttling;
 - self-tested acceleration;
+- event-cadence prediction for resource scheduling;
+- small bounded local learner;
+- advisory-not-dominating swarm policy;
+- silicon-body/self telemetry;
+- display/brain decoupling;
 - bounded online learning around frozen truth;
 - persistent local learning;
 - continued swarm visibility despite autonomy;
@@ -157,4 +252,7 @@ A future ADV_Elite implementation satisfies this contract only if it can demonst
 3. side-work can be throttled or deferred visibly;
 4. learned parameters survive reboot without flash-write abuse;
 5. accelerated paths fall back safely on mismatch;
-6. truth/protocol/user-control invariants remain unchanged.
+6. truth/protocol/user-control invariants remain unchanged;
+7. event-cadence forecasts are frozen before the event and scored afterward;
+8. local learner outputs remain inside a bounded safe action space;
+9. display sleep/off does not stop the primary brain path when hardware support is added.
