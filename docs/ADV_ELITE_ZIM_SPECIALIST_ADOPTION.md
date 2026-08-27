@@ -192,7 +192,31 @@ Learnable policy may include bounded versions of:
 - miner batch/resource scheduling;
 - compression/resource policy.
 
-The unresolved Q23 promotion policy is intentionally not decided by this file. This contract defines what may be learnable, not whether a PASS candidate auto-promotes without the user.
+## Q23 — Fully Automated Safe Promotion
+
+Q23 is resolved: ADV_Elite does **not** wait for human approval after a learnable candidate proves itself inside the allowed safe action space.
+
+```text
+PROPOSE
+  -> FROZEN REPLAY
+  -> UNSEEN FUTURE HOLDOUT
+  -> SHADOW
+  -> COMPARE AGAINST CURRENT
+  -> HARD CONSTRAINT CHECK
+  -> SNAPSHOT KNOWN-GOOD
+  -> PROMOTE
+  -> PROBATION MONITOR
+  -> KEEP or AUTO-ROLLBACK
+  -> WITNESS
+```
+
+Automatic promotion applies only to bounded learnable parameters/policies. It does not grant authority to rewrite the immutable truth core, user controls, packet ABI, SHA/verifier semantics or executable firmware logic.
+
+Every promotion must be versioned and Witnessed. A known-good state must be saved before switching. Regression, integrity failure, truth violation, ABI mismatch or resource-instability regression triggers automatic rollback.
+
+Training loss alone is never sufficient; the candidate must demonstrate reproducible out-of-sample improvement or better calibration on the declared metric.
+
+Legacy synthetic SHA-home is retired from the ADV_Elite runtime. Real pool/Buzz SHA work may remain workload context, but rare hash outcomes are not a model-quality judge.
 
 ## Persistent Learning
 
@@ -255,4 +279,6 @@ A future ADV_Elite implementation satisfies this contract only if it can demonst
 6. truth/protocol/user-control invariants remain unchanged;
 7. event-cadence forecasts are frozen before the event and scored afterward;
 8. local learner outputs remain inside a bounded safe action space;
-9. display sleep/off does not stop the primary brain path when hardware support is added.
+9. display sleep/off does not stop the primary brain path when hardware support is added;
+10. successful learnable candidates auto-promote only after replay+holdout+shadow+hard-constraint PASS;
+11. every promotion has a known-good snapshot and automatic rollback path.
