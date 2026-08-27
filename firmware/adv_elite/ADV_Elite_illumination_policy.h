@@ -63,3 +63,11 @@ struct IlluminationPolicy {
 // There is no LED-only brightness memory and no separate LED brightness walk.
 
 }  // namespace janus_adv_elite
+
+// Arduino defines sq(x) as a macro. The Alien runtime intentionally owns a
+// local helper with the historical name sq(); undefine the global macro here
+// because this policy is included immediately before the runtime in ADV_Elite.
+// This is compile hygiene only and does not change arithmetic semantics.
+#ifdef sq
+#undef sq
+#endif
