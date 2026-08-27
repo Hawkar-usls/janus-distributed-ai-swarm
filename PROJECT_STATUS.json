@@ -1,12 +1,31 @@
 {
-  "schema_id": "hawkar.project-status.v1",
+  "schema_id": "hawkar.project-status.v2",
   "project": "JANUS Distributed AI Swarm",
   "repository": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm",
-  "portfolio_class": "flagship_engineering",
-  "last_reviewed": "2026-08-22",
+  "portfolio_class": "flagship_engineering_background_ip",
+  "last_reviewed": "2026-08-27",
   "maturity": "ACTIVE_ENGINEERING",
   "completion_status": "ONGOING_DEVELOPMENT",
   "summary": "Public ESP32/M5Stack firmware collection for heterogeneous telemetry, observer, UI and experimental worker nodes with explicit protocol, recovery, cumulative spiral-evolution and shared genome-lineage boundaries.",
+  "licensing": {
+    "current": "JANUS_DISTRIBUTED_AI_SWARM_SOURCE_AVAILABLE_EVALUATION_LICENSE_V1_0",
+    "open_source_current": false,
+    "commercial_rights_granted_by_publication": false,
+    "production_rights_granted_by_publication": false,
+    "historical_mit_snapshot_through_commit": "b644af87de104b405427a8c0ae3c35c8d192507c",
+    "historical_mit_rights_retroactively_revoked": false,
+    "first_relicense_commit": "a1df4ee660f523bf014d739726458ecd1c909587",
+    "license_history": "LICENSE_HISTORY.md",
+    "third_party_register": "THIRD_PARTY_NOTICES.md",
+    "ip_notice": "IP_NOTICE.md"
+  },
+  "helios_relationship": {
+    "role": "BACKGROUND_ENGINEERING_AND_PROTOCOL_LINEAGE",
+    "helios_repository": "Hawkar-usls/Janus-HELIOS",
+    "entire_swarm_repo_included_in_helios_transaction_by_default": false,
+    "public_access_grants_helios_rights": false,
+    "commercial_or_acquisition_rights_require_exact_written_scope": true
+  },
   "implemented_scope": [
     "public firmware sketches for multiple ESP32/M5Stack nodes",
     "ESP-NOW protocol/ABI handling",
@@ -15,7 +34,8 @@
     "CI compilation/static checks for selected public build paths",
     "credential separation through examples/ignored local configuration",
     "Demiurge spiral binding for persistent learning identity, failed-attempt lessons, stale-node lineage and recovery ascent",
-    "SWARM_GENOME_LEDGER joining per-entity SpiralLedgers into one append-only bidirectionally traversable genealogy"
+    "SWARM_GENOME_LEDGER joining per-entity SpiralLedgers into one append-only bidirectionally traversable genealogy",
+    "Buzz coordinator/worker distribution lineage relevant to generalized HELIOS swarm orchestration"
   ],
   "invariants": [
     "sensor truth must be distinguishable from prediction, memory and UI fiction",
@@ -28,12 +48,21 @@
     "cross-entity specialization or synthesis names explicit parent genome nodes instead of replacing them",
     "DNA/genome language is an architecture metaphor for lineage and paired identity/evidence strands, not a biological claim"
   ],
+  "transaction_truth": {
+    "complete_chain_of_title_claimed_without_closing_review": false,
+    "automated_sbom_scan_claimed_complete": false,
+    "historical_mit_can_be_erased_by_relicensing": false,
+    "abstract_ideas_exclusively_owned_by_copyright_claim": false,
+    "future_source_available_modifications_reserved_for_commercial_agreement": true
+  },
   "not_claimed": [
     "artificial general intelligence",
     "precognition or access to future physical information",
     "mining superiority or profitability",
     "production safety certification",
-    "autonomous authority over people or external systems"
+    "autonomous authority over people or external systems",
+    "retroactive cancellation of historical MIT grants",
+    "patent protection without a verified filing"
   ],
   "review_start": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/PROJECT_MAP.md",
   "technical_boundaries": "https://github.com/Hawkar-usls/janus-distributed-ai-swarm/blob/main/docs/technical-boundaries.md",
