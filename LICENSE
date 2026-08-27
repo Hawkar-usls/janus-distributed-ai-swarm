@@ -1,4 +1,4 @@
-JANUS Distributed AI Swarm Source-Available Evaluation License v1.0
+JANUS Distributed AI Swarm Source-Available Evaluation License v1.1
 
 Copyright (c) 2026 Hawkar-usls / JANUS project. All rights reserved except for the limited permissions expressly granted below.
 
@@ -25,7 +25,7 @@ Without a separate written agreement from the copyright holder, you may not:
 
 - use the Materials or substantial derivatives in production or in a live commercial service;
 - sell, sublicense, rent, white-label, host for third parties, monetize, or otherwise commercially exploit the Materials;
-- redistribute modified or unmodified copies outside permitted internal evaluation;
+- redistribute modified or unmodified copies outside permitted internal evaluation, except for platform-level operations expressly addressed in Section 7;
 - create or distribute derivative works based on protected source code, documentation, visual assets, protocol expression, or other copyrightable expression in the Materials;
 - use substantial protected expression from the Materials to build or operate a competing commercial product or service;
 - remove or obscure copyright, provenance, safety, or licensing notices;
@@ -59,34 +59,42 @@ However, new material and modifications first published in revisions carrying th
 
 See LICENSE_HISTORY.md for the repository licensing timeline.
 
-7. THIRD-PARTY MATERIAL
+7. GITHUB PLATFORM RIGHTS
+
+Nothing in this license is intended to contradict technical rights that GitHub itself requires users to grant to GitHub or other users solely for ordinary operation of a public repository under GitHub's applicable Terms of Service, including platform functionality such as viewing or forking where those terms require it.
+
+Such platform-level rights do not create a broader permission to deploy, monetize, redistribute outside the platform/evaluation context, sublicense, white-label, or commercially exploit later source-available project revisions.
+
+If GitHub platform terms and this repository license appear to conflict for a specific operation, the platform terms govern only to the minimum extent necessary for use of that platform; no additional commercial license is implied.
+
+8. THIRD-PARTY MATERIAL
 
 Third-party libraries, SDKs, board-support packages, vendor components, fonts, media, or other external material retain their own licenses. This license does not override third-party terms. See THIRD_PARTY_NOTICES.md and the relevant upstream projects before redistribution or commercial deployment.
 
-8. CONTRIBUTIONS
+9. CONTRIBUTIONS
 
 A contribution does not transfer ownership of pre-existing project Materials. Contributors must have the right to submit their contribution and must identify material subject to a separate license. Acceptance of a contribution does not grant commercial rights to the project as a whole.
 
 A future commercial or acquisition transaction should perform a complete contribution and chain-of-title review and obtain any additional assignments or licenses required for the exact closing snapshot.
 
-9. SECURITY, HARDWARE, AND REGULATED DEPLOYMENT
+10. SECURITY, HARDWARE, AND REGULATED DEPLOYMENT
 
 This license does not certify or authorize unattended hardware deployment, financial activity, cryptocurrency/mining operations, gambling, safety-critical use, regulated services, or production distributed-compute operation. Such deployments require separate engineering, security, legal, regulatory, privacy, safety, and commercial review as applicable.
 
-10. TERMINATION
+11. TERMINATION
 
 Rights under this license terminate automatically upon material breach. On termination, you must stop uses that depend on this license and delete evaluation copies not required by law or immutable compliance records.
 
 Termination of this evaluation license does not purport to terminate independent rights previously and validly granted under an applicable historical MIT-licensed revision.
 
-11. NO WARRANTY
+12. NO WARRANTY
 
 THE MATERIALS ARE PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, SECURITY, AVAILABILITY, OR FITNESS FOR PRODUCTION OR REGULATED DEPLOYMENT.
 
-12. SEPARATE AGREEMENTS CONTROL
+13. SEPARATE AGREEMENTS CONTROL
 
 A separately signed agreement with the copyright holder may grant additional rights and, to the extent of a conflict, controls for that contracting party.
 
-13. RESERVATION OF RIGHTS
+14. RESERVATION OF RIGHTS
 
 All rights not expressly granted are reserved.
