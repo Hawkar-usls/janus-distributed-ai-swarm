@@ -1,0 +1,64 @@
+{
+  "schema": "janus.swarm.autonomous_specialist_doctrine.v1",
+  "version": "1.0.0",
+  "created_at": "2026-08-27T17:18:00+03:00",
+  "source_experiment": "ZimGeek autonomy / Buzz leaderboard observation",
+  "status": "MANDATORY_DESIGN_DOCTRINE",
+  "canonical_formula": "HETEROGENEOUS_SPECIALISTS = PROTECTED_PRIMARY_MISSIONS + BOUNDED_SIDE_QUESTS + SHARED_STATE",
+  "principles": [
+    {
+      "id": "PRIMARY_MISSION_BOUNDED_SIDE_QUESTS",
+      "rule": "Every node declares a protected primary mission; coordinator side-work is explicitly budgeted and may be deferred, shortened, skipped or rejected when it threatens the primary mission, truthful sensing, hardware safety or fresh local state.",
+      "required_budget_dimensions": ["time", "cpu_or_batch", "radio", "heap_stack", "thermal_load", "queue", "energy_if_available"]
+    },
+    {
+      "id": "SELF_TESTED_ACCELERATION_ONLY",
+      "rule": "A new fast path is promoted only after equivalence against a trusted reference path and benchmark gain; runtime cross-check and fallback are required where practical.",
+      "sequence": ["NEW_FAST_PATH", "VERIFY_AGAINST_KNOWN_TRUTH", "BENCHMARK", "PROMOTE_OR_REJECT", "PERIODIC_CROSSCHECK", "FALLBACK_ON_MISMATCH"]
+    },
+    {
+      "id": "QUIET_CANARY_RESOURCE_HIERARCHY",
+      "rule": "Optional work degrades before the primary mission under low heap, thermal/load pressure, weak radio/Wi-Fi, queue pressure or timing jitter.",
+      "degrade_order": ["decorative_ui_and_verbose_logs", "optional_telemetry_rate", "background_study_and_archive", "side_quest_batch_or_frequency", "optional_network_upload", "primary_mission_only_if_required_for_safety_or_correctness"]
+    },
+    {
+      "id": "IMMUTABLE_TRUTH_CORE_LEARNABLE_POLICY",
+      "rule": "Online learning may optimize only an explicitly bounded safe policy space around immutable truth semantics.",
+      "immutable_examples": ["SHA256_SHA256d", "target_and_submit_validity", "packet_ABI_and_types", "observed_vs_predicted_truth", "user_control_gates", "identity_and_provenance"],
+      "learnable_examples": ["scheduler", "batch", "lane_sector_window", "safe_sampling_cadence", "M2R_weights", "Theta_weight", "sensor_fusion_weights", "memory_priority", "compression", "side_quest_budget"]
+    },
+    {
+      "id": "PERSISTENT_LEARNING_FLASH_WEAR_GUARD",
+      "rule": "Useful local learning may survive reboot through versioned, throttled persistence with dirty flags, known-good fallback and safe rejection of incompatible state."
+    },
+    {
+      "id": "AUTONOMY_WITHOUT_INFORMATION_ISOLATION",
+      "rule": "Autonomous local policy does not remove the node from trusted swarm cognition; alive/role/health/primary-state/budget/refusal reason and bounded learning state remain observable."
+    },
+    {
+      "id": "TOTAL_STRENGTH_NOT_EQUAL_COORDINATOR_CONTRIBUTION",
+      "rule": "When attribution matters, separate overall node strength from work specifically attributable to coordinator assignments.",
+      "recommended_metrics": ["TOP_STRENGTH", "TOP_SWARM_WORK"]
+    }
+  ],
+  "zim_policy": {
+    "keep_current_behavior_unchanged": true,
+    "reason": "Zim is a successful autonomous-specialist experiment and should be observed rather than normalized into an obedient worker.",
+    "claim_boundary": "Current leaderboard leadership is an observed system behavior; it is not evidence of mining superiority or a hidden SHA advantage."
+  },
+  "adv_elite": {
+    "adoption": "IMMEDIATE_ARCHITECTURE_CONTRACT",
+    "implementation_status": "P0_ARCHITECTURE_FROZEN_NOT_RUNTIME_PATCHED_YET",
+    "profile_document": "docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md"
+  },
+  "review_questions": [
+    "What is the node primary mission?",
+    "What side-work budget is allowed?",
+    "What survives if Buzz/Core/NAS disappears?",
+    "What truth core is immutable?",
+    "Which policy variables may learn?",
+    "What reference validates acceleration?",
+    "What learning is persisted and how is flash protected?",
+    "What remains visible when side-work is refused?"
+  ]
+}
