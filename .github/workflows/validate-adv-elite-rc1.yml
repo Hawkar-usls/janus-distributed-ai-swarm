@@ -18,6 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout pinned M5Cardputer ADV keyboard layer
+        uses: actions/checkout@v4
+        with:
+          repository: m5stack/M5Cardputer
+          ref: f1392858b9994c3547120e602a57d3553d16ab01
+          path: _vendor/M5Cardputer
+
       - name: Install Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -46,4 +53,5 @@ jobs:
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --warnings all \
+            --library _vendor/M5Cardputer \
             firmware/adv_elite
