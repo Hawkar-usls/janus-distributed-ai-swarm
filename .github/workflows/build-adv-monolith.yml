@@ -55,19 +55,10 @@ jobs:
           body = inline_file(root / 'ADV_Elite.ino')
 
           old1 = "  bool nEnter=ks.enter,nEsc=ks.esc,nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
-          new1 = """  bool nEnter=ks.enter;
-  bool nEsc=ks.fn && keyNow('`','~');
-  bool nSpace=ks.space;
-  bool nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I');
-  bool nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"""
+          new1 = "  bool nEnter=ks.enter;\n  bool nEsc=ks.fn && keyNow('`','~');\n  bool nSpace=ks.space;\n  bool nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I');\n  bool nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');"
 
           old2 = "  bool left=ks.left||keyNow('a','A'),right=ks.right||keyNow('d','D'),up=ks.up||keyNow('w','W'),down=ks.down||keyNow('s','S');"
-          new2 = """  // Compatible with both legacy and current M5Cardputer keyboard APIs.
-  // Legacy library has no ks.left/right/up/down/esc fields; Fn-layer is decoded here.
-  bool left=(ks.fn&&keyNow(',','<'))||keyNow('a','A');
-  bool right=(ks.fn&&keyNow('/','?'))||keyNow('d','D');
-  bool up=(ks.fn&&keyNow(';',':'))||keyNow('w','W');
-  bool down=(ks.fn&&keyNow('.','>'))||keyNow('s','S');"""
+          new2 = "  // Compatible with both legacy and current M5Cardputer keyboard APIs.\n  // Legacy library has no ks.left/right/up/down/esc fields; Fn-layer is decoded here.\n  bool left=(ks.fn&&keyNow(',','<'))||keyNow('a','A');\n  bool right=(ks.fn&&keyNow('/','?'))||keyNow('d','D');\n  bool up=(ks.fn&&keyNow(';',':'))||keyNow('w','W');\n  bool down=(ks.fn&&keyNow('.','>'))||keyNow('s','S');"
 
           if old1 not in body:
               raise RuntimeError('expected legacy key declaration not found')
@@ -76,7 +67,7 @@ jobs:
 
           body = body.replace(old1, new1, 1).replace(old2, new2, 1)
 
-          banner = '''/*\n  JANUS ADV_ELITE RC2 — MONOLITHIC 2bek FIRST-FLASH SOURCE\n  Auto-generated from the canonical modular ADV_Elite sources.\n  Keyboard router compatible with legacy + current M5Cardputer APIs.\n  Local ADV_Elite_*.h dependencies are inlined into this one sketch.\n  Place as: C:\\ArduinoWork\\2bek\\2bek.ino\n*/\n\n'''
+          banner = '/*\n  JANUS ADV_ELITE RC2 — MONOLITHIC 2bek FIRST-FLASH SOURCE\n  Auto-generated from the canonical modular ADV_Elite sources.\n  Keyboard router compatible with legacy + current M5Cardputer APIs.\n  Local ADV_Elite_*.h dependencies are inlined into this one sketch.\n  Place as: C:\\ArduinoWork\\2bek\\2bek.ino\n*/\n\n'
           out_dir = root / '2bek'
           out_dir.mkdir(parents=True, exist_ok=True)
           (out_dir / '2bek.ino').write_text(banner + body, encoding='utf-8')
