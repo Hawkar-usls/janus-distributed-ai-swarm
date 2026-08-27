@@ -1,10 +1,11 @@
 {
   "schema": "janus.swarm.autonomous_specialist_doctrine.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "created_at": "2026-08-27T17:18:00+03:00",
+  "updated_at": "2026-08-27T17:18:00+03:00",
   "source_experiment": "ZimGeek autonomy / Buzz leaderboard observation",
   "status": "MANDATORY_DESIGN_DOCTRINE",
-  "canonical_formula": "HETEROGENEOUS_SPECIALISTS = PROTECTED_PRIMARY_MISSIONS + BOUNDED_SIDE_QUESTS + SHARED_STATE",
+  "canonical_formula": "HETEROGENEOUS_SPECIALISTS = PROTECTED_PRIMARY_MISSIONS + BOUNDED_SIDE_QUESTS + LOCAL_AUTONOMY + SHARED_STATE",
   "principles": [
     {
       "id": "PRIMARY_MISSION_BOUNDED_SIDE_QUESTS",
@@ -25,7 +26,7 @@
       "id": "IMMUTABLE_TRUTH_CORE_LEARNABLE_POLICY",
       "rule": "Online learning may optimize only an explicitly bounded safe policy space around immutable truth semantics.",
       "immutable_examples": ["SHA256_SHA256d", "target_and_submit_validity", "packet_ABI_and_types", "observed_vs_predicted_truth", "user_control_gates", "identity_and_provenance"],
-      "learnable_examples": ["scheduler", "batch", "lane_sector_window", "safe_sampling_cadence", "M2R_weights", "Theta_weight", "sensor_fusion_weights", "memory_priority", "compression", "side_quest_budget"]
+      "learnable_examples": ["scheduler", "batch", "lane_sector_window", "safe_sampling_cadence", "event_cadence_estimate", "M2R_weights", "Theta_weight", "sensor_fusion_weights", "memory_priority", "compression", "side_quest_budget"]
     },
     {
       "id": "PERSISTENT_LEARNING_FLASH_WEAR_GUARD",
@@ -41,15 +42,45 @@
       "recommended_metrics": ["TOP_STRENGTH", "TOP_SWARM_WORK"]
     }
   ],
+  "zim_derived_reusable_patterns": [
+    {
+      "id": "EVENT_CADENCE_ORACLE",
+      "origin": "ZimNotifyOracle",
+      "generalization": "Learn timing cadence of external events and use the estimate only for resource scheduling; freeze predictions before the event and score afterward.",
+      "not_claimed": "No future information access and no SHA prediction."
+    },
+    {
+      "id": "TINY_LOCAL_POLICY_LEARNER",
+      "origin": "White Raven micrograd-like agent",
+      "generalization": "Keep a small local learner for bounded safe policy adaptation even when heavy NAS/Habitat models are absent."
+    },
+    {
+      "id": "ADVISORY_SWARM_POLICY",
+      "origin": "Zim Home Cortex",
+      "generalization": "Trusted coordinator policy is context/advice; final local decision remains with the specialist unless authority is explicitly delegated by role."
+    },
+    {
+      "id": "SILICON_BODY_SELF_TRACE",
+      "origin": "Zim P/N Cortex",
+      "generalization": "Observe compute-body side effects such as jitter, heap, load, radio health and queue pressure as SELF-state without changing protocol truth."
+    },
+    {
+      "id": "DISPLAY_BRAIN_DECOUPLING",
+      "origin": "Zim HARD BLACKOUT",
+      "generalization": "Rendering/display power may be reduced or stopped while the primary compute/sensor/swarm mission continues, when hardware behavior is verified."
+    }
+  ],
   "zim_policy": {
     "keep_current_behavior_unchanged": true,
     "reason": "Zim is a successful autonomous-specialist experiment and should be observed rather than normalized into an obedient worker.",
-    "claim_boundary": "Current leaderboard leadership is an observed system behavior; it is not evidence of mining superiority or a hidden SHA advantage."
+    "claim_boundary": "Current leaderboard leadership is an observed system behavior; it is not evidence of mining superiority or a hidden SHA advantage.",
+    "experiment_document": "docs/experiments/ZIM_AUTONOMY_BUZZ_LEADERBOARD_2026-08-27.md"
   },
   "adv_elite": {
     "adoption": "IMMEDIATE_ARCHITECTURE_CONTRACT",
     "implementation_status": "P0_ARCHITECTURE_FROZEN_NOT_RUNTIME_PATCHED_YET",
-    "profile_document": "docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md"
+    "profile_document": "docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md",
+    "adopt_patterns": ["EVENT_CADENCE_ORACLE", "TINY_LOCAL_POLICY_LEARNER", "ADVISORY_SWARM_POLICY", "SILICON_BODY_SELF_TRACE", "DISPLAY_BRAIN_DECOUPLING"]
   },
   "review_questions": [
     "What is the node primary mission?",
@@ -59,6 +90,8 @@
     "Which policy variables may learn?",
     "What reference validates acceleration?",
     "What learning is persisted and how is flash protected?",
-    "What remains visible when side-work is refused?"
+    "What remains visible when side-work is refused?",
+    "Which event cadence, if any, is forecast and how is it scored?",
+    "Can display/UI load be reduced without stopping the primary mission?"
   ]
 }
