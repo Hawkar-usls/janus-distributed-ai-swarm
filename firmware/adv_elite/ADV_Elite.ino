@@ -93,6 +93,8 @@
 #include "ADV_Elite_mode_contract.h"
 #include "ADV_Elite_illumination_policy.h"
 #include "ADV_Elite_alien_survival_runtime.h"
+#include "ADV_Elite_wifi_manager.h"
+#include "ADV_Elite_primary_credential.h"
 
 using namespace janus_adv_elite;
 
@@ -244,6 +246,7 @@ ModeContract mode;
 IlluminationPolicy illumination;
 AlienSurvivalRuntime alien;
 AlienPerformanceGovernor alienGovernor;
+AdvWifiManager advWifi;
 Preferences prefs;
 
 bool houseActive = false;
@@ -698,11 +701,17 @@ void maybeSendLoRaSeal(){
 #endif
 }
 
+// -------------------------- exclusive foreground audio lease --------------------------
+bool radioAudioLease=false;
+bool brainWaveBeforeRadio=true;
+void acquireRadioAudioLease(){if(radioAudioLease)return;brainWaveBeforeRadio=brainWaveEnabled;brainWaveEnabled=false;radioStopEngine();M5Cardputer.Speaker.stop();radioAudioLease=true;lastBrainNoteMs=millis();}
+void releaseRadioAudioLease(){if(!radioAudioLease)return;radioSetPlaying(false);M5Cardputer.Speaker.stop();radioAudioLease=false;brainWaveEnabled=brainWaveBeforeRadio;lastBrainNoteMs=millis();applyVolume();}
+
 // -------------------------- BrainWave synthesis core --------------------------
 const uint16_t bwA[8]={220,277,330,440,392,330,277,220};
 const uint16_t bwB[8]={196,247,294,392,349,294,247,196};
 void brainWaveTick(){
-  if(!brainWaveEnabled||hardMute||masterVolume==0||radioState.engineRunning||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;
+  if(!brainWaveEnabled||hardMute||masterVolume==0||mode.mode==ForegroundMode::RADIO_R||mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)return;
   uint32_t now=millis();uint32_t interval=(uint32_t)constrain(420.0f-core.entropy*28.0f,110.0f,420.0f);if(now-lastBrainNoteMs<interval)return;lastBrainNoteMs=now;
   const uint16_t* phrase=houseActive?bwB:bwA;float swarmShift=eye.online&&isfinite(eye.sync)?1.0f+constrain(eye.sync,0.0f,1.0f)*0.08f:1.0f;int note=(int)(phrase[brainStep]*(1.0f+core.entropy*0.012f)*swarmShift);M5Cardputer.Speaker.tone(note,(uint32_t)(interval*0.65f));brainStep=(brainStep+1)&7;
 }
@@ -777,13 +786,13 @@ void drawVisualizer(){
   d.drawRect(3,17,234,106,TFT_DARKGREY);if(histCount<2)return;float minV=1e9f,maxV=-1e9f;for(int i=0;i<histCount;i++){float v=histValue(mode.visualizer_source,i);if(!isfinite(v))continue;if(v<minV)minV=v;if(v>maxV)maxV=v;}if(!(maxV>minV))maxV=minV+1;float mid=(minV+maxV)*0.5f,span=(maxV-minV)/visualGain;minV=mid-span*0.5f;maxV=mid+span*0.5f;for(int i=0;i<histCount-1;i++){int idx=(histPos+HIST_N-histCount+i)%HIST_N,idx2=(idx+1)%HIST_N;float v1=histValue(mode.visualizer_source,idx),v2=histValue(mode.visualizer_source,idx2);int x1=4+i*232/max(1,(int)histCount-1),x2=4+(i+1)*232/max(1,(int)histCount-1);int y1=121-(int)(constrain((v1-minV)/(maxV-minV),0.0f,1.0f)*101),y2=121-(int)(constrain((v2-minV)/(maxV-minV),0.0f,1.0f)*101);d.drawLine(x1,y1,x2,y2,uiPrimary());}d.setTextColor(TFT_LIGHTGREY,TFT_BLACK);d.setCursor(6,20);d.printf("%.2f .. %.2f",minV,maxV);
 }
 void drawZimView(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_YELLOW,TFT_BLACK);d.setCursor(2,2);d.print("Z / ADV RESOURCE VIEW");d.setTextColor(TFT_WHITE,TFT_BLACK);d.setCursor(2,18);d.print("PRIMARY: observe+predict+witness");d.setCursor(2,30);d.printf("P0 RUN anomaly:%s",anomalyLatched?"LATCH":"watch");d.setCursor(2,42);d.printf("P1 RUN M2R:%s theta:%.2f",m2rActive?"FULL":"light",m2r.thetaWeight);d.setCursor(2,54);d.printf("P2 swarm RX:%lu TX:%lu/%lu",(unsigned long)espRxCount,(unsigned long)espTxCount,(unsigned long)espTxFail);d.setCursor(2,66);d.printf("heap:%lu loop:%luus max:%lu",(unsigned long)core.freeHeap,(unsigned long)core.loopUs,(unsigned long)core.loopMaxUs);d.setCursor(2,78);d.printf("P3 Buzz %luH/s sh:%lu b:%u",(unsigned long)buzzHashRate,(unsigned long)buzzShares,buzzBestBits);d.setCursor(2,90);d.printf("P4 fg:%d game:%dFPS budget:%u%%",(int)mode.mode,(int)alien.fpsEma(),alienGovernor.discretionary_budget_pct);d.setCursor(2,102);d.printf("P3 throttle:%s P5 defer:%s",alienGovernor.throttle_p3?"YES":"no",alienGovernor.defer_p5?"YES":"no");if(zimExtended){d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,114);d.printf("GNSS:%s LoRa:%s WiFi:%d",advGps.location.isValid()?"FIX":"?",loraReady?"HW":"?",core.wifiRssi);}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("hold Z detail | ESC HOME");}
-void drawRadio(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,2);d.print("R / INTERNET RADIO");d.setTextColor(TFT_WHITE,TFT_BLACK);if(!ADV_HAS_WEBRADIO){d.setCursor(2,22);d.print("Install ESP8266Audio library.");d.setCursor(2,34);d.print("Core remains alive; no fake PLAY.");}else if(radioState.count==0){d.setCursor(2,22);d.print(radioState.catalogBusy?"Loading Radio Browser...":"No catalogue. hold R refresh");}else{RadioStation& s=radioState.stations[radioState.index];d.setCursor(2,20);d.printf("%02u/%02u %s",radioState.index+1,radioState.count,s.name);d.setCursor(2,34);d.printf("MP3 %uk  local %+d",s.bitrate,s.localScore);d.setCursor(2,48);d.printf("%s engine:%s fail:%lu",radioState.desiredPlaying?"PLAY":"PAUSE",radioState.engineRunning?"RUN":"idle",(unsigned long)radioState.failures);d.setCursor(2,64);d.print("<- -> station   up/down rank");d.setCursor(2,78);d.print("SPACE play/pause   hold R refresh");}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,110);d.printf("WiFi:%s RSSI:%d",WiFi.status()==WL_CONNECTED?"ON":"OFF",core.wifiRssi);d.setCursor(2,124);d.print("HTTP MP3 stream | ESC HOME");}
+void drawRadio(){auto& d=M5Cardputer.Display;if(advWifi.overlayActive()){advWifi.draw(d);return;}d.fillScreen(TFT_BLACK);d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,2);d.print("R / INTERNET RADIO");d.setTextColor(TFT_WHITE,TFT_BLACK);if(!ADV_HAS_WEBRADIO){d.setCursor(2,22);d.print("Install ESP8266Audio library.");d.setCursor(2,34);d.print("Core remains alive; no fake PLAY.");}else if(radioState.count==0){d.setCursor(2,22);d.print(radioState.catalogBusy?"Loading Radio Browser...":"No catalogue. hold R refresh");}else{RadioStation& s=radioState.stations[radioState.index];d.setCursor(2,20);d.printf("%02u/%02u %s",radioState.index+1,radioState.count,s.name);d.setCursor(2,34);d.printf("MP3 %uk  local %+d",s.bitrate,s.localScore);d.setCursor(2,48);d.printf("%s engine:%s fail:%lu",radioState.desiredPlaying?"PLAY":"PAUSE",radioState.engineRunning?"RUN":"idle",(unsigned long)radioState.failures);d.setCursor(2,64);d.print("<- -> station   up/down rank");d.setCursor(2,78);d.print("SPACE play/pause  N WiFi  hold R refresh");}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,110);d.printf("WiFi:%s RSSI:%d",WiFi.status()==WL_CONNECTED?"ON":"OFF",core.wifiRssi);d.setCursor(2,124);d.print("HTTP MP3 stream | ESC HOME");}
 void drawPet(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_MAGENTA,TFT_BLACK);d.setCursor(2,2);d.print("D / JANUS PET [SIMULATED]");d.setTextColor(TFT_WHITE,TFT_BLACK);if(petPage==0){d.setCursor(2,18);d.printf("Hunger %3d Thirst %3d",(int)pet.hunger,(int)pet.thirst);d.setCursor(2,30);d.printf("Dirt %3d Energy %3d",(int)pet.dirt,(int)pet.energy);d.setCursor(2,42);d.printf("Mood %3d Health %3d",(int)pet.mood,(int)pet.health);d.setCursor(2,54);d.printf("Comfort %3d %s",(int)pet.comfort,pet.sleeping?"SLEEP":"AWAKE");}else if(petPage==1){d.setCursor(2,18);d.print("REAL ENV -> SIMULATED COMFORT");d.setCursor(2,32);d.printf("T:%s H:%s P:%s",core.shtValid?String(core.tempC,1).c_str():"?",core.shtValid?String(core.humidity,0).c_str():"?",core.qmpValid?String(core.pressureHpa,0).c_str():"?");d.setCursor(2,46);d.printf("comfort:%d/100",(int)pet.comfort);d.setCursor(2,60);d.print("Pet state is NOT sensor evidence.");}else{d.setCursor(2,18);d.printf("Age %lumin interactions %lu",(unsigned long)pet.ageMinutes,(unsigned long)pet.interactions);d.setCursor(2,32);d.printf("Meals %lu Drinks %lu Clean %lu",(unsigned long)pet.meals,(unsigned long)pet.drinks,(unsigned long)pet.cleanups);d.setCursor(2,46);d.print("Persistent via NVS wear-guarded saves");}d.setTextColor(TFT_YELLOW,TFT_BLACK);d.setCursor(2,84);d.printf("ACTION < %s >",petActions[petAction]);d.setTextColor(TFT_LIGHTGREY,TFT_BLACK);d.setCursor(2,100);d.print("<- -> action  up/down page  SPACE");d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("FICTIONAL STATE | ESC HOME");}
 void drawCurrentMode(){switch(mode.mode){case ForegroundMode::HOME:drawHome();break;case ForegroundMode::VISUALIZER_O:drawVisualizer();break;case ForegroundMode::ZIM_VIEW_Z:drawZimView();break;case ForegroundMode::RADIO_R:drawRadio();break;case ForegroundMode::TAMAGOTCHI_D:drawPet();break;case ForegroundMode::ALIEN_SURVIVAL_A:alien.draw(M5Cardputer.Display);break;}}
 
 // -------------------------- input --------------------------
 bool keyNow(char a,char b=0){return M5Cardputer.Keyboard.isKeyPressed(a)||(b&&M5Cardputer.Keyboard.isKeyPressed(b));}
-struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;
+struct EdgeState{bool enter=false,esc=false,space=false,l=false,j=false,o=false,z=false,r=false,d=false,a=false,g=false,p=false,i=false,n=false,minus=false,plus=false,lb=false,rb=false,left=false,right=false,up=false,down=false;}prevKey;
 bool rising(bool now,bool& prev){bool r=now&&!prev;prev=now;return r;}
 struct HoldState{bool was=false,fired=false;uint32_t since=0;};HoldState holdO,holdR,holdZ,holdD;
 bool longHold(bool now,HoldState& h,uint32_t ms=900){if(now&&!h.was){h.since=millis();h.fired=false;}bool fire=now&&!h.fired&&millis()-h.since>=ms;if(fire)h.fired=true;if(!now){h.since=0;h.fired=false;}h.was=now;return fire;}
@@ -795,11 +804,11 @@ void handleCodeBuffer(const Keyboard_Class::KeysState& ks){
 }
 
 void processInput(){
-  M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();handleCodeBuffer(ks);
+  M5Cardputer.update();auto ks=M5Cardputer.Keyboard.keysState();if(!advWifi.passwordEntry())handleCodeBuffer(ks);bool topHome=M5Cardputer.BtnA.wasPressed();
   bool any=M5Cardputer.Keyboard.isPressed();if(any)userActivity();
-  bool nEnter=ks.enter,nEsc=ks.esc,nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');
-  if(rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R)radioSetPlaying(false);mode.escapeToHome();statusLine="HOME";}
-  if(rising(nEnter,prevKey.enter)){hardMute=!hardMute;if(hardMute)radioStopEngine();applyVolume();if(!hardMute&&radioState.desiredPlaying)radioStartEngine();statusLine=hardMute?"MUTE":"AUDIO ON";witness("AUDIO_MUTE",hardMute?"on":"off");saveUiSettings();}
+  bool nEnter=ks.enter,nEsc=ks.fn&&keyNow('`','~'),nSpace=ks.space,nL=keyNow('l','L'),nJ=keyNow('j','J'),nO=keyNow('o','O'),nZ=keyNow('z','Z'),nR=keyNow('r','R'),nD=keyNow('d','D'),nA=keyNow('a','A'),nG=keyNow('g','G'),nP=keyNow('p','P'),nI=keyNow('i','I'),nN=keyNow('n','N'),nMinus=keyNow('-','_'),nPlus=keyNow('+','='),nLb=keyNow('[','{'),nRb=keyNow(']','}');
+  if(topHome||rising(nEsc,prevKey.esc)){if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A)alien.leave();if(mode.mode==ForegroundMode::RADIO_R){releaseRadioAudioLease();advWifi.leaveRadio();}mode.escapeToHome();statusLine="HOME";}
+  if(!advWifi.overlayActive()&&rising(nEnter,prevKey.enter)){hardMute=!hardMute;if(hardMute)radioStopEngine();applyVolume();if(!hardMute&&radioState.desiredPlaying)radioStartEngine();statusLine=hardMute?"MUTE":"AUDIO ON";witness("AUDIO_MUTE",hardMute?"on":"off");saveUiSettings();}
   if(rising(nMinus,prevKey.minus)){masterVolume=masterVolume>8?masterVolume-8:0;applyVolume();saveUiSettings();}
   if(rising(nPlus,prevKey.plus)){masterVolume=masterVolume<247?masterVolume+8:255;applyVolume();saveUiSettings();}
   if(rising(nLb,prevKey.lb)){illumination.stepDown();applyIllumination();saveUiSettings();}
@@ -807,17 +816,17 @@ void processInput(){
   if(rising(nL,prevKey.l)){illumination.toggleLed();applyIllumination();statusLine=illumination.led_enabled?"LED ON":"LED OFF";saveUiSettings();}
   if(rising(nJ,prevKey.j)){loraActive=!loraActive;statusLine=loraActive?(loraReady?"LORA ON":"LORA REQUEST/HW FAIL"):"LORA OFF";witness("LORA_GATE",loraActive?"on":"off");}
 
-  if(mode.mode==ForegroundMode::HOME){if(rising(nO,prevKey.o)){mode.enter(ForegroundMode::VISUALIZER_O);statusLine="OSCILLOSCOPE";}if(rising(nZ,prevKey.z)){mode.enter(ForegroundMode::ZIM_VIEW_Z);statusLine="RESOURCE VIEW";}if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);statusLine="RADIO";if(!radioState.count)radioRefreshCatalog();}if(rising(nD,prevKey.d)){mode.enter(ForegroundMode::TAMAGOTCHI_D);statusLine="PET";}if(rising(nA,prevKey.a)){mode.enter(ForegroundMode::ALIEN_SURVIVAL_A);alien.enter();statusLine="ALIEN SURVIVAL";witness("MODE","alien_survival","CONTROL_STATE");}}
+  if(mode.mode==ForegroundMode::HOME){if(rising(nO,prevKey.o)){mode.enter(ForegroundMode::VISUALIZER_O);statusLine="OSCILLOSCOPE";}if(rising(nZ,prevKey.z)){mode.enter(ForegroundMode::ZIM_VIEW_Z);statusLine="RESOURCE VIEW";}if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);acquireRadioAudioLease();advWifi.enterRadio();statusLine="RADIO";if(advWifi.connected()&&!radioState.count)radioRefreshCatalog();}if(rising(nD,prevKey.d)){mode.enter(ForegroundMode::TAMAGOTCHI_D);statusLine="PET";}if(rising(nA,prevKey.a)){mode.enter(ForegroundMode::ALIEN_SURVIVAL_A);alien.enter();statusLine="ALIEN SURVIVAL";witness("MODE","alien_survival","CONTROL_STATE");}}
   else{prevKey.o=nO;prevKey.z=nZ;prevKey.r=nR;prevKey.d=nD;prevKey.a=nA;}
 
-  bool left=ks.left||keyNow('a','A'),right=ks.right||keyNow('d','D'),up=ks.up||keyNow('w','W'),down=ks.down||keyNow('s','S');
+  bool left=ks.fn&&keyNow(',','<'),right=ks.fn&&keyNow('/','?'),up=ks.fn&&keyNow(';',':'),down=ks.fn&&keyNow('.','>');
   if(mode.mode==ForegroundMode::VISUALIZER_O){if(rising(left,prevKey.left))mode.visualizerPrev();if(rising(right,prevKey.right))mode.visualizerNext();if(rising(up,prevKey.up))visualGain=constrain(visualGain*1.25f,0.5f,4.0f);if(rising(down,prevKey.down))visualGain=constrain(visualGain/1.25f,0.5f,4.0f);if(longHold(nO,holdO)){deskVisualizerEnabled=!deskVisualizerEnabled;statusLine=deskVisualizerEnabled?"DESK VIS ON":"DESK VIS OFF";saveUiSettings();}}
   else if(mode.mode==ForegroundMode::ZIM_VIEW_Z){if(longHold(nZ,holdZ))zimExtended=!zimExtended;prevKey.left=left;prevKey.right=right;prevKey.up=up;prevKey.down=down;prevKey.space=nSpace;}
-  else if(mode.mode==ForegroundMode::RADIO_R){if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}
+  else if(mode.mode==ForegroundMode::RADIO_R){if(advWifi.overlayActive()){if(advWifi.passwordEntry()&&M5Cardputer.Keyboard.isChange()&&M5Cardputer.Keyboard.isPressed()&&!ks.fn){for(char c:ks.word)advWifi.onChar(c);if(ks.del)advWifi.onBackspace();}if(rising(up,prevKey.up))advWifi.onUp();if(rising(down,prevKey.down))advWifi.onDown();if(rising(nEnter,prevKey.enter))advWifi.onEnter();prevKey.left=left;prevKey.right=right;prevKey.space=nSpace;}else{if(rising(left,prevKey.left))radioStep(-1);if(rising(right,prevKey.right))radioStep(1);if(rising(up,prevKey.up))radioVoteLocal(1);if(rising(down,prevKey.down))radioVoteLocal(-1);if(rising(nSpace,prevKey.space))radioSetPlaying(!radioState.desiredPlaying);if(rising(nN,prevKey.n)){radioSetPlaying(false);advWifi.forceScan();}if(longHold(nR,holdR)){radioSetPlaying(false);radioRefreshCatalog();}}}
   else if(mode.mode==ForegroundMode::TAMAGOTCHI_D){if(rising(left,prevKey.left))petAction=(petAction+PET_ACTION_COUNT-1)%PET_ACTION_COUNT;if(rising(right,prevKey.right))petAction=(petAction+1)%PET_ACTION_COUNT;if(rising(up,prevKey.up))petPage=(petPage+2)%3;if(rising(down,prevKey.down))petPage=(petPage+1)%3;if(rising(nSpace,prevKey.space))petDoAction();if(longHold(nD,holdD))petPage=2;}
   else if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A){if(rising(nG,prevKey.g))alien.toggleGyro(core.ax,core.ay);if(rising(nP,prevKey.p))alien.togglePause();if(rising(nI,prevKey.i))alien.toggleAutoFire();if(alien.dead()&&rising(nSpace,prevKey.space))alien.restartIfDead();alien.update(millis(),left,right,up,down,nSpace,core.ax,core.ay,sqrtf(core.gx*core.gx+core.gy*core.gy+core.gz*core.gz)*0.010f);}
   else{prevKey.left=left;prevKey.right=right;prevKey.up=up;prevKey.down=down;prevKey.space=nSpace;}
-  if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}
+  if(mode.mode!=ForegroundMode::ALIEN_SURVIVAL_A){prevKey.g=nG;prevKey.p=nP;prevKey.i=nI;}if(mode.mode!=ForegroundMode::RADIO_R)prevKey.n=nN;
 }
 
 // -------------------------- setup / loop --------------------------
@@ -827,7 +836,7 @@ void setup(){
   Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool shtOk=advSht.begin(&Wire,0x44,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool qmpOk=advQmp.begin(&Wire,0x56,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);Serial.printf("[ADV] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
   M5.Imu.init();core.imuValid=true;calibrateImuZero();
   FastLED.addLeds<WS2812,LED_PIN,GRB>(advLed,1);loadUiSettings();applyIllumination();M5Cardputer.Speaker.begin();applyVolume();
-  loadPet();alien.begin();buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
+  loadPet();alien.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
   core.predEntropy=core.entropy;core.battery=M5.Power.getBatteryLevel();core.freeHeap=ESP.getFreeHeap();lastUserInputMs=millis();witness("BOOT","ADV_Elite_RC2","CONTROL_STATE");statusLine="RC2 READY";
 }
 
@@ -837,7 +846,7 @@ void loop(){
   if(now-lastEnvMs>=ENV_INTERVAL_MS){lastEnvMs=now;readEnv();}
   if(now-lastCoreMs>=CORE_INTERVAL_MS){lastCoreMs=now;readImu();if(eye.online&&now-eye.lastOkMs>18000UL)eye.online=false;if(audioNode.online&&now-audioNode.lastOkMs>18000UL)audioNode.online=false;core.battery=M5.Power.getBatteryLevel();core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;core.freeHeap=ESP.getFreeHeap();updatePredictorAndAnomaly();petTick();m2rTick();}
   if(now-lastHeartbeatMs>=HEARTBEAT_MS){lastHeartbeatMs=now;sendHeartbeat();}
-  alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();
+  advWifi.tick();if(mode.mode==ForegroundMode::RADIO_R&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();
   if(now-lastDrawMs>=DRAW_INTERVAL_MS){lastDrawMs=now;drawCurrentMode();}
   core.loopUs=micros()-loopStart;if(core.loopUs>core.loopMaxUs)core.loopMaxUs=core.loopUs;delay(1);
 }
