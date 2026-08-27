@@ -41,9 +41,14 @@ SHA256_SEMANTICS = UNCHANGED
 TARGET_MATH = UNCHANGED
 POOL_DIFFICULTY_SEMANTICS = UNCHANGED
 SUBMIT_SEMANTICS = UNCHANGED
+PRIMARY_MISSION = PROTECTED
+SIDE_QUEST_BUDGET = BOUNDED
+IMMUTABLE_TRUTH_CORE + LEARNABLE_POLICY_AROUND_IT
 ```
 
-Adaptive experiments may change scheduling choices such as nonce order, lane, stride, sector, or batch pressure. They are not permitted to reinterpret the hash function or acceptance target.
+Adaptive experiments may change scheduling choices such as nonce order, lane, stride, sector, batch pressure, safe local model weights or resource allocation. They are not permitted to reinterpret the hash function, acceptance target, sensor truth, packet ABI, identity/provenance or user-control gates.
+
+The swarm is intentionally heterogeneous: a node is expected to preserve its own specialization while contributing bounded work and state to the collective. See [`docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md`](docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md).
 
 ## Boundary
 
@@ -60,6 +65,8 @@ This repository does **not** claim:
 - [`PROJECT_MAP.md`](PROJECT_MAP.md) — current components and file map.
 - [`docs/current-swarm-state.md`](docs/current-swarm-state.md) — current working state.
 - [`docs/swarm-critical-rules.md`](docs/swarm-critical-rules.md) — invariants and recovery rules.
+- [`docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md`](docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md) — mandatory primary-mission / bounded-side-quest / safe-learning doctrine.
+- [`docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md`](docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md) — immediate ADV_Elite architecture adoption of the generalizable Zim properties.
 - [`docs/architecture.md`](docs/architecture.md) — architecture.
 - [`docs/technical-boundaries.md`](docs/technical-boundaries.md) — claim/safety boundaries.
 - [`M5STACK_REVIEW_GUIDE.md`](M5STACK_REVIEW_GUIDE.md) — hardware-oriented review path.
