@@ -23,20 +23,37 @@ enum class VisualizerSource : uint8_t {
   COUNT
 };
 
+enum class GameMoveControl : uint8_t {
+  KEYBOARD = 0,
+  GYRO = 1
+};
+
 struct ModeContract {
   ForegroundMode mode = ForegroundMode::HOME;
   VisualizerSource visualizer_source = VisualizerSource::ENV;
   bool zim_overlay = false;
   bool visualizer_idle_auto = false;
 
-  // Global invariant: ESC always returns to HOME and clears presentation-only overlays.
+  // A-mode session state. These flags never change JANUS truth state.
+  GameMoveControl game_move_control = GameMoveControl::KEYBOARD;
+  bool game_paused = false;
+  bool game_auto_fire = false;
+  bool game_stats_overlay = false;
+
+  // Global invariant: ESC always returns HOME and clears presentation-only overlays.
+  // It does not stop JANUS background organs.
   void escapeToHome() {
     mode = ForegroundMode::HOME;
     zim_overlay = false;
+    game_stats_overlay = false;
   }
 
   void enter(ForegroundMode next) {
     mode = next;
+  }
+
+  bool inAlienGame() const {
+    return mode == ForegroundMode::ALIEN_SURVIVAL_A;
   }
 
   void visualizerPrev() {
@@ -49,6 +66,27 @@ struct ModeContract {
     uint8_t v = static_cast<uint8_t>(visualizer_source);
     const uint8_t n = static_cast<uint8_t>(VisualizerSource::COUNT);
     visualizer_source = static_cast<VisualizerSource>((v + 1U) % n);
+  }
+
+  // Canonical A-mode controls. The final input router calls these only while A is foreground.
+  void gameToggleGyro() {
+    game_move_control = (game_move_control == GameMoveControl::KEYBOARD)
+        ? GameMoveControl::GYRO
+        : GameMoveControl::KEYBOARD;
+    // When switching into GYRO, the hardware adapter must capture a fresh neutral pose.
+  }
+
+  void gameTogglePause() {
+    game_paused = !game_paused;
+    // Pause applies to game simulation only, never to JANUS P0/P1/P2 work.
+  }
+
+  void gameToggleAutoFire() {
+    game_auto_fire = !game_auto_fire;
+  }
+
+  void gameToggleStatsOverlay() {
+    game_stats_overlay = !game_stats_overlay;
   }
 };
 
@@ -65,7 +103,14 @@ struct ModeContract {
 // Z         -> ZIM_VIEW_Z; long-Z toggles read-only resource overlay.
 // R         -> RADIO_R; L/R stations, U/D local rank, Space play/pause.
 // D         -> TAMAGOTCHI_D; arrows select care, Space acts.
-// A         -> ALIEN_SURVIVAL_A; movement + Space primary game action.
+// A         -> ALIEN_SURVIVAL_A.
+// In A only:
+//   arrows/WASD -> movement when KEYBOARD control is active.
+//   G           -> KEYBOARD <-> GYRO; entering GYRO captures neutral pose.
+//   Space       -> manual fire/action.
+//   I           -> auto-fire toggle.
+//   P           -> pause/unpause game simulation only.
+//   long-A      -> stats/controls/perk overlay; not pause.
 //
 // Long-press router invariant:
 // a recognized long press consumes the corresponding short press.
