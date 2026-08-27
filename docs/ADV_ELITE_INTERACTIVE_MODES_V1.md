@@ -1,4 +1,4 @@
-# ADV_Elite Interactive Modes v1
+# ADV_Elite Interactive Modes v1.1
 
 Status: architecture frozen for final single ADV_Elite composition.
 
@@ -80,36 +80,7 @@ Controls:
 - `ENTER` remains absolute mute.
 - `-` / `+` remain global volume.
 
-### Directory policy
-
-Preferred open directory: Radio Browser API.
-
-Rules:
-- discover/rotate available Radio Browser API servers instead of hard-coding one server;
-- use `stationuuid` as stable station identity;
-- query `hidebroken=true`;
-- initially prefer codecs the final Cardputer ADV decoder actually passes in hardware tests (MP3 first; AAC/AAC+ only after decoder validation);
-- cache a bounded station catalogue to SD for fast boot and offline browsing;
-- never store API results as trusted sensor truth.
-
-### Ranking
-
-Local station rank is independent of public Radio Browser voting.
-
-Suggested score:
-`LOCAL_RANK = USER_SCORE + FAVORITE_BONUS + RECENCY/PLAY_SUCCESS - FAILURE_PENALTY`
-
-Up/Down modifies `USER_SCORE` only. A station that repeatedly fails to connect is demoted locally without deleting the user's preference history.
-
-When a station is actually played, the client may call Radio Browser's documented click-counter endpoint as normal directory etiquette; local Up/Down must not spam or impersonate public votes.
-
-### Audio ownership
-
-Radio temporarily owns the speaker renderer. BrainWave state estimation continues, but BrainWave audio rendering pauses while radio is playing. When radio stops/exits, BrainWave rendering may resume according to the user's current audio state.
-
-Radio is a bounded side quest: if decoding/network buffering threatens P0/P1 JANUS work, reduce visualization rate/buffer ambition or pause radio before dropping sensor/anomaly/Witness functions.
-
-No Wi-Fi password, token or secret may be compiled into the public repository.
+Preferred open directory: Radio Browser API. Use `stationuuid`, `hidebroken=true`, bounded SD cache, decoder-tested codecs, and local ranking independent of public voting. Radio temporarily owns the speaker renderer while BrainWave state estimation continues. It yields before P0/P1 JANUS work.
 
 ## D — ENV Tamagotchi
 
@@ -128,49 +99,116 @@ Core needs:
 - interaction/play;
 - persistent history across reboot.
 
-ENV coupling is contextual, not medical/biological truth. Real temperature/humidity/pressure may influence a bounded `comfort` term; stale/unknown ENV produces `UNKNOWN_ENV`, not invented values.
+Real ENV may influence a bounded comfort term; stale/unknown ENV produces UNKNOWN_ENV rather than invented values.
 
-Recommended controls inside D:
+Controls:
 - Left/Right -> select care action;
-- Up/Down -> select item/amount or pet page;
+- Up/Down -> select item/amount or page;
 - `Space` -> perform selected action;
-- long `D` -> pet history/stats page;
+- long `D` -> pet history/stats;
 - `ESC` -> HOME.
-
-Pet time progression uses monotonic/RTC-aware timestamps and persists with flash-wear guards. Background JANUS continues normally.
 
 ## A — Alien Survival Roguelike
 
-Short `A` enters a lightweight fictional survival roguelike inspired by top-down horde survival / Alien Shooter-style pacing.
+Short `A` enters the fictional top-down horde-survival / Alien-Shooter-inspired roguelike.
 
-This is entertainment only and is completely separated from JANUS truth semantics.
+The uploaded Atom `TD_SWARM v8.16B` code is now an identified GAMEPLAY DONOR. Reusable organs include:
+- fixed-step simulation (`1/30 s`) with bounded catch-up;
+- spatial grid targeting;
+- waves/hordes and procedural enemy roles;
+- particles/beams and compact pixel graphics;
+- persistent best-run records with magic/version/CRC;
+- procedural day/night and weather presentation;
+- hero classes, mana, independent skill cooldowns and multiple abilities;
+- one-way real-event-to-game reward concepts where truth is preserved.
 
-Suggested controls:
-- arrows or WASD -> movement;
-- `Space` -> fire/use primary action;
-- long `A` -> pause/status overlay;
-- `ESC` -> HOME immediately.
+Do not transplant donor Wi-Fi credentials, pool identity, legacy game->entropy coupling, or any path that lets game state become JANUS truth.
 
-The game may have waves, hordes, procedural rooms/arena modifiers, pickups, leveling, perks, bosses, local high scores and persistent unlocks, but:
-- no game variable may be emitted as OBSERVED_REAL;
-- game state may not affect anomaly/M2R/sensor truth;
-- it must have a fixed CPU/frame budget and yield under Quiet Canary;
-- sound obeys ENTER mute and global +/- volume;
-- LED effects obey the shared brightness axis and L gate.
+### Canonical A-mode controls
 
-The currently supplied Beacon/ADV code in the design discussion does NOT contain an Alien Shooter implementation; it is a JANUS/Beacon sketch. Therefore the roguelike must be implemented as a new isolated module or transplanted only from a separately identified game source.
+- arrows / WASD -> manual movement when keyboard control is active;
+- `G` -> toggle `KEYBOARD <-> GYRO` movement control;
+- entering GYRO captures/recenters the neutral IMU pose; adaptive drift correction is allowed only as an input-calibration function;
+- `Space` -> manual primary fire/action;
+- `I` -> toggle AUTO-FIRE;
+- `P` -> pause/unpause GAME SIMULATION only;
+- long `A` -> run stats / controls / perk-status overlay; it is not the pause key;
+- `ESC` -> HOME immediately, from play or pause;
+- `ENTER` -> absolute audio mute still wins;
+- `-` / `+` -> global volume still wins.
+
+Pause freezes game simulation timers and combat progression, but does NOT freeze JANUS sensors, anomaly, Witness, swarm, clock, or protected cognition.
+
+### GYRO control
+
+The donor WitchHunter IMU pattern is preferred over a raw accelerometer mapping:
+- capture neutral pose;
+- remove gyro bias;
+- derive side/forward intent from pose delta;
+- low-pass roll/pitch command;
+- bounded dead zone;
+- adaptive recenter only while the hand is quiet and user intent is low;
+- never let game recentering mutate the canonical sensor truth stream.
+
+GYRO is a game input projection, not a replacement for the real IMU observation.
+
+### AUTO-FIRE
+
+AUTO-FIRE is a local gameplay convenience. It may acquire the nearest valid in-game target and fire according to the weapon cooldown. It cannot create real JANUS events, alter mining validity, or affect anomaly/M2R.
+
+### User-active GAME PERFORMANCE PRIORITY
+
+When `A` is active and the user is playing, ADV may temporarily give the game more discretionary compute, Zim-style, while keeping PRIMARY_MISSION intact.
+
+Invariant:
+`P0/P1/P2 ARE NEVER SACRIFICED FOR FPS`.
+
+The following may yield first:
+1. P5 archive/catalog refresh/heavy optional work;
+2. nonessential P4 background rendering/BrainWave rendering not currently audible;
+3. P3 Buzz/mining batch size, corpus maintenance and other bounded side work.
+
+The SHA/verifier/target/header semantics never change. Already-found valid work is never discarded by the performance governor. The governor changes only scheduling/batch/time budget.
+
+Suggested adaptive control uses measured render FPS / loop pressure rather than a fixed permanent throttle. Exact thresholds are hardware-tuned after Cardputer ADV benchmarks.
+
+### Adaptive game LED
+
+During A-mode, the LED may become a game-status renderer while preserving the canonical shared brightness axis:
+- healthy -> GREEN;
+- wounded -> YELLOW;
+- critical -> RED;
+- short damage/fire/reward accents may alter color pattern, but never create an independent brightness axis.
+
+Canonical LED priority:
+1. `L=OFF` -> BLACK, always;
+2. JANUS confirmed anomaly -> WHITE, always;
+3. A-mode game-status color while A is foreground;
+4. House/default JANUS color policy outside the game foreground.
+
+When A exits, LED immediately returns to the applicable JANUS/House state at the same shared brightness step. `[`/`]` continue to move display and enabled LED together while the game is active.
+
+### Truth boundary and one-way bridges
+
+Allowed:
+`REAL ENV / REAL Buzz event / REAL pool ACCEPT -> FICTIONAL game modifier or cosmetic`.
+
+Forbidden:
+`GAME event -> OBSERVED_REAL / anomaly / M2R evidence / share validity`.
+
+Any real-world-derived game effect must be labelled DERIVED/SIMULATED in logs.
 
 ## Long-press policy
 
-Long presses are first-class but must remain deterministic:
+Long presses are first-class and deterministic:
 - short and long actions are documented per key;
 - a long press must not also fire the short action on release;
 - global safety/user-control keys keep their existing semantics;
-- hold duration should be centralized in one input router, not reimplemented independently by every mode.
+- hold duration is centralized in one input router.
 
 ## Mode manager
 
-Recommended foreground states:
+Foreground states:
 - HOME
 - VISUALIZER_O
 - ZIM_VIEW_Z
@@ -178,31 +216,34 @@ Recommended foreground states:
 - TAMAGOTCHI_D
 - ALIEN_SURVIVAL_A
 
-Only one foreground mode is active at a time. Background JANUS core remains alive.
-
-`ESC -> HOME` is a global invariant.
+Only one foreground mode is active at a time. Background JANUS core remains alive. `ESC -> HOME` is a global invariant.
 
 ## Resource hierarchy
 
-P0 — truth/clock/sensors/anomaly/Witness/user controls
-P1 — local cognition/prediction/swarm model
-P2 — trusted swarm communications
-P3 — bounded work such as Buzz/corpus
-P4 — foreground entertainment/visualization/audio
-P5 — external archive/catalog refresh/heavy optional tasks
+Normal operation:
+- P0 truth/clock/sensors/anomaly/Witness/user controls
+- P1 local cognition/prediction/swarm model
+- P2 trusted swarm communications
+- P3 bounded work such as Buzz/corpus
+- P4 foreground entertainment/visualization/audio
+- P5 external archive/catalog refresh/heavy optional tasks
 
-Radio/game/tamagotchi/visualizer must degrade before P0-P2.
+While A-mode has explicit active user input, game rendering/simulation may temporarily outrank P3 bounded work, but never P0-P2.
 
 ## Acceptance gates
 
 1. ESC returns HOME from every mode within one input cycle.
 2. ENTER mutes every audio producer, including radio and game.
 3. +/- changes one global master volume used by BrainWave/radio/game/pet.
-4. [ ] and L continue to obey the canonical shared illumination policy in every mode.
+4. [ ] and L obey the canonical shared illumination policy in every mode.
 5. Entering a foreground mode does not stop sensor freshness, anomaly, Witness or swarm health loops.
 6. O visual transformations do not change sensing/anomaly parameters.
 7. Radio Up/Down changes local ranking only and survives reboot with flash-wear guards.
-8. Radio catalogue cache can fail/offline without blocking HOME or JANUS core.
-9. Tamagotchi state is always classified SIMULATED/FICTIONAL.
-10. Game state is isolated from prediction/anomaly/sensor truth.
-11. Under induced CPU/network pressure, P4 features degrade before P0/P1.
+8. Tamagotchi is always SIMULATED/FICTIONAL.
+9. Game state is isolated from prediction/anomaly/sensor truth.
+10. G toggles keyboard/gyro without mutating the canonical IMU observation stream.
+11. P pauses only the game simulation.
+12. I toggles auto-fire deterministically.
+13. Under low game FPS, P5 then bounded P3 work yields before P0-P2.
+14. Game LED health mapping obeys L, anomaly-white priority, and the shared brightness axis.
+15. Donor game persistence rejects invalid magic/version/CRC.
