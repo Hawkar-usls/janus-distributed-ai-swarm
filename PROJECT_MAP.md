@@ -36,8 +36,12 @@ together.
 - `README.md`: current public swarm overview.
 - `docs/current-swarm-state.md`: current node roles and integration status.
 - `docs/swarm-critical-rules.md`: critical sketch rules for future edits.
+- `docs/AUTONOMOUS_SPECIALIST_DOCTRINE.md`: mandatory `PRIMARY_MISSION + BOUNDED_SIDE_QUESTS` doctrine derived from the Zim experiment.
+- `docs/JANUS_AUTONOMOUS_SPECIALIST_DOCTRINE_2026-08-27.json`: machine-readable specialist doctrine.
+- `docs/ADV_ELITE_ZIM_SPECIALIST_ADOPTION.md`: ADV_Elite adoption contract for Zim's generalizable strengths.
+- `.github/PULL_REQUEST_TEMPLATE.md`: review checklist that requires mission/budget/truth/learning/acceleration/persistence checks.
 - `docs/current/`: copied latest working notes from the private LastSwarm lab.
-- `docs/architecture.md`: older architecture overview retained for review.
+- `docs/architecture.md`: architecture overview and specialist-node model.
 - `docs/technical-boundaries.md`: protocol and validation boundaries.
 - `docs/esp-now-swarm.md`: ESP-NOW compatibility notes.
 - `M5STACK_REVIEW_GUIDE.md`: shortest external review path.
