@@ -1,3 +1,4 @@
 ADV Elite RC3 build trigger
 2026-08-28
 Pixel shooter + ToyCastle-first Wi-Fi + radio exclusive audio lease.
+ZIM-class runtime governor integration compile gate.
