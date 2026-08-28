@@ -59,6 +59,7 @@ jobs:
           mkdir -p /tmp/adv_build
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
+            --build-property "upload.maximum_size=3342336" \
             --warnings all \
             --library _vendor/M5Cardputer \
             --output-dir /tmp/adv_build \
@@ -66,8 +67,8 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "$status" > /tmp/adv_compile.status
           if [ "$status" -ne 0 ]; then
-            grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
-              | tail -n 80 \
+            grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed|Sketch too big|text section exceeds' /tmp/adv_compile.log \
+              | tail -n 100 \
               | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
               | while IFS= read -r line; do echo "::error::$line"; done
           fi
