@@ -51,7 +51,7 @@ class AdvWifiManager {
     const uint32_t now = millis();
     if (WiFi.status() == WL_CONNECTED) {
       if (state_ != State::CONNECTED) {
-        if (state_ == State::CONNECT_PICKED) savePicked();
+        if (state_ == State::CONNECT_PICKED) stagePickedSave();
         state_ = State::CONNECTED;
         connectedEvent_ = true;
         error_[0] = 0;
@@ -97,6 +97,15 @@ class AdvWifiManager {
   bool connected() const { return WiFi.status() == WL_CONNECTED; }
   bool passwordEntry() const { return state_ == State::PASSWORD; }
   State state() const { return state_; }
+
+  void servicePersistence() {
+    if (!savePending_) return;
+    savePending_ = false;
+    if (!store_.begin("adv_wifi", false)) return;
+    store_.putString("ssid", savedSsid_);
+    store_.putString("pwd", savedPassword_);
+    store_.end();
+  }
 
   bool consumeConnectedEvent() {
     bool v = connectedEvent_;
@@ -233,6 +242,7 @@ class AdvWifiManager {
   int selected_ = 0;
   bool pickedOpen_ = false;
   bool connectedEvent_ = false;
+  bool savePending_ = false;
   char error_[32] = {};
   Preferences store_;
 
@@ -243,14 +253,11 @@ class AdvWifiManager {
     store_.end();
   }
 
-  void savePicked() {
+  void stagePickedSave() {
     if (pickedSsid_.length() == 0) return;
-    if (!store_.begin("adv_wifi", false)) return;
-    store_.putString("ssid", pickedSsid_);
-    store_.putString("pwd", password_);
-    store_.end();
     savedSsid_ = pickedSsid_;
     savedPassword_ = password_;
+    savePending_ = true;
   }
 
   void startPrimary() {
@@ -267,7 +274,6 @@ class AdvWifiManager {
   bool startSaved() {
     if (savedSsid_.length() == 0 || savedSsid_ == primarySsid_) return false;
     WiFi.disconnect(false, false);
-    delay(20);
     WiFi.mode(WIFI_STA);
     WiFi.begin(savedSsid_.c_str(), savedPassword_.c_str());
     state_ = State::CONNECT_SAVED;
@@ -277,7 +283,6 @@ class AdvWifiManager {
 
   void startScan() {
     WiFi.disconnect(false, false);
-    delay(20);
     WiFi.mode(WIFI_STA);
     WiFi.scanDelete();
     int rc = WiFi.scanNetworks(true, true);

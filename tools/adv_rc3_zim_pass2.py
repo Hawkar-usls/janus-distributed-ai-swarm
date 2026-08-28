@@ -123,7 +123,8 @@ uint32_t lastWifiTelemetryMs = 0;
 bool uiPrefsDirty = false;
 bool petPrefsDirty = false;
 bool radioScoreDirty = false;
-uint8_t radioScoreDirtyIndex = 0;
+char radioScoreDirtyUuid[40] = "";
+int16_t radioScoreDirtyValue = 0;
 uint8_t brainStep = 0;
 ''','pass2 state')
 
@@ -156,13 +157,13 @@ orig=s[ps:pe]
 actual=orig.replace('void savePet(){','void savePetNow(){',1)
 s=s[:ps]+actual+'\nvoid savePet(){petPrefsDirty=true;}'+s[pe:]
 
-# radio score deferred
+# radio score deferred by stable UUID, never by mutable sorted index
 rs=s.find('void radioSaveScore(uint8_t i){')
 re=s.find('\nint32_t stationRank',rs)
 if rs<0 or re<0: raise RuntimeError('radio score block')
-orig=s[rs:re]
-actual=orig.replace('void radioSaveScore(uint8_t i){','void radioSaveScoreNow(uint8_t i){',1)
-s=s[:rs]+actual+'\nvoid radioSaveScore(uint8_t i){if(i>=radioState.count)return;radioScoreDirtyIndex=i;radioScoreDirty=true;}'+s[re:]
+generated='''void radioSaveScoreNow(const char* uuid,int16_t score){if(!uuid||!*uuid)return;prefs.begin("adv_radio",false);prefs.putShort(stationScoreKey(uuid).c_str(),score);prefs.end();}
+void radioSaveScore(uint8_t i){if(i>=radioState.count)return;strlcpy(radioScoreDirtyUuid,radioState.stations[i].uuid,sizeof(radioScoreDirtyUuid));radioScoreDirtyValue=radioState.stations[i].localScore;radioScoreDirty=true;}'''
+s=s[:rs]+generated+s[re:]
 
 # ESP-NOW does not own Wi-Fi association and never spins for seconds during rescue.
 old='''bool initEspNow(){
@@ -189,7 +190,7 @@ insert='''void serviceDeferredPersistence(){
   if(heavyFg)return;
   if(uiPrefsDirty){uiPrefsDirty=false;saveUiSettingsNow();return;}
   if(petPrefsDirty){petPrefsDirty=false;savePetNow();return;}
-  if(radioScoreDirty){uint8_t i=radioScoreDirtyIndex;radioScoreDirty=false;radioSaveScoreNow(i);return;}
+  if(radioScoreDirty){radioScoreDirty=false;radioSaveScoreNow(radioScoreDirtyUuid,radioScoreDirtyValue);return;}
   advWifi.servicePersistence();
 }
 

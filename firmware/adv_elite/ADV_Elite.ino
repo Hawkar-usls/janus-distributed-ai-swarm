@@ -100,6 +100,7 @@
 #include "ADV_Elite_runtime_governor.h"
 
 // RC3_ZIM_OPTIMIZED
+// RC3_ZIM_PASS2
 
 using namespace janus_adv_elite;
 
@@ -321,6 +322,13 @@ uint32_t lastEspRescueMs = 0;
 uint32_t lastUserInputMs = 0;
 uint32_t lastRobustStatsMs = 0;
 uint32_t lastLedPushMs = 0;
+uint32_t lastBatteryPollMs = 0;
+uint32_t lastWifiTelemetryMs = 0;
+bool uiPrefsDirty = false;
+bool petPrefsDirty = false;
+bool radioScoreDirty = false;
+char radioScoreDirtyUuid[40] = "";
+int16_t radioScoreDirtyValue = 0;
 uint8_t brainStep = 0;
 float gyroBiasX = 0, gyroBiasY = 0, gyroBiasZ = 0;
 
@@ -471,52 +479,39 @@ void serviceWitnessQueue(uint8_t quota){
 }
 
 void witness(const char* type,const char* detail,const char* truthClass="CONTROL_STATE") {
-  String payload="{";
-  payload += "\"schema\":\"JANUS_EVENT_V1\",";
-  payload += "\"source\":\"ADV_Elite\",";
-  payload += "\"ts_ms\":"+String(millis())+",";
-  payload += "\"type\":\""+String(type)+"\",";
-  payload += "\"truth_class\":\""+String(truthClass)+"\",";
-  payload += "\"detail\":\""+String(detail)+"\",";
-  payload += "\"entropy\":"+String(core.entropy,5)+",";
-  payload += "\"pred\":"+String(core.predEntropy,5)+",";
-  payload += "\"loss\":"+String(core.loss,5)+",";
-  payload += "\"eye_online\":"+String(eye.online?"true":"false")+",";
-  payload += "\"prev_hash\":\""+String(witnessPrevHash)+"\"}";
+  String safeDetail=detail?String(detail):String("");
+  if(safeDetail.length()>320) safeDetail=safeDetail.substring(0,320);
+  auto buildPayload=[&](const String& d){
+    String payload="{";
+    payload += "\"schema\":\"JANUS_EVENT_V1\",";
+    payload += "\"source\":\"ADV_Elite\",";
+    payload += "\"ts_ms\":"+String(millis())+",";
+    payload += "\"type\":\""+String(type)+"\",";
+    payload += "\"truth_class\":\""+String(truthClass)+"\",";
+    payload += "\"detail\":\""+d+"\",";
+    payload += "\"entropy\":"+String(core.entropy,5)+",";
+    payload += "\"pred\":"+String(core.predEntropy,5)+",";
+    payload += "\"loss\":"+String(core.loss,5)+",";
+    payload += "\"eye_online\":"+String(eye.online?"true":"false")+",";
+    payload += "\"prev_hash\":\""+String(witnessPrevHash)+"\"}";
+    return payload;
+  };
+  String payload=buildPayload(safeDetail);
+  if(payload.length()>WITNESS_LINE_MAX-82) payload=buildPayload(String("payload_compacted"));
   char newHash[65];sha256Hex(String(witnessPrevHash)+payload,newHash);
   String line=payload.substring(0,payload.length()-1)+",\"hash\":\""+String(newHash)+"\"}";
-
-  // Never break the hash chain. Queue saturation is exceptional; flush one oldest
-  // synchronously rather than dropping an event whose hash is already referenced.
-  if(witnessQCount>=WITNESS_QUEUE_N){
-    writeWitnessLineNow(witnessQueue[witnessQTail].line);
-    witnessQTail=(witnessQTail+1)%WITNESS_QUEUE_N;
-    --witnessQCount;
-  }
-  if(line.length()>=WITNESS_LINE_MAX){
-    // Current event payloads are much smaller; keep valid JSON + chain if a future
-    // caller supplies pathological detail.
-    line=String("{\"schema\":\"JANUS_EVENT_V1\",\"source\":\"ADV_Elite\",\"ts_ms\":")+String(millis())+
-         ",\"type\":\"WITNESS_OVERSIZE\",\"truth_class\":\"CONTROL_STATE\",\"detail\":\"payload_compacted\",\"prev_hash\":\""+
-         String(witnessPrevHash)+"\",\"hash\":\""+String(newHash)+"\"}";
-  }
+  if(witnessQCount>=WITNESS_QUEUE_N){writeWitnessLineNow(witnessQueue[witnessQTail].line);witnessQTail=(witnessQTail+1)%WITNESS_QUEUE_N;--witnessQCount;}
   line.toCharArray(witnessQueue[witnessQHead].line,WITNESS_LINE_MAX);
-  witnessQHead=(witnessQHead+1)%WITNESS_QUEUE_N;
-  ++witnessQCount;
-  strlcpy(witnessPrevHash,newHash,sizeof(witnessPrevHash));
-  ++witnessCount;
+  witnessQHead=(witnessQHead+1)%WITNESS_QUEUE_N;++witnessQCount;
+  strlcpy(witnessPrevHash,newHash,sizeof(witnessPrevHash));++witnessCount;
 }
 
-void saveUiSettings() {
+void saveUiSettingsNow() {
   prefs.begin("adv_ui",false);
-  prefs.putUChar("vol",masterVolume);
-  prefs.putBool("mute",hardMute);
-  prefs.putUChar("bright",illumination.level_index);
-  prefs.putBool("led",illumination.led_enabled);
-  prefs.putBool("desk",deskVisualizerEnabled);
-  prefs.putFloat("theta",m2r.thetaWeight);
-  prefs.end();
+  prefs.putUChar("vol",masterVolume);prefs.putBool("mute",hardMute);prefs.putUChar("bright",illumination.level_index);
+  prefs.putBool("led",illumination.led_enabled);prefs.putBool("desk",deskVisualizerEnabled);prefs.putFloat("theta",m2r.thetaWeight);prefs.end();
 }
+void saveUiSettings(){uiPrefsDirty=true;}
 void loadUiSettings() {
   prefs.begin("adv_ui",true);
   masterVolume=prefs.getUChar("vol",96);
@@ -760,7 +755,6 @@ void onEspRecv(const uint8_t* mac,const uint8_t* data,int len){
 
 bool initEspNow(){
   WiFi.mode(WIFI_STA);
-  if(strlen(ADV_WIFI_SSID)>0&&WiFi.status()!=WL_CONNECTED){WiFi.begin(ADV_WIFI_SSID,ADV_WIFI_PASSWORD);uint32_t until=millis()+3500UL;while(WiFi.status()!=WL_CONNECTED&&millis()<until)delay(25);}
   if(WiFi.status()!=WL_CONNECTED)esp_wifi_set_channel(ADV_ESPNOW_CHANNEL,WIFI_SECOND_CHAN_NONE);
   if(esp_now_init()!=ESP_OK){statusLine="ESP-NOW FAIL";espNowReady=false;return false;}
   esp_now_register_recv_cb(onEspRecv);
@@ -788,7 +782,10 @@ void initGnssAndLoRa(){
   loraReady=false;
 #endif
 }
-void gnssTick(){while(Serial2.available())advGps.encode((char)Serial2.read());}
+void gnssTick(){
+  const uint32_t started=micros();uint8_t n=0;
+  while(Serial2.available()&&n<96&&(uint32_t)(micros()-started)<350UL){advGps.encode((char)Serial2.read());++n;}
+}
 void maybeSendLoRaSeal(bool allowStart){
 #if ADV_HAS_RADIOLIB
   if(loraTxPending&&loraTxDoneFlag){loraTxDoneFlag=false;advRadio.finishTransmit();loraTxPending=false;}
@@ -820,7 +817,8 @@ void brainWaveTick(){
 void loadPet(){
   prefs.begin("adv_pet",true);pet.hunger=prefs.getFloat("hung",18);pet.thirst=prefs.getFloat("thir",15);pet.dirt=prefs.getFloat("dirt",8);pet.energy=prefs.getFloat("ener",82);pet.mood=prefs.getFloat("mood",75);pet.health=prefs.getFloat("heal",100);pet.ageMinutes=prefs.getUInt("age",0);pet.interactions=prefs.getUInt("ints",0);pet.meals=prefs.getUInt("meal",0);pet.drinks=prefs.getUInt("drink",0);pet.cleanups=prefs.getUInt("clean",0);pet.sleeping=prefs.getBool("sleep",false);prefs.end();pet.lastTickMs=millis();
 }
-void savePet(){prefs.begin("adv_pet",false);prefs.putFloat("hung",pet.hunger);prefs.putFloat("thir",pet.thirst);prefs.putFloat("dirt",pet.dirt);prefs.putFloat("ener",pet.energy);prefs.putFloat("mood",pet.mood);prefs.putFloat("heal",pet.health);prefs.putUInt("age",pet.ageMinutes);prefs.putUInt("ints",pet.interactions);prefs.putUInt("meal",pet.meals);prefs.putUInt("drink",pet.drinks);prefs.putUInt("clean",pet.cleanups);prefs.putBool("sleep",pet.sleeping);prefs.end();}
+void savePetNow(){prefs.begin("adv_pet",false);prefs.putFloat("hung",pet.hunger);prefs.putFloat("thir",pet.thirst);prefs.putFloat("dirt",pet.dirt);prefs.putFloat("ener",pet.energy);prefs.putFloat("mood",pet.mood);prefs.putFloat("heal",pet.health);prefs.putUInt("age",pet.ageMinutes);prefs.putUInt("ints",pet.interactions);prefs.putUInt("meal",pet.meals);prefs.putUInt("drink",pet.drinks);prefs.putUInt("clean",pet.cleanups);prefs.putBool("sleep",pet.sleeping);prefs.end();}
+void savePet(){petPrefsDirty=true;}
 void petTick(){
   uint32_t now=millis();if(!pet.lastTickMs)pet.lastTickMs=now;uint32_t elapsed=now-pet.lastTickMs;if(elapsed<60000UL)return;uint32_t mins=elapsed/60000UL;pet.lastTickMs+=mins*60000UL;pet.ageMinutes+=mins;float m=(float)mins;
   pet.hunger=constrain(pet.hunger+0.22f*m,0.0f,100.0f);pet.thirst=constrain(pet.thirst+0.30f*m,0.0f,100.0f);pet.dirt=constrain(pet.dirt+0.13f*m,0.0f,100.0f);
@@ -841,7 +839,8 @@ void petDoAction(){
 uint32_t fnv1a(const char* s){uint32_t h=2166136261UL;while(*s){h^=(uint8_t)*s++;h*=16777619UL;}return h;}
 String stationScoreKey(const char* uuid){char k[12];snprintf(k,sizeof(k),"s%08lx",(unsigned long)fnv1a(uuid));return String(k);}
 void radioLoadScores(){prefs.begin("adv_radio",true);for(uint8_t i=0;i<radioState.count;i++)radioState.stations[i].localScore=(int16_t)prefs.getShort(stationScoreKey(radioState.stations[i].uuid).c_str(),0);prefs.end();}
-void radioSaveScore(uint8_t i){if(i>=radioState.count)return;prefs.begin("adv_radio",false);prefs.putShort(stationScoreKey(radioState.stations[i].uuid).c_str(),radioState.stations[i].localScore);prefs.end();}
+void radioSaveScoreNow(const char* uuid,int16_t score){if(!uuid||!*uuid)return;prefs.begin("adv_radio",false);prefs.putShort(stationScoreKey(uuid).c_str(),score);prefs.end();}
+void radioSaveScore(uint8_t i){if(i>=radioState.count)return;strlcpy(radioScoreDirtyUuid,radioState.stations[i].uuid,sizeof(radioScoreDirtyUuid));radioScoreDirtyValue=radioState.stations[i].localScore;radioScoreDirty=true;}
 int32_t stationRank(const RadioStation& s){return (int32_t)s.localScore*100000+(int32_t)min<uint32_t>(s.votes,99999);}
 void radioSort(){for(uint8_t i=1;i<radioState.count;i++){RadioStation v=radioState.stations[i];int j=i-1;while(j>=0&&stationRank(radioState.stations[j])<stationRank(v)){radioState.stations[j+1]=radioState.stations[j];--j;}radioState.stations[j+1]=v;}if(radioState.index>=radioState.count)radioState.index=0;}
 void radioSaveCache(){if(SD.cardType()==CARD_NONE)return;ensureSdWitnessDir();File f=SD.open("/janus/radio_catalog.json",FILE_WRITE);if(!f)return;DynamicJsonDocument doc(24576);JsonArray a=doc.to<JsonArray>();for(uint8_t i=0;i<radioState.count;i++){JsonObject o=a.createNestedObject();o["name"]=radioState.stations[i].name;o["url"]=radioState.stations[i].url;o["uuid"]=radioState.stations[i].uuid;o["bitrate"]=radioState.stations[i].bitrate;o["votes"]=radioState.stations[i].votes;}serializeJson(doc,f);f.close();}
@@ -918,6 +917,16 @@ void radioTick(){}
 void radioSetPlaying(bool on){radioState.desiredPlaying=on;if(!on)radioStopEngine();else if(!hardMute)radioStartEngine();}
 void radioStep(int dir){if(!radioState.count)return;radioState.index=(radioState.index+radioState.count+(dir<0?-1:1))%radioState.count;if(radioState.desiredPlaying){radioStopEngine();if(!hardMute)radioStartEngine();}}
 void radioVoteLocal(int delta){if(!radioState.count)return;RadioStation& s=radioState.stations[radioState.index];s.localScore=constrain((int)s.localScore+delta,-50,50);radioSaveScore(radioState.index);char uuid[40];strlcpy(uuid,s.uuid,sizeof(uuid));radioSort();for(uint8_t i=0;i<radioState.count;i++)if(strcmp(radioState.stations[i].uuid,uuid)==0){radioState.index=i;break;}}
+
+void serviceDeferredPersistence(){
+  if(!runtimeGovernor.allowMaintenance())return;
+  const bool heavyFg=mode.mode==ForegroundMode::ALIEN_SURVIVAL_A||(mode.mode==ForegroundMode::RADIO_R&&radioState.engineRunning);
+  if(heavyFg)return;
+  if(uiPrefsDirty){uiPrefsDirty=false;saveUiSettingsNow();return;}
+  if(petPrefsDirty){petPrefsDirty=false;savePetNow();return;}
+  if(radioScoreDirty){radioScoreDirty=false;radioSaveScoreNow(radioScoreDirtyUuid,radioScoreDirtyValue);return;}
+  advWifi.servicePersistence();
+}
 
 // -------------------------- rendering --------------------------
 void drawTicker(){}
@@ -1030,8 +1039,8 @@ void loop(){
     lastCoreMs=now;readImu();
     if(eye.online&&now-eye.lastOkMs>18000UL)eye.online=false;
     if(audioNode.online&&now-audioNode.lastOkMs>18000UL)audioNode.online=false;
-    core.battery=M5.Power.getBatteryLevel();
-    core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;
+    if(now-lastBatteryPollMs>=2000UL){lastBatteryPollMs=now;core.battery=M5.Power.getBatteryLevel();}
+    if(now-lastWifiTelemetryMs>=500UL){lastWifiTelemetryMs=now;core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;}
     core.freeHeap=ESP.getFreeHeap();
     updatePredictorAndAnomaly();petTick();m2rTick();
   }
@@ -1063,6 +1072,7 @@ void loop(){
   maybeSendLoRaSeal(runtimeGovernor.allowLoRaStart(gameFg,radioFg));
   serviceWitnessQueue(runtimeGovernor.witnessFlushQuota());
   serviceRadioCache();
+  serviceDeferredPersistence();
 
   core.loopUs=micros()-loopStart;
   if(core.loopUs>core.loopMaxUs)core.loopMaxUs=core.loopUs;

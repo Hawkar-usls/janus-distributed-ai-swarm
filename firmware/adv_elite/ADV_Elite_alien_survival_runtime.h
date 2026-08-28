@@ -75,17 +75,14 @@ class AlienSurvivalRuntime {
   AlienSurvivalRuntime() : frame_(&M5Cardputer.Display) {}
 
   void begin() {
-    if (!frameReady_) {
-      frame_.setColorDepth(16);
-      frame_.createSprite(kScreenW, kScreenH);
-      frameReady_ = frame_.width() == kScreenW && frame_.height() == kScreenH;
-    }
+    // ZIM-style: do not reserve a game framebuffer while HOME/Radio owns foreground.
     resetRun();
     lastWallMs_ = millis();
     lastDrawMs_ = lastWallMs_;
   }
 
   void enter() {
+    ensureFrame();
     active_ = true;
     lastWallMs_ = millis();
     accumulator_ = 0.0f;
@@ -95,6 +92,8 @@ class AlienSurvivalRuntime {
   void leave() {
     active_ = false;
     paused_ = false;
+    // Return sprite RAM to the rest of JANUS when game is not foreground.
+    if (frameReady_) { frame_.deleteSprite(); frameReady_ = false; }
   }
 
   bool active() const { return active_; }
@@ -234,6 +233,13 @@ class AlienSurvivalRuntime {
   uint32_t lastDrawMs_ = 0;
   float fpsEma_ = 45.0f;
   char perkLabel_[18] = "BASELINE";
+
+  void ensureFrame() {
+    if (frameReady_) return;
+    frame_.setColorDepth(8);
+    frame_.createSprite(kScreenW, kScreenH);
+    frameReady_ = frame_.width() == kScreenW && frame_.height() == kScreenH;
+  }
 
   static float dist2(float x, float y) { return x*x + y*y; }
 
