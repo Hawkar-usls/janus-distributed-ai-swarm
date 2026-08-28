@@ -124,12 +124,9 @@ replace_between(
   FastLED.show();
   lastR=target.r;lastG=target.g;lastB=target.b;lastBright=bright;lastLedPushMs=now;
 }
-
-float meanArr(''',
+''',
     'LED cadence')
 
-# The replacement above intentionally consumes the function name marker; repair its signature.
-s=s.replace('float meanArr(const float* a,int n)', 'float meanArr(const float* a,int n)', 1)
 
 replace_between(
     'void updatePredictorAndAnomaly(){',
@@ -176,8 +173,7 @@ replace_between(
   if(anomaly&&!anomalyLatched){anomalyLatched=true;++anomalyCount;statusLine="ANOMALY / WITNESS";witness("ANOMALY","z+mad+prediction+peer_disagreement","DERIVED_FROM_REAL");playUiTone(820,80);}
   else if(!anomaly)anomalyLatched=false;
 }
-
-// -------------------------- M2R manual future session --------------------------''',
+''',
     'predictor split')
 
 replace_between(
@@ -198,8 +194,7 @@ replace_between(
   }
   if(millis()-lastBuzzRateMs>=1000UL){buzzHashRate=buzzHashCounter;buzzHashCounter=0;lastBuzzRateMs=millis();}
 }
-
-// -------------------------- ESP-NOW --------------------------''',
+''',
     'Buzz budget')
 
 must_replace(
@@ -234,8 +229,7 @@ void maybeSendLoRaSeal(bool allowStart){
   if(st==RADIOLIB_ERR_NONE)loraTxPending=true;else statusLine="LORA TX FAIL";
 #endif
 }
-
-// -------------------------- exclusive foreground audio lease --------------------------''',
+''',
     'async LoRa')
 
 # Radio Browser HTTP/JSON moves to Core 0. Main loop only atomically publishes staged catalogue.
@@ -299,8 +293,7 @@ void serviceRadioCache(){
   if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A||mode.mode==ForegroundMode::RADIO_R)return;
   radioSaveCache();radioCacheDirty=false;
 }
-
-#if ADV_HAS_WEBRADIO''',
+''',
     'radio catalog worker')
 
 # Add governor visibility to the Z resource view without changing the screen contract.

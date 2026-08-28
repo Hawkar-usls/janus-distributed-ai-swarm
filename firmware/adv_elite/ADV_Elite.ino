@@ -97,6 +97,9 @@
 #include "ADV_Elite_primary_credential.h"
 #include "ADV_Elite_beacon_home.h"
 #include "ADV_Elite_sht3x_async.h"
+#include "ADV_Elite_runtime_governor.h"
+
+// RC3_ZIM_OPTIMIZED
 
 using namespace janus_adv_elite;
 
@@ -251,6 +254,7 @@ AlienPerformanceGovernor alienGovernor;
 AdvWifiManager advWifi;
 BeaconHomeRenderer beaconHome;
 AdvSht3xAsync shtAsync;
+AdvRuntimeGovernor runtimeGovernor;
 Preferences prefs;
 
 bool houseActive = false;
@@ -315,6 +319,8 @@ uint32_t lastGpsSealMs = 0;
 uint32_t lastBuzzRateMs = 0;
 uint32_t lastEspRescueMs = 0;
 uint32_t lastUserInputMs = 0;
+uint32_t lastRobustStatsMs = 0;
+uint32_t lastLedPushMs = 0;
 uint8_t brainStep = 0;
 float gyroBiasX = 0, gyroBiasY = 0, gyroBiasZ = 0;
 
@@ -445,6 +451,25 @@ void sha256Hex(const String& text,char out[65]) {
   out[64]=0;
 }
 
+static constexpr uint8_t WITNESS_QUEUE_N = 8;
+static constexpr size_t WITNESS_LINE_MAX = 896;
+struct WitnessPending { char line[WITNESS_LINE_MAX] = {}; };
+WitnessPending witnessQueue[WITNESS_QUEUE_N];
+uint8_t witnessQHead=0,witnessQTail=0,witnessQCount=0;
+
+void writeWitnessLineNow(const char* line){
+  File f=LittleFS.open(WITNESS_LFS,FILE_APPEND);if(f){f.println(line);f.close();}
+  if(SD.cardType()!=CARD_NONE){ensureSdWitnessDir();File sf=SD.open(WITNESS_SD,FILE_APPEND);if(sf){sf.println(line);sf.close();}}
+}
+
+void serviceWitnessQueue(uint8_t quota){
+  while(quota--&&witnessQCount){
+    writeWitnessLineNow(witnessQueue[witnessQTail].line);
+    witnessQTail=(witnessQTail+1)%WITNESS_QUEUE_N;
+    --witnessQCount;
+  }
+}
+
 void witness(const char* type,const char* detail,const char* truthClass="CONTROL_STATE") {
   String payload="{";
   payload += "\"schema\":\"JANUS_EVENT_V1\",";
@@ -458,10 +483,26 @@ void witness(const char* type,const char* detail,const char* truthClass="CONTROL
   payload += "\"loss\":"+String(core.loss,5)+",";
   payload += "\"eye_online\":"+String(eye.online?"true":"false")+",";
   payload += "\"prev_hash\":\""+String(witnessPrevHash)+"\"}";
-  char newHash[65]; sha256Hex(String(witnessPrevHash)+payload,newHash);
+  char newHash[65];sha256Hex(String(witnessPrevHash)+payload,newHash);
   String line=payload.substring(0,payload.length()-1)+",\"hash\":\""+String(newHash)+"\"}";
-  File f=LittleFS.open(WITNESS_LFS,FILE_APPEND); if(f){f.println(line);f.close();}
-  if(SD.cardType()!=CARD_NONE){ensureSdWitnessDir();File sf=SD.open(WITNESS_SD,FILE_APPEND);if(sf){sf.println(line);sf.close();}}
+
+  // Never break the hash chain. Queue saturation is exceptional; flush one oldest
+  // synchronously rather than dropping an event whose hash is already referenced.
+  if(witnessQCount>=WITNESS_QUEUE_N){
+    writeWitnessLineNow(witnessQueue[witnessQTail].line);
+    witnessQTail=(witnessQTail+1)%WITNESS_QUEUE_N;
+    --witnessQCount;
+  }
+  if(line.length()>=WITNESS_LINE_MAX){
+    // Current event payloads are much smaller; keep valid JSON + chain if a future
+    // caller supplies pathological detail.
+    line=String("{\"schema\":\"JANUS_EVENT_V1\",\"source\":\"ADV_Elite\",\"ts_ms\":")+String(millis())+
+         ",\"type\":\"WITNESS_OVERSIZE\",\"truth_class\":\"CONTROL_STATE\",\"detail\":\"payload_compacted\",\"prev_hash\":\""+
+         String(witnessPrevHash)+"\",\"hash\":\""+String(newHash)+"\"}";
+  }
+  line.toCharArray(witnessQueue[witnessQHead].line,WITNESS_LINE_MAX);
+  witnessQHead=(witnessQHead+1)%WITNESS_QUEUE_N;
+  ++witnessQCount;
   strlcpy(witnessPrevHash,newHash,sizeof(witnessPrevHash));
   ++witnessCount;
 }
@@ -497,12 +538,24 @@ void playUiTone(uint16_t freq,uint16_t ms){
 }
 
 void updateLed(){
-  if(!illumination.led_enabled||illumination.ledBrightness()==0){advLed[0]=CRGB::Black;FastLED.show();return;}
-  if(anomalyLatched) advLed[0]=CRGB::White;
-  else if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A){AlienRgb c=AlienLedPolicy::healthColor(alien.health01());advLed[0]=CRGB(c.r,c.g,c.b);}
-  else if(houseActive) advLed[0]=CRGB(255,140,0);
-  else {uint8_t hue=(uint8_t)constrain(160-(int)(core.entropy*14.0f),0,160);advLed[0]=CHSV(hue,255,255);}
+  const uint32_t now=millis();
+  const uint16_t cadence=runtimeGovernor.ledIntervalMs();
+  if(now-lastLedPushMs<cadence&&!anomalyLatched)return;
+
+  CRGB target;
+  if(!illumination.led_enabled||illumination.ledBrightness()==0)target=CRGB::Black;
+  else if(anomalyLatched)target=CRGB::White;
+  else if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A){AlienRgb c=AlienLedPolicy::healthColor(alien.health01());target=CRGB(c.r,c.g,c.b);}
+  else if(houseActive)target=CRGB(255,140,0);
+  else {uint8_t hue=(uint8_t)constrain(160-(int)(core.entropy*14.0f),0,160);target=CHSV(hue,255,255);}
+
+  static uint8_t lastR=255,lastG=255,lastB=255,lastBright=255;
+  const uint8_t bright=illumination.ledBrightness();
+  if(target.r==lastR&&target.g==lastG&&target.b==lastB&&bright==lastBright&&now-lastLedPushMs<1000UL)return;
+  advLed[0]=target;
+  FastLED.setBrightness(bright);
   FastLED.show();
+  lastR=target.r;lastG=target.g;lastB=target.b;lastBright=bright;lastLedPushMs=now;
 }
 
 float meanArr(const float* a,int n){if(n<=0)return 0;float s=0;for(int i=0;i<n;i++)s+=a[i];return s/n;}
@@ -594,18 +647,25 @@ void updatePredictorAndAnomaly(){
   appendHistory();
 
   bool anomaly=false;
-  core.classicZE=core.classicZL=core.robustZE=core.robustZL=0;
-  core.disagreement=0;
+  core.classicZE=core.classicZL=0;
+  core.disagreement=(eye.online&&isfinite(eye.activity)&&isfinite(eye.predActivity))?fabsf(eye.activity-eye.predActivity):0.0f;
   if(histCount>=24){
+    // Cheap classic Z remains live every P1 tick: anomaly attention is never gated.
     float mE=meanArr(histEntropy,histCount),sE=stdArr(histEntropy,histCount,mE);
     float mL=meanArr(histLoss,histCount),sL=stdArr(histLoss,histCount,mL);
     core.classicZE=sE>1e-5f?fabsf((core.entropy-mE)/sE):0;
     core.classicZL=sL>1e-5f?fabsf((core.loss-mL)/sL):0;
-    float medE=medianCopy(histEntropy,histCount),madE=madArr(histEntropy,histCount,medE);
-    float medL=medianCopy(histLoss,histCount),madL=madArr(histLoss,histCount,medL);
-    core.robustZE=madE>1e-5f?0.6745f*fabsf(core.entropy-medE)/madE:0;
-    core.robustZL=madL>1e-5f?0.6745f*fabsf(core.loss-medL)/madL:0;
-    if(eye.online&&isfinite(eye.activity)&&isfinite(eye.predActivity))core.disagreement=fabsf(eye.activity-eye.predActivity);
+
+    // Median/MAD is O(n^2) in the tiny insertion-sort implementation. Cache it and
+    // refresh on a governor cadence; classic Z + disagreement still react immediately.
+    const uint32_t now=millis();
+    if(lastRobustStatsMs==0||now-lastRobustStatsMs>=runtimeGovernor.robustStatsIntervalMs()){
+      lastRobustStatsMs=now;
+      float medE=medianCopy(histEntropy,histCount),madE=madArr(histEntropy,histCount,medE);
+      float medL=medianCopy(histLoss,histCount),madL=madArr(histLoss,histCount,medL);
+      core.robustZE=madE>1e-5f?0.6745f*fabsf(core.entropy-medE)/madE:0;
+      core.robustZL=madL>1e-5f?0.6745f*fabsf(core.loss-medL)/madL:0;
+    }
     anomaly=core.classicZE>4.2f||core.classicZL>4.0f||core.robustZE>5.0f||core.robustZL>5.0f||core.disagreement>2.25f;
   }
   if(anomaly&&!anomalyLatched){anomalyLatched=true;++anomalyCount;statusLine="ANOMALY / WITNESS";witness("ANOMALY","z+mad+prediction+peer_disagreement","DERIVED_FROM_REAL");playUiTone(820,80);}
@@ -661,12 +721,16 @@ void doubleSha256(const uint8_t* data,size_t len,uint8_t out[32]){
 bool hashMeetsTargetBE(const uint8_t hash[32],const uint8_t target[32]){for(int i=0;i<32;i++){if(hash[i]<target[i])return true;if(hash[i]>target[i])return false;}return true;}
 uint16_t leadingZeroBitsBE(const uint8_t h[32]){uint16_t bits=0;for(int i=0;i<32;i++){uint8_t b=h[i];if(!b){bits+=8;continue;}for(int k=7;k>=0;k--){if((b&(1<<k))==0)bits++;else return bits;}}return bits;}
 void sendShare(const RemoteJobState& j,uint32_t nonce){ShareResponse s{};s.magic[0]='S';s.magic[1]='R';memcpy(s.job_id,j.jobId,8);s.nonce=nonce;s.worker_id=buzzWorkerId;if(esp_now_send((uint8_t*)"\xFF\xFF\xFF\xFF\xFF\xFF",(uint8_t*)&s,sizeof(s))==ESP_OK)buzzShares++;else buzzRejects++;}
-void runBuzzBatch(){
+void runBuzzBatch(uint16_t budgetUs){
   if(!buzzJob.active||millis()-buzzJob.receivedAt>BUZZ_JOB_TTL_MS){buzzJob.active=false;return;}
-  uint16_t batch=alienGovernor.throttle_p3?40:180;uint8_t hash[32];
-  for(uint16_t i=0;i<batch&&buzzJob.active;i++){
+  if(budgetUs==0){if(millis()-lastBuzzRateMs>=1000UL){buzzHashRate=buzzHashCounter;buzzHashCounter=0;lastBuzzRateMs=millis();}return;}
+  const uint32_t started=micros();
+  const uint16_t hardCap=alienGovernor.throttle_p3?40:180;
+  uint16_t done=0;uint8_t hash[32];
+  while(done<hardCap&&buzzJob.active){
+    if((uint32_t)(micros()-started)>=budgetUs)break;
     if(buzzJob.nonce>=buzzJob.endNonce){buzzJob.active=false;break;}
-    uint32_t nonce=buzzJob.nonce++;writeLE32(buzzJob.header+76,nonce);doubleSha256(buzzJob.header,80,hash);++buzzHashCounter;
+    uint32_t nonce=buzzJob.nonce++;writeLE32(buzzJob.header+76,nonce);doubleSha256(buzzJob.header,80,hash);++buzzHashCounter;++done;
     uint16_t bits=leadingZeroBitsBE(hash);if(bits>buzzBestBits)buzzBestBits=bits;
     if(hashMeetsTargetBE(hash,buzzJob.target)){sendShare(buzzJob,nonce);buzzJob.active=false;break;}
   }
@@ -703,25 +767,37 @@ bool initEspNow(){
   esp_now_peer_info_t peer{};memcpy(peer.peer_addr,broadcastMac,6);peer.channel=0;peer.encrypt=false;if(!esp_now_is_peer_exist(broadcastMac))esp_now_add_peer(&peer);
   espNowReady=true;espTxFailStreak=0;return true;
 }
-void rescueEspNow(const char* why){if(millis()-lastEspRescueMs<ESP_RESCUE_COOLDOWN_MS)return;lastEspRescueMs=millis();esp_now_deinit();delay(5);initEspNow();witness("ESPNOW_RESCUE",why,"CONTROL_STATE");}
+bool espRescuePending=false;char espRescueWhy[32]="";
+void rescueEspNow(const char* why){if(millis()-lastEspRescueMs<ESP_RESCUE_COOLDOWN_MS)return;espRescuePending=true;strlcpy(espRescueWhy,why,sizeof(espRescueWhy));}
+void serviceEspRescue(){if(!espRescuePending||!runtimeGovernor.allowMaintenance())return;lastEspRescueMs=millis();espRescuePending=false;esp_now_deinit();delay(5);initEspNow();witness("ESPNOW_RESCUE",espRescueWhy,"CONTROL_STATE");}
 void sendHeartbeat(){
   if(!espNowReady)return;JanusColonyPacket p{};memcpy(p.magic,"JANUS",6);strlcpy(p.nodeId,"ADV_Elite",sizeof(p.nodeId));strlcpy(p.role,"ADV_ELITE",sizeof(p.role));p.seq=++heartbeatSeq;p.hashRate=buzzHashRate;p.shares=buzzShares;p.rejects=buzzRejects;p.bestBits=buzzBestBits;p.aiBatch=alienGovernor.throttle_p3?40:180;p.aiHint=anomalyLatched?2:1;p.jobAgeMs=buzzJob.active?millis()-buzzJob.receivedAt:0;p.rssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():lastEspRssi;p.uptime=millis()/1000UL;
   esp_err_t e=esp_now_send(broadcastMac,(uint8_t*)&p,sizeof(p));if(e==ESP_OK){++espTxCount;espTxFailStreak=0;}else{++espTxFail;++espTxFailStreak;if(espTxFailStreak>=18)rescueEspNow("tx_fail_streak");}
 }
 
 // -------------------------- CAP GNSS / manual LoRa --------------------------
+volatile bool loraTxDoneFlag=false;
+bool loraTxPending=false;
+void onLoraTxDone(){loraTxDoneFlag=true;}
+
 void initGnssAndLoRa(){
   Serial2.begin(GNSS_BAUD,SERIAL_8N1,GNSS_RX_PIN,GNSS_TX_PIN);
 #if ADV_HAS_RADIOLIB
-  pinMode(LORA_PWR_EN,OUTPUT);digitalWrite(LORA_PWR_EN,HIGH);delay(80);int st=advRadio.begin(868.0,125.0,9,7,0x34,10,8,1.6,false);loraReady=(st==RADIOLIB_ERR_NONE);if(loraReady){advRadio.setOutputPower(10);advRadio.setCRC(true);}
+  pinMode(LORA_PWR_EN,OUTPUT);digitalWrite(LORA_PWR_EN,HIGH);delay(80);int st=advRadio.begin(868.0,125.0,9,7,0x34,10,8,1.6,false);loraReady=(st==RADIOLIB_ERR_NONE);if(loraReady){advRadio.setOutputPower(10);advRadio.setCRC(true);advRadio.setDio1Action(onLoraTxDone);}
 #else
   loraReady=false;
 #endif
 }
 void gnssTick(){while(Serial2.available())advGps.encode((char)Serial2.read());}
-void maybeSendLoRaSeal(){
+void maybeSendLoRaSeal(bool allowStart){
 #if ADV_HAS_RADIOLIB
-  if(!loraActive||!loraReady||millis()-lastGpsSealMs<30000UL)return;lastGpsSealMs=millis();String s="JSA3|ADV|"+String(millis()/1000UL)+"|E="+String(core.entropy,2)+"|A="+String(anomalyLatched?1:0);if(advGps.location.isValid())s+="|FIX=1|SAT="+String(advGps.satellites.value());else s+="|FIX=0";advRadio.transmit(s.c_str());
+  if(loraTxPending&&loraTxDoneFlag){loraTxDoneFlag=false;advRadio.finishTransmit();loraTxPending=false;}
+  if(!allowStart||loraTxPending||!loraActive||!loraReady||millis()-lastGpsSealMs<30000UL)return;
+  lastGpsSealMs=millis();
+  String s="JSA3|ADV|"+String(millis()/1000UL)+"|E="+String(core.entropy,2)+"|A="+String(anomalyLatched?1:0);
+  if(advGps.location.isValid())s+="|FIX=1|SAT="+String(advGps.satellites.value());else s+="|FIX=0";
+  loraTxDoneFlag=false;int st=advRadio.startTransmit(s.c_str());
+  if(st==RADIOLIB_ERR_NONE)loraTxPending=true;else statusLine="LORA TX FAIL";
 #endif
 }
 
@@ -770,14 +846,64 @@ int32_t stationRank(const RadioStation& s){return (int32_t)s.localScore*100000+(
 void radioSort(){for(uint8_t i=1;i<radioState.count;i++){RadioStation v=radioState.stations[i];int j=i-1;while(j>=0&&stationRank(radioState.stations[j])<stationRank(v)){radioState.stations[j+1]=radioState.stations[j];--j;}radioState.stations[j+1]=v;}if(radioState.index>=radioState.count)radioState.index=0;}
 void radioSaveCache(){if(SD.cardType()==CARD_NONE)return;ensureSdWitnessDir();File f=SD.open("/janus/radio_catalog.json",FILE_WRITE);if(!f)return;DynamicJsonDocument doc(24576);JsonArray a=doc.to<JsonArray>();for(uint8_t i=0;i<radioState.count;i++){JsonObject o=a.createNestedObject();o["name"]=radioState.stations[i].name;o["url"]=radioState.stations[i].url;o["uuid"]=radioState.stations[i].uuid;o["bitrate"]=radioState.stations[i].bitrate;o["votes"]=radioState.stations[i].votes;}serializeJson(doc,f);f.close();}
 bool radioLoadCache(){if(SD.cardType()==CARD_NONE||!SD.exists("/janus/radio_catalog.json"))return false;File f=SD.open("/janus/radio_catalog.json",FILE_READ);if(!f)return false;DynamicJsonDocument doc(24576);DeserializationError e=deserializeJson(doc,f);f.close();if(e)return false;radioState.count=0;for(JsonObject o:doc.as<JsonArray>()){if(radioState.count>=RADIO_MAX)break;RadioStation& s=radioState.stations[radioState.count++];strlcpy(s.name,o["name"]|"station",sizeof(s.name));strlcpy(s.url,o["url"]|"",sizeof(s.url));strlcpy(s.uuid,o["uuid"]|"none",sizeof(s.uuid));s.bitrate=o["bitrate"]|0;s.votes=o["votes"]|0;}radioLoadScores();radioSort();return radioState.count>0;}
-bool radioRefreshCatalog(){
-  if(WiFi.status()!=WL_CONNECTED)return radioLoadCache();radioState.catalogBusy=true;
-  WiFiClientSecure client;client.setInsecure();HTTPClient http;String url="https://de1.api.radio-browser.info/json/stations/search?codec=MP3&is_https=false&hidebroken=true&order=votes&reverse=true&limit=24";
-  if(!http.begin(client,url)){radioState.catalogBusy=false;return radioLoadCache();}http.addHeader("User-Agent","JANUS-ADV-Elite/2.0");int code=http.GET();if(code!=200){http.end();radioState.catalogBusy=false;return radioLoadCache();}
-  DynamicJsonDocument doc(32768);DeserializationError de=deserializeJson(doc,http.getStream());http.end();if(de){radioState.catalogBusy=false;return radioLoadCache();}
-  radioState.count=0;for(JsonObject o:doc.as<JsonArray>()){if(radioState.count>=RADIO_MAX)break;const char* u=o["url_resolved"]|"";const char* c=o["codec"]|"";if(strncmp(u,"http://",7)!=0||strcasecmp(c,"MP3")!=0)continue;RadioStation& s=radioState.stations[radioState.count++];strlcpy(s.name,o["name"]|"station",sizeof(s.name));strlcpy(s.url,u,sizeof(s.url));strlcpy(s.uuid,o["stationuuid"]|"none",sizeof(s.uuid));s.bitrate=o["bitrate"]|0;s.votes=o["votes"]|0;}
-  radioLoadScores();radioSort();radioState.lastCatalogMs=millis();radioState.catalogBusy=false;if(radioState.count)radioSaveCache();return radioState.count>0;
+RadioStation radioCatalogStage[RADIO_MAX];
+volatile uint8_t radioCatalogStageCount=0;
+volatile bool radioCatalogStageReady=false;
+volatile bool radioCatalogStageOk=false;
+TaskHandle_t radioCatalogTaskHandle=nullptr;
+bool radioCacheDirty=false;
+
+void radioCatalogWorker(void*){
+  uint8_t count=0;bool ok=false;
+  if(WiFi.status()==WL_CONNECTED){
+    WiFiClientSecure client;client.setInsecure();HTTPClient http;
+    String url="https://de1.api.radio-browser.info/json/stations/search?codec=MP3&is_https=false&hidebroken=true&order=votes&reverse=true&limit=24";
+    if(http.begin(client,url)){
+      http.addHeader("User-Agent","JANUS-ADV-Elite/3.0");
+      int code=http.GET();
+      if(code==200){
+        DynamicJsonDocument doc(32768);DeserializationError de=deserializeJson(doc,http.getStream());
+        if(!de){
+          for(JsonObject o:doc.as<JsonArray>()){
+            if(count>=RADIO_MAX)break;const char* u=o["url_resolved"]|"";const char* c=o["codec"]|"";
+            if(strncmp(u,"http://",7)!=0||strcasecmp(c,"MP3")!=0)continue;
+            RadioStation& st=radioCatalogStage[count++];
+            strlcpy(st.name,o["name"]|"station",sizeof(st.name));strlcpy(st.url,u,sizeof(st.url));strlcpy(st.uuid,o["stationuuid"]|"none",sizeof(st.uuid));st.bitrate=o["bitrate"]|0;st.votes=o["votes"]|0;st.localScore=0;
+          }
+          ok=count>0;
+        }
+      }
+      http.end();
+    }
+  }
+  radioCatalogStageCount=count;radioCatalogStageOk=ok;radioCatalogStageReady=true;radioCatalogTaskHandle=nullptr;vTaskDelete(nullptr);
 }
+
+bool radioRefreshCatalog(){
+  if(radioState.catalogBusy||radioCatalogTaskHandle)return false;
+  if(WiFi.status()!=WL_CONNECTED)return radioState.count>0||radioLoadCache();
+  if(radioState.engineRunning||!runtimeGovernor.allowRadioCatalogStart()){statusLine="CATALOG DEFERRED";return false;}
+  radioState.catalogBusy=true;radioCatalogStageReady=false;radioCatalogStageOk=false;radioCatalogStageCount=0;
+  BaseType_t rc=xTaskCreatePinnedToCore(radioCatalogWorker,"adv_radio_cat",9216,nullptr,1,&radioCatalogTaskHandle,0);
+  if(rc!=pdPASS){radioCatalogTaskHandle=nullptr;radioState.catalogBusy=false;statusLine="CATALOG TASK FAIL";return false;}
+  return true;
+}
+
+void radioCatalogService(){
+  if(!radioCatalogStageReady)return;
+  radioCatalogStageReady=false;radioState.catalogBusy=false;
+  if(!radioCatalogStageOk){statusLine="CATALOG NET FAIL";return;}
+  uint8_t count=min<uint8_t>(radioCatalogStageCount,RADIO_MAX);radioState.count=count;
+  for(uint8_t i=0;i<count;i++)radioState.stations[i]=radioCatalogStage[i];
+  radioLoadScores();radioSort();radioState.lastCatalogMs=millis();radioCacheDirty=true;statusLine="CATALOG READY";
+}
+
+void serviceRadioCache(){
+  if(!radioCacheDirty||!runtimeGovernor.allowMaintenance())return;
+  if(mode.mode==ForegroundMode::ALIEN_SURVIVAL_A||mode.mode==ForegroundMode::RADIO_R)return;
+  radioSaveCache();radioCacheDirty=false;
+}
+
 #if ADV_HAS_WEBRADIO
 void radioStopEngine(){if(radioMp3){radioMp3->stop();delete radioMp3;radioMp3=nullptr;}if(radioBuffer){delete radioBuffer;radioBuffer=nullptr;}if(radioFile){radioFile->close();delete radioFile;radioFile=nullptr;}if(radioOut){radioOut->stop();delete radioOut;radioOut=nullptr;}radioState.engineRunning=false;}
 bool radioStartEngine(){
@@ -833,7 +959,7 @@ void drawVisualizer(){
   if(mode.visualizer_source==VisualizerSource::KALEIDOSCOPE){float e=core.entropy;float m=core.imuLoss+(eye.online&&isfinite(eye.motion)?fabsf(eye.motion)*0.001f:0);int cx=120,cy=72;uint16_t c=d.color565((uint8_t)constrain(40+e*35,0.0f,255.0f),(uint8_t)constrain(80+m*80,0.0f,255.0f),210);for(int ring=1;ring<=7;ring++){float r=8+ring*7+sinf(millis()*0.001f*ring+e)*4;for(int k=0;k<8;k++){float a=k*PI/4.0f+millis()*0.00025f*(ring&1?1:-1);d.drawCircle(cx+cosf(a)*r,cy+sinf(a)*r*0.65f,1+(ring&1),c);}}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("VISUALIZATION - NOT EVIDENCE");return;}
   d.drawRect(3,17,234,106,TFT_DARKGREY);if(histCount<2)return;float minV=1e9f,maxV=-1e9f;for(int i=0;i<histCount;i++){float v=histValue(mode.visualizer_source,i);if(!isfinite(v))continue;if(v<minV)minV=v;if(v>maxV)maxV=v;}if(!(maxV>minV))maxV=minV+1;float mid=(minV+maxV)*0.5f,span=(maxV-minV)/visualGain;minV=mid-span*0.5f;maxV=mid+span*0.5f;for(int i=0;i<histCount-1;i++){int idx=(histPos+HIST_N-histCount+i)%HIST_N,idx2=(idx+1)%HIST_N;float v1=histValue(mode.visualizer_source,idx),v2=histValue(mode.visualizer_source,idx2);int x1=4+i*232/max(1,(int)histCount-1),x2=4+(i+1)*232/max(1,(int)histCount-1);int y1=121-(int)(constrain((v1-minV)/(maxV-minV),0.0f,1.0f)*101),y2=121-(int)(constrain((v2-minV)/(maxV-minV),0.0f,1.0f)*101);d.drawLine(x1,y1,x2,y2,uiPrimary());}d.setTextColor(TFT_LIGHTGREY,TFT_BLACK);d.setCursor(6,20);d.printf("%.2f .. %.2f",minV,maxV);
 }
-void drawZimView(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_YELLOW,TFT_BLACK);d.setCursor(2,2);d.print("Z / ADV RESOURCE VIEW");d.setTextColor(TFT_WHITE,TFT_BLACK);d.setCursor(2,18);d.print("PRIMARY: observe+predict+witness");d.setCursor(2,30);d.printf("P0 RUN anomaly:%s",anomalyLatched?"LATCH":"watch");d.setCursor(2,42);d.printf("P1 RUN M2R:%s theta:%.2f",m2rActive?"FULL":"light",m2r.thetaWeight);d.setCursor(2,54);d.printf("P2 swarm RX:%lu TX:%lu/%lu",(unsigned long)espRxCount,(unsigned long)espTxCount,(unsigned long)espTxFail);d.setCursor(2,66);d.printf("heap:%lu loop:%luus max:%lu",(unsigned long)core.freeHeap,(unsigned long)core.loopUs,(unsigned long)core.loopMaxUs);d.setCursor(2,78);d.printf("P3 Buzz %luH/s sh:%lu b:%u",(unsigned long)buzzHashRate,(unsigned long)buzzShares,buzzBestBits);d.setCursor(2,90);d.printf("P4 fg:%d game:%dFPS budget:%u%%",(int)mode.mode,(int)alien.fpsEma(),alienGovernor.discretionary_budget_pct);d.setCursor(2,102);d.printf("P3 throttle:%s P5 defer:%s",alienGovernor.throttle_p3?"YES":"no",alienGovernor.defer_p5?"YES":"no");if(zimExtended){d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,114);d.printf("GNSS:%s LoRa:%s WiFi:%d",advGps.location.isValid()?"FIX":"?",loraReady?"HW":"?",core.wifiRssi);}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("hold Z detail | ESC HOME");}
+void drawZimView(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_YELLOW,TFT_BLACK);d.setCursor(2,2);d.print("Z / ADV RESOURCE VIEW");d.setTextColor(TFT_WHITE,TFT_BLACK);d.setCursor(2,18);d.print("PRIMARY: observe+predict+witness");d.setCursor(2,30);d.printf("P0 RUN anomaly:%s",anomalyLatched?"LATCH":"watch");d.setCursor(2,42);d.printf("P1 RUN M2R:%s theta:%.2f",m2rActive?"FULL":"light",m2r.thetaWeight);d.setCursor(2,54);d.printf("P2 swarm RX:%lu TX:%lu/%lu",(unsigned long)espRxCount,(unsigned long)espTxCount,(unsigned long)espTxFail);d.setCursor(2,66);d.printf("heap:%lu loop:%luus max:%lu",(unsigned long)core.freeHeap,(unsigned long)core.loopUs,(unsigned long)core.loopMaxUs);d.setCursor(2,78);d.printf("P3 Buzz %luH/s sh:%lu b:%u",(unsigned long)buzzHashRate,(unsigned long)buzzShares,buzzBestBits);d.setCursor(2,90);d.printf("P4 fg:%d game:%dFPS budget:%u%%",(int)mode.mode,(int)alien.fpsEma(),alienGovernor.discretionary_budget_pct);d.setCursor(2,102);d.printf("GOV:%s ema:%lu peak:%lu",runtimeGovernor.label(),(unsigned long)runtimeGovernor.loopEmaUs(),(unsigned long)runtimeGovernor.loopPeakUs());if(zimExtended){d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,114);d.printf("GNSS:%s LoRa:%s WiFi:%d",advGps.location.isValid()?"FIX":"?",loraReady?"HW":"?",core.wifiRssi);}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("hold Z detail | ESC HOME");}
 void drawRadio(){auto& d=M5Cardputer.Display;if(advWifi.overlayActive()){advWifi.draw(d);return;}d.fillScreen(TFT_BLACK);d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,2);d.print("R / INTERNET RADIO");d.setTextColor(TFT_WHITE,TFT_BLACK);if(!ADV_HAS_WEBRADIO){d.setCursor(2,22);d.print("Install ESP8266Audio library.");d.setCursor(2,34);d.print("Core remains alive; no fake PLAY.");}else if(radioState.count==0){d.setCursor(2,22);d.print(radioState.catalogBusy?"Loading Radio Browser...":"No catalogue. hold R refresh");}else{RadioStation& s=radioState.stations[radioState.index];d.setCursor(2,20);d.printf("%02u/%02u %s",radioState.index+1,radioState.count,s.name);d.setCursor(2,34);d.printf("MP3 %uk  local %+d",s.bitrate,s.localScore);d.setCursor(2,48);d.printf("%s engine:%s fail:%lu",radioState.desiredPlaying?"PLAY":"PAUSE",radioState.engineRunning?"RUN":"idle",(unsigned long)radioState.failures);d.setCursor(2,64);d.print("<- -> station   up/down rank");d.setCursor(2,78);d.print("SPACE play/pause  N WiFi  hold R refresh");}d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,110);d.printf("WiFi:%s RSSI:%d",WiFi.status()==WL_CONNECTED?"ON":"OFF",core.wifiRssi);d.setCursor(2,124);d.print("HTTP MP3 stream | ESC HOME");}
 void drawPet(){auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextColor(TFT_MAGENTA,TFT_BLACK);d.setCursor(2,2);d.print("D / JANUS PET [SIMULATED]");d.setTextColor(TFT_WHITE,TFT_BLACK);if(petPage==0){d.setCursor(2,18);d.printf("Hunger %3d Thirst %3d",(int)pet.hunger,(int)pet.thirst);d.setCursor(2,30);d.printf("Dirt %3d Energy %3d",(int)pet.dirt,(int)pet.energy);d.setCursor(2,42);d.printf("Mood %3d Health %3d",(int)pet.mood,(int)pet.health);d.setCursor(2,54);d.printf("Comfort %3d %s",(int)pet.comfort,pet.sleeping?"SLEEP":"AWAKE");}else if(petPage==1){d.setCursor(2,18);d.print("REAL ENV -> SIMULATED COMFORT");d.setCursor(2,32);d.printf("T:%s H:%s P:%s",core.shtValid?String(core.tempC,1).c_str():"?",core.shtValid?String(core.humidity,0).c_str():"?",core.qmpValid?String(core.pressureHpa,0).c_str():"?");d.setCursor(2,46);d.printf("comfort:%d/100",(int)pet.comfort);d.setCursor(2,60);d.print("Pet state is NOT sensor evidence.");}else{d.setCursor(2,18);d.printf("Age %lumin interactions %lu",(unsigned long)pet.ageMinutes,(unsigned long)pet.interactions);d.setCursor(2,32);d.printf("Meals %lu Drinks %lu Clean %lu",(unsigned long)pet.meals,(unsigned long)pet.drinks,(unsigned long)pet.cleanups);d.setCursor(2,46);d.print("Persistent via NVS wear-guarded saves");}d.setTextColor(TFT_YELLOW,TFT_BLACK);d.setCursor(2,84);d.printf("ACTION < %s >",petActions[petAction]);d.setTextColor(TFT_LIGHTGREY,TFT_BLACK);d.setCursor(2,100);d.print("<- -> action  up/down page  SPACE");d.setTextColor(TFT_DARKGREY,TFT_BLACK);d.setCursor(2,124);d.print("FICTIONAL STATE | ESC HOME");}
 void drawCurrentMode(){switch(mode.mode){case ForegroundMode::HOME:drawHome();break;case ForegroundMode::VISUALIZER_O:drawVisualizer();break;case ForegroundMode::ZIM_VIEW_Z:drawZimView();break;case ForegroundMode::RADIO_R:drawRadio();break;case ForegroundMode::TAMAGOTCHI_D:drawPet();break;case ForegroundMode::ALIEN_SURVIVAL_A:alien.draw(M5Cardputer.Display);break;}}
@@ -884,17 +1010,61 @@ void setup(){
   Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool shtOk=shtAsync.begin(&Wire,0x44);bool qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_L,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);if(!qmpOk)qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_H,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);Serial.printf("[ADV] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
   M5.Imu.init();core.imuValid=true;calibrateImuZero();
   FastLED.addLeds<WS2812,LED_PIN,GRB>(advLed,1);loadUiSettings();applyIllumination();M5Cardputer.Speaker.begin();applyVolume();
-  loadPet();alien.begin();beaconHome.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
+  loadPet();alien.begin();beaconHome.begin();runtimeGovernor.begin(millis());String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
   core.predEntropy=core.entropy;core.battery=M5.Power.getBatteryLevel();core.freeHeap=ESP.getFreeHeap();lastUserInputMs=millis();witness("BOOT","ADV_Elite_RC2","CONTROL_STATE");statusLine="RC2 READY";
 }
 
 void loop(){
-  uint32_t loopStart=micros();processInput();gnssTick();uint32_t now=millis();
+  const uint32_t loopStart=micros();
+  processInput();
+  gnssTick();
+  const uint32_t now=millis();
+  const bool gameFg=mode.mode==ForegroundMode::ALIEN_SURVIVAL_A;
+  const bool radioFg=mode.mode==ForegroundMode::RADIO_R;
+
   if(deskVisualizerEnabled&&mode.mode==ForegroundMode::HOME&&now-lastUserInputMs>=DESK_VISUALIZER_IDLE_MS){mode.enter(ForegroundMode::VISUALIZER_O);mode.visualizer_source=VisualizerSource::KALEIDOSCOPE;autoVisualizerEntered=true;statusLine="DESK VISUALIZER";}
+
+  // P0/P1: never gated.
   serviceEnv();
-  if(now-lastCoreMs>=CORE_INTERVAL_MS){lastCoreMs=now;readImu();if(eye.online&&now-eye.lastOkMs>18000UL)eye.online=false;if(audioNode.online&&now-audioNode.lastOkMs>18000UL)audioNode.online=false;core.battery=M5.Power.getBatteryLevel();core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;core.freeHeap=ESP.getFreeHeap();updatePredictorAndAnomaly();petTick();m2rTick();}
+  if(now-lastCoreMs>=CORE_INTERVAL_MS){
+    lastCoreMs=now;readImu();
+    if(eye.online&&now-eye.lastOkMs>18000UL)eye.online=false;
+    if(audioNode.online&&now-audioNode.lastOkMs>18000UL)audioNode.online=false;
+    core.battery=M5.Power.getBatteryLevel();
+    core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;
+    core.freeHeap=ESP.getFreeHeap();
+    updatePredictorAndAnomaly();petTick();m2rTick();
+  }
+
+  runtimeGovernor.update(now,core.freeHeap,core.wifiRssi,WiFi.status()==WL_CONNECTED,core.loopUs,alien.fpsEma(),gameFg,radioFg,radioState.engineRunning);
+  alienGovernor.update(alien.fpsEma(),gameFg&&!alien.paused());
+
+  // P4 audio must remain continuous in radio foreground; Wi-Fi state machine is short/non-blocking.
+  advWifi.tick();
+  if(radioFg&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();
+  radioCatalogService();
+  if(radioFg||radioState.engineRunning)radioTick();
+
+  // Presentation runs before discretionary compute. Missed cadence can therefore only
+  // throttle background organs, not make the foreground wait behind them.
+  const uint16_t drawMs=runtimeGovernor.drawIntervalMs(gameFg);
+  if(now-lastDrawMs>=drawMs){lastDrawMs=now;drawCurrentMode();}
+
+  // P2 essential swarm heartbeat.
   if(now-lastHeartbeatMs>=HEARTBEAT_MS){lastHeartbeatMs=now;sendHeartbeat();}
-  advWifi.tick();if(mode.mode==ForegroundMode::RADIO_R&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();
-  if(now-lastDrawMs>=DRAW_INTERVAL_MS){lastDrawMs=now;drawCurrentMode();}
-  core.loopUs=micros()-loopStart;if(core.loopUs>core.loopMaxUs)core.loopMaxUs=core.loopUs;delay(1);
+  brainWaveTick();
+  updateLed();
+
+  // P3: exact Buzz work is deadline-bounded like ZIM miner batches.
+  runBuzzBatch(runtimeGovernor.buzzBudgetUs(gameFg,radioFg));
+
+  // P5 residual maintenance. No foreground path waits for SD/LoRa/catalogue work.
+  serviceEspRescue();
+  maybeSendLoRaSeal(runtimeGovernor.allowLoRaStart(gameFg,radioFg));
+  serviceWitnessQueue(runtimeGovernor.witnessFlushQuota());
+  serviceRadioCache();
+
+  core.loopUs=micros()-loopStart;
+  if(core.loopUs>core.loopMaxUs)core.loopMaxUs=core.loopUs;
+  delay(1);
 }
