@@ -60,6 +60,8 @@ jobs:
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --build-property "upload.maximum_size=3342336" \
+            --build-property "build.flash_size=8MB" \
+            --build-property "upload.flash_size=8MB" \
             --warnings all \
             --library _vendor/M5Cardputer \
             --output-dir /tmp/adv_build \
