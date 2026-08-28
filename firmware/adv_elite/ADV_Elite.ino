@@ -101,6 +101,7 @@
 
 // RC3_ZIM_OPTIMIZED
 // RC3_ZIM_PASS2
+// RC3_PHYSICAL_BOOTSAFE
 
 using namespace janus_adv_elite;
 
@@ -119,7 +120,7 @@ static constexpr uint8_t LORA_NSS = 5;
 static constexpr uint8_t LORA_IRQ = 4;
 static constexpr uint8_t LORA_RST = 3;
 static constexpr uint8_t LORA_BUSY = 6;
-static constexpr uint8_t LORA_PWR_EN = 10;
+// Cardputer ADV GPIO10 is BATTERY_ADC. Never drive it as LoRa power.
 
 CRGB advLed[1];
 SHT3X advSht;
@@ -262,6 +263,10 @@ bool houseActive = false;
 bool m2rActive = false;
 bool loraActive = false;
 bool loraReady = false;
+bool loraInitAttempted = false;
+bool envReady = false;
+bool ledReady = false;
+bool speakerReady = false;
 bool hardMute = false;
 bool brainWaveEnabled = true;
 bool anomalyLatched = false;
@@ -527,12 +532,13 @@ void applyVolume(){M5Cardputer.Speaker.setVolume(hardMute?0:masterVolume);if(har
 void applyIllumination(){M5Cardputer.Display.setBrightness(illumination.displayBrightness());FastLED.setBrightness(illumination.ledBrightness());}
 
 void playUiTone(uint16_t freq,uint16_t ms){
-  if(hardMute||masterVolume==0)return;
+  if(!speakerReady||hardMute||masterVolume==0)return;
   if(mode.mode==ForegroundMode::RADIO_R)return;
   M5Cardputer.Speaker.tone(freq,ms);
 }
 
 void updateLed(){
+  if(!ledReady)return;
   const uint32_t now=millis();
   const uint16_t cadence=runtimeGovernor.ledIntervalMs();
   if(now-lastLedPushMs<cadence&&!anomalyLatched)return;
@@ -576,6 +582,7 @@ void appendHistory(){
 
 // -------------------------- sensors --------------------------
 void serviceEnv(){
+  if(!envReady)return;
   const uint32_t now=millis();
 
   // Start a new SHT3X conversion once per ENV interval, but never sleep here.
@@ -774,13 +781,23 @@ volatile bool loraTxDoneFlag=false;
 bool loraTxPending=false;
 void onLoraTxDone(){loraTxDoneFlag=true;}
 
-void initGnssAndLoRa(){
+void initGnssOnly(){
   Serial2.begin(GNSS_BAUD,SERIAL_8N1,GNSS_RX_PIN,GNSS_TX_PIN);
+}
+bool ensureLoRaReady(){
+  if(loraReady)return true;
+  if(loraInitAttempted)return false;
+  loraInitAttempted=true;
 #if ADV_HAS_RADIOLIB
-  pinMode(LORA_PWR_EN,OUTPUT);digitalWrite(LORA_PWR_EN,HIGH);delay(80);int st=advRadio.begin(868.0,125.0,9,7,0x34,10,8,1.6,false);loraReady=(st==RADIOLIB_ERR_NONE);if(loraReady){advRadio.setOutputPower(10);advRadio.setCRC(true);advRadio.setDio1Action(onLoraTxDone);}
+  // ADV EXT module shares SCK40/MOSI14/MISO39 and uses CS5/IRQ4/RST3/BUSY6.
+  // There is NO GPIO power-enable: GPIO10 is the battery ADC and must stay untouched.
+  int st=advRadio.begin(868.0,125.0,9,7,0x34,10,8,1.6,false);
+  loraReady=(st==RADIOLIB_ERR_NONE);
+  if(loraReady){advRadio.setOutputPower(10);advRadio.setCRC(true);advRadio.setDio1Action(onLoraTxDone);}
 #else
   loraReady=false;
 #endif
+  return loraReady;
 }
 void gnssTick(){
   const uint32_t started=micros();uint8_t n=0;
@@ -997,7 +1014,11 @@ void processInput(){
   if(rising(nLb,prevKey.lb)){illumination.stepDown();applyIllumination();saveUiSettings();}
   if(rising(nRb,prevKey.rb)){illumination.stepUp();applyIllumination();saveUiSettings();}
   if(rising(nL,prevKey.l)){illumination.toggleLed();applyIllumination();statusLine=illumination.led_enabled?"LED ON":"LED OFF";saveUiSettings();}
-  if(rising(nJ,prevKey.j)){loraActive=!loraActive;statusLine=loraActive?(loraReady?"LORA ON":"LORA REQUEST/HW FAIL"):"LORA OFF";witness("LORA_GATE",loraActive?"on":"off");}
+  if(rising(nJ,prevKey.j)){
+    if(!loraActive){loraActive=ensureLoRaReady();statusLine=loraActive?"LORA ON":"LORA HW FAIL";}
+    else {loraActive=false;statusLine="LORA OFF";}
+    witness("LORA_GATE",loraActive?"on":"off");
+  }
 
   if(mode.mode==ForegroundMode::HOME){if(rising(nO,prevKey.o)){mode.enter(ForegroundMode::VISUALIZER_O);statusLine="OSCILLOSCOPE";}if(rising(nZ,prevKey.z)){mode.enter(ForegroundMode::ZIM_VIEW_Z);statusLine="RESOURCE VIEW";}if(rising(nR,prevKey.r)){mode.enter(ForegroundMode::RADIO_R);acquireRadioAudioLease();advWifi.enterRadio();statusLine="RADIO";if(advWifi.connected()&&!radioState.count)radioRefreshCatalog();}if(rising(nD,prevKey.d)){mode.enter(ForegroundMode::TAMAGOTCHI_D);statusLine="PET";}if(rising(nA,prevKey.a)){mode.enter(ForegroundMode::ALIEN_SURVIVAL_A);alien.enter();statusLine="ALIEN SURVIVAL";witness("MODE","alien_survival","CONTROL_STATE");}}
   else{prevKey.o=nO;prevKey.z=nZ;prevKey.r=nR;prevKey.d=nD;prevKey.a=nA;}
@@ -1013,15 +1034,103 @@ void processInput(){
 }
 
 // -------------------------- setup / loop --------------------------
-void setup(){
-  auto cfg=M5.config();M5Cardputer.begin(cfg,true);Serial.begin(115200);M5Cardputer.Display.setRotation(1);M5Cardputer.Display.setTextSize(1);
-  LittleFS.begin(true);SPI.begin(SD_SCK_PIN,SD_MISO_PIN,SD_MOSI_PIN,SD_CS_PIN);bool sdOk=SD.begin(SD_CS_PIN,SPI,25000000);Serial.printf("[ADV] SD=%d\n",sdOk?1:0);
-  Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool shtOk=shtAsync.begin(&Wire,0x44);bool qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_L,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);if(!qmpOk)qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_H,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);Serial.printf("[ADV] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
-  M5.Imu.init();core.imuValid=true;calibrateImuZero();
-  FastLED.addLeds<WS2812,LED_PIN,GRB>(advLed,1);loadUiSettings();applyIllumination();M5Cardputer.Speaker.begin();applyVolume();
-  loadPet();alien.begin();beaconHome.begin();runtimeGovernor.begin(millis());String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
-  core.predEntropy=core.entropy;core.battery=M5.Power.getBatteryLevel();core.freeHeap=ESP.getFreeHeap();lastUserInputMs=millis();witness("BOOT","ADV_Elite_RC2","CONTROL_STATE");statusLine="RC2 READY";
+void bootStage(const char* text,uint16_t color=TFT_DARKGREY){
+  Serial.printf("[ADV-BOOT] %s\n",text);
+  M5Cardputer.Display.setTextColor(color,TFT_BLACK);
+  M5Cardputer.Display.println(text);
 }
+
+void setup(){
+  // SAFEBOOT rule: serial and a visible LCD marker exist before any optional organ.
+  Serial.begin(115200);
+  delay(120);
+  Serial.println();
+  Serial.println("[ADV-BOOT] RC3 PHYSICAL SAFEBOOT");
+
+  auto cfg=M5.config();
+  cfg.internal_mic=false; // microphone is not an ADV_Elite truth source; shorten early audio init.
+  M5Cardputer.begin(cfg,false); // M5/display only; keyboard comes after the first visible marker.
+  M5Cardputer.Display.setRotation(1);
+  M5Cardputer.Display.setTextSize(1);
+  M5Cardputer.Display.setBrightness(90);
+  M5Cardputer.Display.fillScreen(TFT_BLACK);
+  M5Cardputer.Display.setCursor(4,4);
+  M5Cardputer.Display.setTextColor(TFT_CYAN,TFT_BLACK);
+  M5Cardputer.Display.println("JANUS ADV RC3 SAFEBOOT");
+  M5Cardputer.Display.setTextColor(TFT_DARKGREY,TFT_BLACK);
+  M5Cardputer.Display.printf("BOARD %d\n",(int)M5.getBoard());
+  bootStage("S0 DISPLAY OK",TFT_GREEN);
+
+  // Second begin is intentional: M5.begin() is already complete, while M5Cardputer
+  // enables its keyboard reader now that a boot marker exists. ADV selects TCA8418.
+  M5Cardputer.begin(cfg,true);
+  bootStage("S1 KEYBOARD OK",TFT_GREEN);
+
+  bool fsOk=LittleFS.begin(true);
+  bootStage(fsOk?"S2 LITTLEFS OK":"S2 LITTLEFS FAIL",fsOk?TFT_GREEN:TFT_YELLOW);
+
+  loadUiSettings();
+  loadPet();
+  alien.begin();
+  bool homeBuf=beaconHome.begin();
+  runtimeGovernor.begin(millis());
+  bootStage(homeBuf?"S3 UI BUFFER OK":"S3 UI BUFFER FAIL",homeBuf?TFT_GREEN:TFT_YELLOW);
+
+  // External Grove I2C only (G2/G1). ADV internal keyboard/audio/IMU I2C is G8/G9.
+  Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);
+  Wire.setClock(400000U);
+  bool shtOk=shtAsync.begin(&Wire,0x44);
+  bool qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_L,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);
+  if(!qmpOk)qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_H,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);
+  envReady=shtOk||qmpOk;
+  Serial.printf("[ADV-BOOT] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
+  bootStage(envReady?"S4 ENV READY":"S4 ENV OPTIONAL",envReady?TFT_GREEN:TFT_YELLOW);
+
+  // M5Unified already initialized the ADV BMI270 during M5.begin(). Do not init it twice.
+  core.imuValid=M5.Imu.isEnabled();
+  if(core.imuValid)calibrateImuZero();
+  bootStage(core.imuValid?"S5 IMU OK":"S5 IMU OPTIONAL",core.imuValid?TFT_GREEN:TFT_YELLOW);
+
+  // SD is optional and deliberately slow-clocked like the historical ADV SAFEBOOT.
+  SPI.begin(SD_SCK_PIN,SD_MISO_PIN,SD_MOSI_PIN,SD_CS_PIN);
+  bool sdOk=SD.begin(SD_CS_PIN,SPI,10000000UL);
+  Serial.printf("[ADV-BOOT] SD=%d\n",sdOk?1:0);
+  bootStage(sdOk?"S6 SD OK":"S6 SD OPTIONAL",sdOk?TFT_GREEN:TFT_YELLOW);
+
+  // ADV RGB rail is GPIO38; LED data is GPIO21. Display is already alive before touching it.
+  pinMode(38,OUTPUT);digitalWrite(38,HIGH);delay(2);
+  FastLED.addLeds<WS2812,LED_PIN,GRB>(advLed,1);
+  ledReady=true;
+  applyIllumination();
+
+  M5Cardputer.Speaker.begin();
+  speakerReady=true;
+  applyVolume();
+  bootStage("S7 AUDIO/LED OK",TFT_GREEN);
+
+  String factorySsid,factoryPass;
+  bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);
+  advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);
+  buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);
+  bool enow=initEspNow();
+  Serial.printf("[ADV-BOOT] ESPNOW=%d\n",enow?1:0);
+  bootStage(enow?"S8 SWARM OK":"S8 SWARM OPTIONAL",enow?TFT_GREEN:TFT_YELLOW);
+
+  // GNSS UART is harmless at boot; LoRa SPI probing is lazy and happens only on J.
+  initGnssOnly();
+  if(sdOk)radioLoadCache();
+
+  core.predEntropy=core.entropy;
+  core.battery=M5.Power.getBatteryLevel();
+  core.freeHeap=ESP.getFreeHeap();
+  lastUserInputMs=millis();
+  statusLine="RC3 SAFE READY";
+  if(fsOk)witness("BOOT","ADV_Elite_RC3_SAFEBOOT","CONTROL_STATE");
+
+  delay(120);
+  drawHome(); // first canonical Beacon frame replaces the diagnostic boot page.
+}
+
 
 void loop(){
   const uint32_t loopStart=micros();
