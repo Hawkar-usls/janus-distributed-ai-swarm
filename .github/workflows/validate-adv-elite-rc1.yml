@@ -51,19 +51,51 @@ jobs:
           mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
 
       - name: Compile ADV Elite
+        id: compile
         shell: bash
         run: |
           set +e
+          rm -rf /tmp/adv_build
+          mkdir -p /tmp/adv_build
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --warnings all \
             --library _vendor/M5Cardputer \
+            --output-dir /tmp/adv_build \
             firmware/adv_elite 2>&1 | tee /tmp/adv_compile.log
           status=${PIPESTATUS[0]}
+          echo "$status" > /tmp/adv_compile.status
           if [ "$status" -ne 0 ]; then
             grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
-              | tail -n 40 \
+              | tail -n 80 \
               | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
               | while IFS= read -r line; do echo "::error::$line"; done
-            exit "$status"
           fi
+          exit 0
+
+      - name: Upload compile diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-elite-compile-diagnostics
+          path: |
+            /tmp/adv_compile.log
+            /tmp/adv_compile.status
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload compiled ADV binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-elite-compiled-bins
+          path: /tmp/adv_build/*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Enforce compile result
+        if: always()
+        shell: bash
+        run: |
+          test -f /tmp/adv_compile.status
+          test "$(cat /tmp/adv_compile.status)" = "0"
