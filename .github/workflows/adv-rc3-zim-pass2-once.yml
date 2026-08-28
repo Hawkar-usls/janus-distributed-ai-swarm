@@ -1,0 +1,106 @@
+name: ADV RC3 ZIM pass2 one-shot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/adv-rc3-zim-pass2-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/adv-elite-rc3-pixel-radio
+          fetch-depth: 0
+
+      - name: Harden pass2 radio persistence identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tools/adv_rc3_zim_pass2.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('uint8_t radioScoreDirtyIndex = 0;', 'char radioScoreDirtyUuid[40] = "";\nint16_t radioScoreDirtyValue = 0;', 1)
+          a=s.index('# radio score deferred')
+          b=s.index('# ESP-NOW does not own Wi-Fi association', a)
+          block=r'''# radio score deferred by stable UUID, never by mutable sorted index
+          rs=s.find('void radioSaveScore(uint8_t i){')
+          re=s.find('\nint32_t stationRank',rs)
+          if rs<0 or re<0: raise RuntimeError('radio score block')
+          generated=''' + "'''" + r'''void radioSaveScoreNow(const char* uuid,int16_t score){if(!uuid||!*uuid)return;prefs.begin("adv_radio",false);prefs.putShort(stationScoreKey(uuid).c_str(),score);prefs.end();}
+          void radioSaveScore(uint8_t i){if(i>=radioState.count)return;strlcpy(radioScoreDirtyUuid,radioState.stations[i].uuid,sizeof(radioScoreDirtyUuid));radioScoreDirtyValue=radioState.stations[i].localScore;radioScoreDirty=true;}''' + "'''" + r'''
+          s=s[:rs]+generated+s[re:]
+
+          '''
+          s=s[:a]+block+s[b:]
+          s=s.replace('if(radioScoreDirty){uint8_t i=radioScoreDirtyIndex;radioScoreDirty=false;radioSaveScoreNow(i);return;}', 'if(radioScoreDirty){radioScoreDirty=false;radioSaveScoreNow(radioScoreDirtyUuid,radioScoreDirtyValue);return;}', 1)
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Apply pass2 memory and latency changes
+        run: |
+          python3 tools/adv_rc3_zim_pass2.py
+
+      - name: Repair Witness oversize hash consistency
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('firmware/adv_elite/ADV_Elite.ino')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('void witness(const char* type,const char* detail,const char* truthClass="CONTROL_STATE") {')
+          end=s.index('void saveUiSettingsNow() {',start)
+          new=r'''void witness(const char* type,const char* detail,const char* truthClass="CONTROL_STATE") {
+            String safeDetail=detail?String(detail):String("");
+            if(safeDetail.length()>320) safeDetail=safeDetail.substring(0,320);
+            auto buildPayload=[&](const String& d){
+              String payload="{";
+              payload += "\"schema\":\"JANUS_EVENT_V1\",";
+              payload += "\"source\":\"ADV_Elite\",";
+              payload += "\"ts_ms\":"+String(millis())+",";
+              payload += "\"type\":\""+String(type)+"\",";
+              payload += "\"truth_class\":\""+String(truthClass)+"\",";
+              payload += "\"detail\":\""+d+"\",";
+              payload += "\"entropy\":"+String(core.entropy,5)+",";
+              payload += "\"pred\":"+String(core.predEntropy,5)+",";
+              payload += "\"loss\":"+String(core.loss,5)+",";
+              payload += "\"eye_online\":"+String(eye.online?"true":"false")+",";
+              payload += "\"prev_hash\":\""+String(witnessPrevHash)+"\"}";
+              return payload;
+            };
+            String payload=buildPayload(safeDetail);
+            if(payload.length()>WITNESS_LINE_MAX-82) payload=buildPayload(String("payload_compacted"));
+            char newHash[65];sha256Hex(String(witnessPrevHash)+payload,newHash);
+            String line=payload.substring(0,payload.length()-1)+",\"hash\":\""+String(newHash)+"\"}";
+            if(witnessQCount>=WITNESS_QUEUE_N){writeWitnessLineNow(witnessQueue[witnessQTail].line);witnessQTail=(witnessQTail+1)%WITNESS_QUEUE_N;--witnessQCount;}
+            line.toCharArray(witnessQueue[witnessQHead].line,WITNESS_LINE_MAX);
+            witnessQHead=(witnessQHead+1)%WITNESS_QUEUE_N;++witnessQCount;
+            strlcpy(witnessPrevHash,newHash,sizeof(witnessPrevHash));++witnessCount;
+          }
+
+          '''
+          p.write_text(s[:start]+new+s[end:],encoding='utf-8')
+          PY
+
+      - name: Validate ZIM pass2 invariants
+        run: |
+          grep -q 'RC3_ZIM_PASS2' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'setColorDepth(8)' firmware/adv_elite/ADV_Elite_alien_survival_runtime.h
+          grep -q 'frame_.deleteSprite' firmware/adv_elite/ADV_Elite_alien_survival_runtime.h
+          grep -q 'serviceDeferredPersistence' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'n<96' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'while(WiFi.status()!=WL_CONNECTED&&millis()<until)' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'delay(20)' firmware/adv_elite/ADV_Elite_wifi_manager.h
+          grep -q 'radioScoreDirtyUuid' firmware/adv_elite/ADV_Elite.ino
+
+      - name: Commit ZIM pass2
+        run: |
+          git config user.name "JANUS ZIM Optimizer"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/ADV_Elite_alien_survival_runtime.h firmware/adv_elite/ADV_Elite_wifi_manager.h tools/adv_rc3_zim_pass2.py
+          git commit -m "ADV Elite RC3: apply ZIM memory and latency pass2"
+          git push origin HEAD:chatgpt/adv-elite-rc3-pixel-radio
