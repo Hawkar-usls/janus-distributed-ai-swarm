@@ -41,8 +41,6 @@ class BeaconHomeRenderer {
 
   bool begin() {
     if (ready_) return true;
-    // Cardputer ADV has tight internal RAM; 8-bit sprite keeps the backbuffer
-    // around 32 KiB instead of ~65 KiB while still removing LCD redraw flicker.
     canvas_.setColorDepth(8);
     ready_ = canvas_.createSprite(kW, kH) != nullptr;
     if (ready_) {
@@ -82,8 +80,8 @@ class BeaconHomeRenderer {
 
     canvas_.fillSprite(bg);
 
-    // Historical Beacon silhouette: header + one framed instrument body +
-    // three fixed columns + a dedicated moving ticker rail at the bottom.
+    // Historical Beacon silhouette: one framed instrument body, three fixed
+    // columns and a separate ticker rail. One sprite push prevents LCD flicker.
     canvas_.drawRect(1, 1, 238, 119, primary);
     canvas_.drawFastHLine(2, 13, 236, dim);
     canvas_.drawFastVLine(80, 14, 105, dim);
@@ -107,7 +105,7 @@ class BeaconHomeRenderer {
     canvas_.setCursor(5, 86);
     canvas_.printf("ENV %s/%s", v.shtValid ? "+" : "-", v.qmpValid ? "+" : "-");
     canvas_.setCursor(5, 101);
-    canvas_.printf("LOOP %4luu", (unsigned long)min<uint32_t>(v.loopUs, 9999));
+    canvas_.printf("LOOP %4luu", (unsigned long)capU32(v.loopUs, 9999));
 
     columnTitle(85, 17, "MIND", primary);
     value(85, 31, "E", v.entropy, 3, text);
@@ -129,14 +127,13 @@ class BeaconHomeRenderer {
     canvas_.setCursor(164, 57);
     if (v.wifiOnline) canvas_.printf("RSS %4d", v.wifiRssi); else canvas_.print("RSS ----");
     canvas_.setCursor(164, 70);
-    canvas_.printf("BZ %5lu", (unsigned long)min<uint32_t>(v.buzzHashRate, 99999));
+    canvas_.printf("BZ %5lu", (unsigned long)capU32(v.buzzHashRate, 99999));
     canvas_.setCursor(164, 83);
-    canvas_.printf("WIT %4lu", (unsigned long)min<uint32_t>(v.witnessCount, 9999));
+    canvas_.printf("WIT %4lu", (unsigned long)capU32(v.witnessCount, 9999));
     canvas_.setTextColor(v.anomaly ? TFT_WHITE : faint, bg);
     canvas_.setCursor(164, 101);
-    canvas_.printf("AN %s %lu", v.anomaly ? "!" : "-", (unsigned long)min<uint32_t>(v.anomalyCount, 99));
+    canvas_.printf("AN %s %lu", v.anomaly ? "!" : "-", (unsigned long)capU32(v.anomalyCount, 99));
 
-    // Small state lamps live inside the frame, not as another wall of prose.
     chip(5, 110, "H", v.house, primary, faint);
     chip(25, 110, "J", v.lora, primary, faint);
     chip(45, 110, "L", v.love, primary, faint);
@@ -146,8 +143,7 @@ class BeaconHomeRenderer {
     canvas_.setCursor(166, 110);
     canvas_.printf("FPS %2d", (int)constrain(fpsEma_ + 0.5f, 0.0f, 99.0f));
 
-    // Dedicated ticker rail. Position derives from elapsed time rather than
-    // frame count, so a late frame never changes the scroll speed.
+    // Scroll is clock-based, so dropped frames do not alter ticker speed.
     canvas_.fillRect(0, 121, 240, 14, bg);
     canvas_.drawFastHLine(0, 121, 240, dim);
     char ticker[220];
@@ -164,10 +160,12 @@ class BeaconHomeRenderer {
     canvas_.setCursor(x, 125);
     canvas_.print(ticker);
 
-    // Thin scan segment recreates the little running Beacon line without
-    // repainting the physical LCD in pieces.
+    // Clipped scan segment: width is always positive and inside the sprite.
     const int sx = (int)((nowMs / 9UL) % 280UL) - 40;
-    canvas_.drawFastHLine(max(0, sx), 122, min(40, kW - max(0, sx)), primary);
+    const int x0 = sx < 0 ? 0 : sx;
+    const int rawX1 = sx + 40;
+    const int x1 = rawX1 > kW ? kW : rawX1;
+    if (x1 > x0 && x0 < kW) canvas_.drawFastHLine(x0, 122, x1 - x0, primary);
 
     canvas_.pushSprite(0, 0);
   }
@@ -181,6 +179,7 @@ class BeaconHomeRenderer {
   uint32_t worstFrameUs_ = 0;
   float fpsEma_ = 0.0f;
 
+  static uint32_t capU32(uint32_t v, uint32_t hi) { return v > hi ? hi : v; }
   uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) const { return canvas_.color565(r, g, b); }
   uint16_t amber() const { return rgb(255, 154, 25); }
   uint16_t amberDim() const { return rgb(112, 70, 16); }
