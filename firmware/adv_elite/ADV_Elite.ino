@@ -95,6 +95,8 @@
 #include "ADV_Elite_alien_survival_runtime.h"
 #include "ADV_Elite_wifi_manager.h"
 #include "ADV_Elite_primary_credential.h"
+#include "ADV_Elite_beacon_home.h"
+#include "ADV_Elite_sht3x_async.h"
 
 using namespace janus_adv_elite;
 
@@ -247,6 +249,8 @@ IlluminationPolicy illumination;
 AlienSurvivalRuntime alien;
 AlienPerformanceGovernor alienGovernor;
 AdvWifiManager advWifi;
+BeaconHomeRenderer beaconHome;
+AdvSht3xAsync shtAsync;
 Preferences prefs;
 
 bool houseActive = false;
@@ -284,7 +288,7 @@ static constexpr uint32_t ENV_INTERVAL_MS = 1000UL;
 static constexpr uint32_t ENV_TTL_MS = 15000UL;
 static constexpr uint32_t CORE_INTERVAL_MS = 120UL;
 static constexpr uint32_t HEARTBEAT_MS = 2000UL;
-static constexpr uint32_t DRAW_INTERVAL_MS = 45UL;
+static constexpr uint32_t DRAW_INTERVAL_MS = 16UL;  // ~60 Hz presentation cadence
 static constexpr uint32_t BRAINWAVE_MIN_NOTE_MS = 110UL;
 static constexpr uint32_t DESK_VISUALIZER_IDLE_MS = 120000UL;
 static constexpr uint32_t ESP_RESCUE_COOLDOWN_MS = 12000UL;
@@ -301,6 +305,8 @@ uint16_t histPos = 0;
 uint16_t histCount = 0;
 
 uint32_t lastEnvMs = 0;
+uint32_t lastShtFreshMs = 0;
+uint32_t lastQmpFreshMs = 0;
 uint32_t lastCoreMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDrawMs = 0;
@@ -521,20 +527,38 @@ void appendHistory(){
 }
 
 // -------------------------- sensors --------------------------
-void readEnv(){
-  bool any=false;
-  if(advSht.update()){
-    core.tempC=advSht.cTemp;core.humidity=advSht.humidity;
-    core.shtValid=isfinite(core.tempC)&&isfinite(core.humidity)&&core.tempC>-40&&core.tempC<90&&core.humidity>=0&&core.humidity<=100;
-    any|=core.shtValid;
+void serviceEnv(){
+  const uint32_t now=millis();
+
+  // Start a new SHT3X conversion once per ENV interval, but never sleep here.
+  if(!shtAsync.pending() && now-lastEnvMs>=ENV_INTERVAL_MS){
+    lastEnvMs=now;
+    (void)shtAsync.start(now);
+
+    // QMP6988 normal-mode read is short and contains no recurring library delay.
+    if(advQmp.update()){
+      const float p=advQmp.pressure/100.0f;
+      if(isfinite(p)&&p>300.0f&&p<1200.0f){
+        core.pressureHpa=p;
+        core.qmpValid=true;
+        lastQmpFreshMs=now;
+      }
+    }
   }
-  if(advQmp.update()){
-    core.pressureHpa=advQmp.pressure/100.0f;
-    core.qmpValid=isfinite(core.pressureHpa)&&core.pressureHpa>300&&core.pressureHpa<1200;
-    any|=core.qmpValid;
+
+  float t=NAN,h=NAN;
+  if(shtAsync.poll(now,t,h)){
+    if(isfinite(t)&&isfinite(h)&&t>-40.0f&&t<90.0f&&h>=0.0f&&h<=100.0f){
+      core.tempC=t;
+      core.humidity=h;
+      core.shtValid=true;
+      lastShtFreshMs=now;
+    }
   }
-  if(any)core.envFreshMs=millis();
-  if(millis()-core.envFreshMs>ENV_TTL_MS){core.shtValid=false;core.qmpValid=false;}
+
+  if(lastShtFreshMs==0 || now-lastShtFreshMs>ENV_TTL_MS) core.shtValid=false;
+  if(lastQmpFreshMs==0 || now-lastQmpFreshMs>ENV_TTL_MS) core.qmpValid=false;
+  core.envFreshMs=max(lastShtFreshMs,lastQmpFreshMs);
 }
 
 void calibrateImuZero(){
@@ -725,7 +749,7 @@ void petTick(){
   uint32_t now=millis();if(!pet.lastTickMs)pet.lastTickMs=now;uint32_t elapsed=now-pet.lastTickMs;if(elapsed<60000UL)return;uint32_t mins=elapsed/60000UL;pet.lastTickMs+=mins*60000UL;pet.ageMinutes+=mins;float m=(float)mins;
   pet.hunger=constrain(pet.hunger+0.22f*m,0.0f,100.0f);pet.thirst=constrain(pet.thirst+0.30f*m,0.0f,100.0f);pet.dirt=constrain(pet.dirt+0.13f*m,0.0f,100.0f);
   pet.energy=constrain(pet.energy+(pet.sleeping?0.55f:-0.16f)*m,0.0f,100.0f);if(pet.sleeping&&pet.energy>92)pet.sleeping=false;
-  float comfort=0.75f;if(core.shtValid){comfort=1.0f-comstrain(fabsf(core.tempC-23.0f)/30.0f,0.0f,0.6f)-constrain(fabsf(core.humidity-50.0f)/100.0f,0.0f,0.3f);} // corrected below by explicit clamp
+  float comfort=0.75f;if(core.shtValid){comfort=1.0f-constrain(fabsf(core.tempC-23.0f)/30.0f,0.0f,0.6f)-constrain(fabsf(core.humidity-50.0f)/100.0f,0.0f,0.3f);} // corrected below by explicit clamp
   pet.comfort=constrain(comfort*100.0f,0.0f,100.0f);
   float neglect=(pet.hunger+pet.thirst+pet.dirt+(100.0f-pet.energy))*0.0025f;pet.mood=constrain(pet.mood+(comfort-neglect-0.45f)*m*0.12f,0.0f,100.0f);
   if(pet.hunger>90||pet.thirst>90||pet.dirt>95||pet.energy<5)pet.health=constrain(pet.health-0.35f*m,1.0f,100.0f);else pet.health=constrain(pet.health+0.05f*m,1.0f,100.0f);
@@ -770,13 +794,37 @@ void radioStep(int dir){if(!radioState.count)return;radioState.index=(radioState
 void radioVoteLocal(int delta){if(!radioState.count)return;RadioStation& s=radioState.stations[radioState.index];s.localScore=constrain((int)s.localScore+delta,-50,50);radioSaveScore(radioState.index);char uuid[40];strlcpy(uuid,s.uuid,sizeof(uuid));radioSort();for(uint8_t i=0;i<radioState.count;i++)if(strcmp(radioState.stations[i].uuid,uuid)==0){radioState.index=i;break;}}
 
 // -------------------------- rendering --------------------------
-void drawTicker(){String t="JANUS // "+statusLine+" // E "+String(core.entropy,2)+" P "+String(core.predEntropy,2)+" // EYE "+String(eye.online?"ON":"STALE")+" // W "+String(witnessCount)+" // BZ "+String(buzzHashRate);int width=t.length()*6;int x=240-(int)((millis()/70UL)%(uint32_t)(width+240));M5Cardputer.Display.fillRect(0,122,240,13,TFT_BLACK);M5Cardputer.Display.setTextColor(uiSecondary(),TFT_BLACK);M5Cardputer.Display.setCursor(x,124);M5Cardputer.Display.print(t);}
+void drawTicker(){}
 void drawHome(){
-  auto& d=M5Cardputer.Display;d.fillScreen(TFT_BLACK);d.setTextSize(1);d.setTextColor(uiPrimary(),TFT_BLACK);d.setCursor(2,2);d.print("JANUS ADV_ELITE RC2");d.setCursor(184,2);d.printf("B%02d%%",core.battery);
-  d.setTextColor(TFT_WHITE,TFT_BLACK);d.setCursor(2,16);d.printf("ENV T:%s H:%s P:%s",core.shtValid?String(core.tempC,1).c_str():"?",core.shtValid?String(core.humidity,0).c_str():"?",core.qmpValid?String(core.pressureHpa,0).c_str():"?");d.setCursor(2,28);d.printf("IMU sh %.2f err %.3f",core.imuShock,core.imuLoss);
-  d.setTextColor(TFT_CYAN,TFT_BLACK);d.setCursor(2,42);d.printf("E %.3f pred %.3f loss %.3f",core.entropy,core.predEntropy,core.loss);d.setCursor(2,54);d.printf("FUT %.2f > %.2f > %.2f",core.future1,core.future2,core.future3);
-  d.setTextColor(eye.online?TFT_GREEN:TFT_DARKGREY,TFT_BLACK);d.setCursor(2,68);d.printf("EYE %s TM:%s/%s SY:%s",eye.online?"ON":"STALE",isfinite(eye.presence)?String(eye.presence,0).c_str():"?",isfinite(eye.motion)?String(eye.motion,0).c_str():"?",isfinite(eye.sync)?String(eye.sync,2).c_str():"?");
-  d.setTextColor(anomalyLatched?TFT_WHITE:uiSecondary(),TFT_BLACK);d.setCursor(2,82);d.printf("AN:%s #%lu W:%lu RZ:%.1f/%.1f",anomalyLatched?"YES":"no",(unsigned long)anomalyCount,(unsigned long)witnessCount,core.robustZE,core.robustZL);d.setCursor(2,94);d.printf("M2R:%s H:%s J:%s LOVE:%s",m2rActive?"RUN":"off",houseActive?"ON":"off",loraActive?"ON":"off",loveContextActive()?"ON":"off");d.setCursor(2,106);d.printf("O scope | Z self | R radio | D pet | A alien");drawTicker();
+  BeaconHomeView v;
+  v.tempC=core.tempC;
+  v.humidity=core.humidity;
+  v.pressureHpa=core.pressureHpa;
+  v.entropy=core.entropy;
+  v.predicted=core.predEntropy;
+  v.loss=core.loss;
+  v.future1=core.future1;
+  v.future2=core.future2;
+  v.future3=core.future3;
+  v.sync=eye.online?eye.sync:NAN;
+  v.shock=core.imuShock;
+  v.battery=core.battery;
+  v.wifiRssi=core.wifiRssi;
+  v.buzzHashRate=buzzHashRate;
+  v.witnessCount=witnessCount;
+  v.anomalyCount=anomalyCount;
+  v.loopUs=core.loopUs;
+  v.shtValid=core.shtValid;
+  v.qmpValid=core.qmpValid;
+  v.eyeOnline=eye.online;
+  v.wifiOnline=WiFi.status()==WL_CONNECTED;
+  v.m2r=m2rActive;
+  v.house=houseActive;
+  v.lora=loraActive;
+  v.love=loveContextActive();
+  v.anomaly=anomalyLatched;
+  v.status=statusLine.c_str();
+  beaconHome.draw(v,millis());
 }
 float histValue(VisualizerSource src,int idx){switch(src){case VisualizerSource::ENV:return isfinite(histTemp[idx])?histTemp[idx]:0;case VisualizerSource::MOTION:return histMotion[idx];case VisualizerSource::SWARM:return eye.online&&isfinite(eye.activity)?eye.activity:histEntropy[idx];case VisualizerSource::PREDICTOR:return histLoss[idx];case VisualizerSource::SELF:return histSelf[idx]/1000.0f;default:return histEntropy[idx];}}
 const char* visualName(VisualizerSource s){switch(s){case VisualizerSource::ENV:return"ENV";case VisualizerSource::MOTION:return"MOTION";case VisualizerSource::SWARM:return"SWARM";case VisualizerSource::PREDICTOR:return"PREDICTOR";case VisualizerSource::SELF:return"SELF";case VisualizerSource::KALEIDOSCOPE:return"KALEIDOSCOPE";default:return"?";}}
@@ -833,17 +881,17 @@ void processInput(){
 void setup(){
   auto cfg=M5.config();M5Cardputer.begin(cfg,true);Serial.begin(115200);M5Cardputer.Display.setRotation(1);M5Cardputer.Display.setTextSize(1);
   LittleFS.begin(true);SPI.begin(SD_SCK_PIN,SD_MISO_PIN,SD_MOSI_PIN,SD_CS_PIN);bool sdOk=SD.begin(SD_CS_PIN,SPI,25000000);Serial.printf("[ADV] SD=%d\n",sdOk?1:0);
-  Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool shtOk=advSht.begin(&Wire,0x44,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool qmpOk=advQmp.begin(&Wire,0x56,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);Serial.printf("[ADV] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
+  Wire.begin(GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);bool shtOk=shtAsync.begin(&Wire,0x44);bool qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_L,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);if(!qmpOk)qmpOk=advQmp.begin(&Wire,QMP6988_SLAVE_ADDRESS_H,GROVE_SDA_PIN,GROVE_SCL_PIN,400000U);Serial.printf("[ADV] ENV SHT=%d QMP=%d\n",shtOk?1:0,qmpOk?1:0);
   M5.Imu.init();core.imuValid=true;calibrateImuZero();
   FastLED.addLeds<WS2812,LED_PIN,GRB>(advLed,1);loadUiSettings();applyIllumination();M5Cardputer.Speaker.begin();applyVolume();
-  loadPet();alien.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
+  loadPet();alien.begin();beaconHome.begin();String factorySsid,factoryPass;bool factoryCred=loadFactoryPrimaryCredential(factorySsid,factoryPass);advWifi.begin(factoryCred?factorySsid.c_str():ADV_WIFI_SSID,factoryCred?factoryPass.c_str():ADV_WIFI_PASSWORD);buzzWorkerId=(uint16_t)(ESP.getEfuseMac()&0xFFFF);initEspNow();advWifi.enterRadio();initGnssAndLoRa();if(SD.cardType()!=CARD_NONE)radioLoadCache();
   core.predEntropy=core.entropy;core.battery=M5.Power.getBatteryLevel();core.freeHeap=ESP.getFreeHeap();lastUserInputMs=millis();witness("BOOT","ADV_Elite_RC2","CONTROL_STATE");statusLine="RC2 READY";
 }
 
 void loop(){
   uint32_t loopStart=micros();processInput();gnssTick();uint32_t now=millis();
   if(deskVisualizerEnabled&&mode.mode==ForegroundMode::HOME&&now-lastUserInputMs>=DESK_VISUALIZER_IDLE_MS){mode.enter(ForegroundMode::VISUALIZER_O);mode.visualizer_source=VisualizerSource::KALEIDOSCOPE;autoVisualizerEntered=true;statusLine="DESK VISUALIZER";}
-  if(now-lastEnvMs>=ENV_INTERVAL_MS){lastEnvMs=now;readEnv();}
+  serviceEnv();
   if(now-lastCoreMs>=CORE_INTERVAL_MS){lastCoreMs=now;readImu();if(eye.online&&now-eye.lastOkMs>18000UL)eye.online=false;if(audioNode.online&&now-audioNode.lastOkMs>18000UL)audioNode.online=false;core.battery=M5.Power.getBatteryLevel();core.wifiRssi=WiFi.status()==WL_CONNECTED?WiFi.RSSI():-127;core.freeHeap=ESP.getFreeHeap();updatePredictorAndAnomaly();petTick();m2rTick();}
   if(now-lastHeartbeatMs>=HEARTBEAT_MS){lastHeartbeatMs=now;sendHeartbeat();}
   advWifi.tick();if(mode.mode==ForegroundMode::RADIO_R&&advWifi.consumeConnectedEvent()&&!radioState.count)radioRefreshCatalog();alienGovernor.update(alien.fpsEma(),mode.mode==ForegroundMode::ALIEN_SURVIVAL_A&&!alien.paused());runBuzzBatch();maybeSendLoRaSeal();radioTick();brainWaveTick();updateLed();
