@@ -35,19 +35,6 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install m5stack:esp32
 
-      - name: Resolve actual Cardputer ADV FQBN
-        shell: bash
-        run: |
-          arduino-cli board listall > /tmp/m5_boards.txt
-          cat /tmp/m5_boards.txt | grep -i -E 'cardputer|adv' || true
-          ADV_FQBN="$(awk 'BEGIN{IGNORECASE=1} /Cardputer/ && /ADV/ {print $NF; exit}' /tmp/m5_boards.txt)"
-          if [ -z "$ADV_FQBN" ]; then
-            echo '::error::M5Stack core does not expose a Cardputer ADV board profile'
-            exit 1
-          fi
-          echo "ADV_FQBN=$ADV_FQBN" | tee /tmp/adv_fqbn.txt
-          echo "ADV_FQBN=$ADV_FQBN" >> "$GITHUB_ENV"
-
       - name: Install libraries
         run: |
           arduino-cli lib update-index
@@ -70,10 +57,11 @@ jobs:
           set +e
           rm -rf /tmp/adv_build
           mkdir -p /tmp/adv_build
-          echo "Compiling for $ADV_FQBN"
           arduino-cli compile \
-            --fqbn "$ADV_FQBN" \
+            --fqbn m5stack:esp32:m5stack_cardputer \
             --build-property "upload.maximum_size=3342336" \
+            --build-property "build.flash_size=8MB" \
+            --build-property "upload.flash_size=8MB" \
             --warnings all \
             --library _vendor/M5Cardputer \
             --output-dir /tmp/adv_build \
@@ -96,9 +84,7 @@ jobs:
           path: |
             /tmp/adv_compile.log
             /tmp/adv_compile.status
-            /tmp/m5_boards.txt
-            /tmp/adv_fqbn.txt
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Upload compiled ADV binaries
