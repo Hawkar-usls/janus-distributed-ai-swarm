@@ -1,0 +1,64 @@
+name: ADV RC3 ZIM optimizer one-shot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/adv-rc3-zim-apply-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/adv-elite-rc3-pixel-radio
+          fetch-depth: 0
+
+      - name: Harden patcher markers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('firmware/adv_elite/apply_rc3_zim_optimization.py')
+          s=p.read_text(encoding='utf-8')
+          fixes={
+            "\n\nfloat meanArr(''',":"\n''',",
+            "\n\n// -------------------------- M2R manual future session --------------------------''',":"\n''',",
+            "\n\n// -------------------------- ESP-NOW --------------------------''',":"\n''',",
+            "\n\n// -------------------------- exclusive foreground audio lease --------------------------''',":"\n''',",
+            "\n\n#if ADV_HAS_WEBRADIO''',":"\n''',",
+          }
+          for old,new in fixes.items():
+            if old not in s:
+              raise SystemExit(f'patcher hardening marker missing: {old!r}')
+            s=s.replace(old,new,1)
+          s=s.replace("\n# The replacement above intentionally consumes the function name marker; repair its signature.\ns=s.replace('float meanArr(const float* a,int n)', 'float meanArr(const float* a,int n)', 1)\n", "\n")
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Apply ZIM runtime optimization
+        run: |
+          python3 firmware/adv_elite/apply_rc3_zim_optimization.py
+          grep -q 'RC3_ZIM_OPTIMIZED' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'runBuzzBatch(runtimeGovernor.buzzBudgetUs' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'advRadio.startTransmit' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'xTaskCreatePinnedToCore(radioCatalogWorker' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'advRadio.transmit(s.c_str())' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'void runBuzzBatch()' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'float meanArr(float meanArr' firmware/adv_elite/ADV_Elite.ino
+
+      - name: Commit optimized RC3 source
+        run: |
+          git config user.name "JANUS ZIM Optimizer"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/apply_rc3_zim_optimization.py firmware/adv_elite/ADV_Elite_runtime_governor.h
+          if git diff --cached --quiet; then
+            echo "RC3 already optimized"
+            exit 0
+          fi
+          git commit -m "ADV Elite RC3: apply ZIM-class runtime optimization"
+          git push origin HEAD:chatgpt/adv-elite-rc3-pixel-radio
