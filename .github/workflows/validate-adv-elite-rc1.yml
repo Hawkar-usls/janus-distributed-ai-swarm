@@ -1,42 +1,22 @@
-name: validate-and-build-adv-elite-rc3
+name: validate-adv-elite-rc2
 
 on:
   push:
-    branches: [chatgpt/adv-elite-rc3-pixel-radio]
     paths:
       - 'firmware/adv_elite/**'
       - '.github/workflows/validate-adv-elite-rc1.yml'
   pull_request:
-    branches: [main]
     paths:
       - 'firmware/adv_elite/**'
       - '.github/workflows/validate-adv-elite-rc1.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   compile:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: chatgpt/adv-elite-rc3-pixel-radio
-
-      - name: Integrate RC3 HOME + ENV III
-        run: python3 firmware/adv_elite/apply_rc3_home_env_patch.py
-
-      - name: Persist integrated source on RC3 branch
-        run: |
-          git config user.name "JANUS RC3 Builder"
-          git config user.email "actions@users.noreply.github.com"
-          git add firmware/adv_elite/ADV_Elite.ino
-          if ! git diff --cached --quiet; then
-            git commit -m "ADV Elite RC3: integrate Beacon HOME and nonblocking ENV III"
-            git push origin HEAD:chatgpt/adv-elite-rc3-pixel-radio
-          fi
 
       - name: Checkout pinned M5Cardputer ADV keyboard layer
         uses: actions/checkout@v4
@@ -66,53 +46,24 @@ jobs:
           arduino-cli lib install "ArduinoJson"
           arduino-cli lib install "ESP8266Audio"
 
-      - name: Normalize sketch name
-        run: mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
+      - name: Normalize sketch name for case-sensitive runner
+        run: |
+          mv firmware/adv_elite/ADV_Elite.ino firmware/adv_elite/adv_elite.ino
 
-      - name: Compile ADV Elite RC3
+      - name: Compile ADV Elite
         shell: bash
         run: |
-          set -o pipefail
-          rm -rf .adv_build && mkdir .adv_build
+          set +e
           arduino-cli compile \
             --fqbn m5stack:esp32:m5stack_cardputer \
             --warnings all \
             --library _vendor/M5Cardputer \
-            --output-dir "$PWD/.adv_build" \
             firmware/adv_elite 2>&1 | tee /tmp/adv_compile.log
-
-      - name: Upload compiler log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ADV-Elite-RC3-compile-log
-          path: /tmp/adv_compile.log
-          if-no-files-found: ignore
-
-      - name: Merge 8MB factory base image
-        shell: bash
-        run: |
-          set -euo pipefail
-          BOOT=$(find .adv_build -maxdepth 1 -type f -name '*.bootloader.bin' | head -1)
-          PART=$(find .adv_build -maxdepth 1 -type f -name '*.partitions.bin' | head -1)
-          APP=$(find .adv_build -maxdepth 1 -type f -name '*.bin' ! -name '*.bootloader.bin' ! -name '*.partitions.bin' | head -1)
-          BOOTAPP=$(find "$HOME/.arduino15" -type f -name 'boot_app0.bin' | head -1)
-          ESPTOOL=$(find "$HOME/.arduino15" -type f -name 'esptool.py' | head -1)
-          test -n "$BOOT" && test -n "$PART" && test -n "$APP" && test -n "$BOOTAPP" && test -n "$ESPTOOL"
-          python3 "$ESPTOOL" --chip esp32s3 merge_bin \
-            -o .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin \
-            --flash_size 8MB \
-            0x0 "$BOOT" 0x8000 "$PART" 0xe000 "$BOOTAPP" 0x10000 "$APP"
-          truncate -s 8388608 .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin
-          sha256sum .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin > .adv_build/SHA256SUMS.txt
-          cp firmware/adv_elite/partitions.csv .adv_build/partitions.csv
-
-      - name: Upload factory base
-        uses: actions/upload-artifact@v4
-        with:
-          name: ADV-Elite-RC3-factory-base
-          path: |
-            .adv_build/ADV_Elite_RC3_PIXEL_RADIO_FACTORY_BASE.bin
-            .adv_build/SHA256SUMS.txt
-            .adv_build/partitions.csv
-          if-no-files-found: error
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -E 'fatal error:|error:|not declared|no member named|cannot convert|undefined reference|exit status|Compilation failed' /tmp/adv_compile.log \
+              | tail -n 40 \
+              | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' \
+              | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
