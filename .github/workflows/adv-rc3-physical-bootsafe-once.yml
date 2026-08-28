@@ -1,0 +1,45 @@
+name: ADV RC3 physical SAFEBOOT one-shot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/adv-rc3-physical-bootsafe-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/adv-elite-rc3-pixel-radio
+          fetch-depth: 0
+
+      - name: Apply physical SAFEBOOT repair
+        run: |
+          python3 tools/adv_rc3_bootsafe_repair.py
+
+      - name: Validate boot invariants
+        run: |
+          grep -q 'RC3_PHYSICAL_BOOTSAFE' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'M5Cardputer.begin(cfg,false)' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'M5Cardputer.begin(cfg,true)' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'S0 DISPLAY OK' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'initGnssOnly' firmware/adv_elite/ADV_Elite.ino
+          grep -q 'ensureLoRaReady' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'LORA_PWR_EN = 10' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'pinMode(LORA_PWR_EN' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'M5.Imu.init' firmware/adv_elite/ADV_Elite.ino
+          ! grep -q 'advWifi.enterRadio();initGnss' firmware/adv_elite/ADV_Elite.ino
+
+      - name: Commit repaired source
+        run: |
+          git config user.name "JANUS SAFEBOOT Repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add firmware/adv_elite/ADV_Elite.ino tools/adv_rc3_bootsafe_repair.py
+          git commit -m "ADV Elite RC3: restore physical SAFEBOOT startup"
+          git push origin HEAD:chatgpt/adv-elite-rc3-pixel-radio
