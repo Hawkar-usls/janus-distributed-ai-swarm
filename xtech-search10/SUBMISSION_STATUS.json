@@ -1,5 +1,5 @@
 {
-  "schema_id": "janus.xtechsearch10.submission-status.v2",
+  "schema_id": "janus.xtechsearch10.submission-status.v3",
   "competition": "xTech|Search 10",
   "program": "U.S. Army FUZE xTech Program",
   "repository": "Hawkar-usls/janus-distributed-ai-swarm",
@@ -12,6 +12,7 @@
   "technical_baseline_maturity": "ACTIVE_ENGINEERING",
   "formal_submission_status": "NOT_SUBMITTED",
   "eligibility_status": "OFFICIAL_CLARIFICATION_PENDING",
+  "presentation_principle": "SHOW_WHAT_ALREADY_EXISTS_AND_WHAT_THE_DEVELOPER_CAN_ALREADY_DO_WITHOUT_RETROACTIVE_INTEGRATION_OR_EMBELLISHMENT",
   "physical_system": {
     "node_count_reported_by_developer": 10,
     "exact_ten_device_manifest_frozen": false,
@@ -19,6 +20,39 @@
     "repository_role_count_equals_physical_node_count": false,
     "quick_demo_is_full_swarm": false,
     "required_next_artifact": "TEN_NODE_TEST_MANIFEST.json"
+  },
+  "adjacent_existing_capability": {
+    "name": "JUXTAPOSE",
+    "role": "SEPARATE_EXISTING_ALGORITHMIC_RESEARCH_ASSET",
+    "current_swarm_integration_claimed": false,
+    "current_swarm_firmware_modified_for_jux": false,
+    "darpa_package_previously_shared": true,
+    "darpa_endorsement_claimed": false,
+    "architecture": "transport-agnostic exact-backed adaptive search for resilient communications",
+    "core_rule": "learning may change authorized search order/width but fresh end-to-end measurement remains current connectivity authority",
+    "insufficient_evidence_terminal": "UNKNOWN_RESOURCE_LIMIT",
+    "synthetic_v5_1": {
+      "evidence_domain": "LOCAL_SYNTHETIC_TWIN_ONLY",
+      "episodes": 20000,
+      "frozen_gates_passed": "15/15",
+      "validated_connectivity_jux": 0.98215,
+      "validated_connectivity_uniform": 0.97785,
+      "mean_mission_cost_jux": 1.38855475,
+      "mean_mission_cost_uniform": 1.91412625,
+      "mean_exact_checks_jux": 1.34015,
+      "mean_exact_checks_uniform": 1.50225,
+      "false_connected_complete_outage": 0,
+      "ood_cold_or_new_fraction": 0.8213802435723951
+    },
+    "negative_lineage": [
+      "v1 probe overhead and route thrashing preserved",
+      "v5 premature confidence in combined out-of-distribution regimes preserved",
+      "v5.1 repaired that specific novelty-confidence failure",
+      "independent end-to-end contribution of every submodule is not established in every setting",
+      "no independent external replication or field validation yet"
+    ],
+    "xtech_use": "demonstrate existing developer algorithmic/falsification capability and define an optional future physical validation path on the ten-node swarm",
+    "current_claim_ceiling": "JUXTAPOSE synthetic evidence may motivate controlled hardware/network evaluation but is not JANUS hardware performance, field superiority, anti-jam capability, or current swarm integration"
   },
   "eligibility_reason": {
     "rfi_detailed_rule": "small, for-profit, independent U.S. businesses with qualifying ownership/control and <=500 employees",
@@ -39,14 +73,15 @@
   },
   "primary_alignment": "Command and Control (C2) and Counter-C2 Networks — resilient communications / deep sensing relevance",
   "secondary_alignment": "Adaptive Sustainment — distributed edge operations relevance",
-  "xtech_value_proposition": "Freeze the physically existing heterogeneous swarm and convert current sensing, freshness, failure and recovery mechanisms into a reproducible evidence package that external evaluators can stress, measure, falsify and improve.",
+  "xtech_value_proposition": "Evaluate the physically existing heterogeneous swarm as-is, freeze its real ten-node configuration, measure failure/recovery honestly, and expose JUXTAPOSE separately as an already-developed adaptive-search research asset whose next scientific gate is real hardware validation.",
   "technical_differentiators": [
     "heterogeneous specialist roles rather than identical node images",
     "protected local primary missions with bounded optional/shared work",
     "explicit current/stale/memory/inference/UI truth separation",
     "observable loss, stale and recovery states",
     "low-cost COTS hardware suitable for repeatable failure testing",
-    "inspectable source, provenance and claim boundaries"
+    "inspectable source, provenance and claim boundaries",
+    "separate exact-backed JUXTAPOSE adaptive-search capability with frozen synthetic falsification lineage"
   ],
   "known_limitations": [
     "exact ten-device physical manifest not yet frozen",
@@ -59,6 +94,8 @@
     "heterogeneous firmware creates ABI, build and configuration complexity",
     "some project lore, mining, game and multimedia functionality is outside the Army value proposition",
     "commercial customers, revenue and quantified market traction are not documented",
+    "JUXTAPOSE currently has synthetic evidence only and is not integrated into the present Swarm",
+    "JUXTAPOSE does not create RF reachability, anti-jam capability, or routing paths that the underlying system does not provide",
     "direct competition eligibility remains unresolved"
   ],
   "reviewer_demo": {
@@ -70,7 +107,8 @@
       "heterogeneous peer",
       "optional coordinator/workload node"
     ],
-    "exact_devices": "TO_BE_SELECTED_FROM_PHYSICALLY_FROZEN_TEN_NODE_MANIFEST"
+    "exact_devices": "TO_BE_SELECTED_FROM_PHYSICALLY_FROZEN_TEN_NODE_MANIFEST",
+    "jux_required_for_demo": false
   },
   "full_evaluation_families": [
     "single-node loss by role",
@@ -82,7 +120,8 @@
     "optional external-service outage",
     "concurrent workload/resource stress",
     "selected firmware/ABI compatibility",
-    "full cold restart"
+    "full cold restart",
+    "optional post-baseline JUXTAPOSE hardware falsification against a simple search-order baseline"
   ],
   "primary_metrics": [
     "T_detect_loss",
@@ -99,6 +138,14 @@
     "power_by_role_where_instrumented",
     "manual_intervention_count"
   ],
+  "optional_jux_hardware_metrics": [
+    "exact_checks_per_recovered_path_decision",
+    "search_resource_cost",
+    "false_current_connectivity_events",
+    "ood_novelty_classification",
+    "search_widening_after_prediction_failure",
+    "matched_comparison_against_nonadaptive_baseline"
+  ],
   "claim_firewall": [
     "OWNER_REPORT != INDEPENDENTLY_VERIFIED_PHYSICAL_FACT",
     "REPOSITORY_ROLE_COUNT != PHYSICAL_NODE_COUNT",
@@ -108,6 +155,10 @@
     "PROPOSED_PHASE_I_WORK != ARMY_OPERATIONAL_CAPABILITY",
     "CODE_TIMEOUT_CONSTANT != MEASURED_LATENCY",
     "PREDICTION_OR_MEMORY != CURRENT_SENSOR_TRUTH",
+    "JUXTAPOSE_SYNTHETIC_RESULT != JANUS_HARDWARE_RESULT",
+    "SEPARATE_EXISTING_CAPABILITIES != CURRENT_INTEGRATION",
+    "JUXTAPOSE_SEARCH_PROPOSAL != CURRENT_CONNECTIVITY_TRUTH",
+    "DARPA_PACKAGE_SHARED != DARPA_ENDORSEMENT",
     "NO_BATTLEFIELD_READINESS_CLAIM",
     "NO_ANTI_JAM_OR_CONTESTED_SPECTRUM_CLAIM_WITHOUT_AUTHORIZED_VALIDATED_TEST",
     "NO_SECURE_MILITARY_NETWORK_CERTIFICATION_CLAIM",
@@ -120,13 +171,17 @@
     "failed_tests_preserved": true,
     "best_run_only_reporting_forbidden": true,
     "limitations_visible_to_reviewer": true,
-    "quantitative_claim_requires_frozen_manifest_and_raw_evidence": true,
-    "unsupported_claim_must_be_demoted": true
+    "quantitative_claim_requires_frozen_evidence_domain": true,
+    "unsupported_claim_must_be_demoted": true,
+    "synthetic_evidence_must_remain_labeled_synthetic": true,
+    "separate_capabilities_must_not_be_retroactively_described_as_integrated": true,
+    "existing_swarm_should_be_presented_as_is": true
   },
   "review_documents": [
     "xtech-search10/README.md",
     "xtech-search10/REVIEWER_PATH.md",
     "xtech-search10/JANUS_RESILIENT_EDGE_SWARM_OVERVIEW.md",
+    "xtech-search10/JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md",
     "xtech-search10/TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md",
     "xtech-search10/STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md",
     "xtech-search10/CLAIM_EVIDENCE_MATRIX.md",
@@ -147,10 +202,12 @@
     "physically identify all ten current nodes",
     "freeze TEN_NODE_TEST_MANIFEST.json with exact board, firmware, commit and peripherals",
     "collect dated group and per-node physical evidence",
-    "run quick reviewer demonstrator without modifying firmware during runs",
+    "run quick reviewer demonstrator on the existing Swarm without rewriting firmware for the application",
     "run repeated full ten-node disruption and recovery evaluation",
     "preserve successes, failures, raw logs and event timestamps",
     "measure resource, thermal and power cost where instrumentation is available",
+    "optionally evaluate JUXTAPOSE on the real Swarm only after the unchanged baseline is characterized",
+    "if JUXTAPOSE hardware test is run, preserve a nonadaptive comparison and all transfer failures",
     "promote only evidence-backed claims through CLAIM_EVIDENCE_MATRIX",
     "transfer compressed final text into official three-page template",
     "submit through Valid Eval only if eligibility is confirmed"
