@@ -6,6 +6,8 @@ This document explains what is technically distinctive about JANUS without relyi
 
 The system should be evaluated as an **edge-systems architecture implemented on heterogeneous low-cost hardware**, not as a claim that one radio, one sensor, or one algorithm is uniquely superior.
 
+The developer also has a separate existing communications-search research asset, **JUXTAPOSE**. It is included as evidence of adjacent algorithmic capability and a possible future hardware-validation layer, **not as an already integrated feature of the current Swarm**.
+
 ## Technical differentiators
 
 ### 1. Heterogeneous specialist architecture
@@ -66,6 +68,26 @@ The submission branch explicitly separates code paths, measured results, propose
 
 **Differentiator:** the reviewer receives not only a pitch, but also a list of statements that the project refuses to make without evidence.
 
+### 9. Separate exact-backed adaptive-search capability: JUXTAPOSE
+
+JUXTAPOSE is an experimental transport-agnostic communications-search architecture developed separately from the Swarm. Its learnable/adaptive layer may change **which authorized path is checked first** and **how broadly to search**, but current connectivity requires a fresh end-to-end measurement.
+
+Its design rule is intentionally parallel to the Swarm's truth discipline:
+
+```text
+SWARM:
+PREDICTION / MEMORY != CURRENT SENSOR TRUTH
+
+JUXTAPOSE:
+PREDICTED GOOD PATH != CURRENT CONNECTIVITY
+```
+
+The frozen v5.1 JUXTAPOSE synthetic holdout used 20,000 episodes and passed 15/15 preregistered gates. Within that synthetic evidence domain, it showed lower mean mission/search-resource cost than the uniform-random comparison, zero fabricated `CONNECTED` in complete-outage controls, and explicit novelty handling. Earlier negative results remain preserved.
+
+**Differentiator:** the developer has already carried a separate resilience concept through formal decision rules, frozen gates, OOD controls, negative-result preservation, and a defined hardware-falsification next step.
+
+**Current evidence limit:** JUXTAPOSE has not yet been integrated into or validated on the ten-node physical JANUS Swarm. It is not represented as a present hardware capability.
+
 ---
 
 ## Why this can matter to Army evaluators
@@ -79,6 +101,7 @@ The Army relevance is not that JANUS is already a tactical C2 product. It is tha
 - How much compute, memory, thermal, and power budget does resilience cost?
 - Which failure modes propagate and which remain local?
 - Can the higher-level state/recovery model survive replacement of the current low-cost transport later?
+- If multiple authorized paths exist, can adaptive ordering reduce wasted path checks without replacing fresh measurement with prediction?
 
 A positive result would not certify a military network. It would provide measured evidence about a low-cost edge architecture that could inform later integration.
 
@@ -114,6 +137,14 @@ Low-cost specialist nodes could be adapted to local equipment/environment monito
 
 **Not claimed:** current Army logistics integration or fielded predictive maintenance.
 
+### E. Optional adaptive path-search evaluation with JUXTAPOSE
+
+After the unchanged Swarm baseline is measured, the same physical testbed could expose several authorized peer/interface/path candidates to JUXTAPOSE and compare adaptive ordering against a simple baseline.
+
+**Useful evaluation:** number of exact checks needed, search/resource cost, behavior after wrong predictions, OOD/novelty response, false-current-connectivity events, and widening of search when confidence decays.
+
+**Not claimed:** current JUXTAPOSE integration, anti-jam behavior, route creation where no route exists, or field superiority.
+
 ---
 
 ## Civilian / commercial dual-use paths
@@ -138,18 +169,24 @@ The architecture can be used to study how local automation behaves when Wi-Fi, a
 
 The public, inspectable firmware and inexpensive hardware class support training in distributed-systems failure, telemetry, firmware compatibility, and sensor provenance.
 
+### Conditional JUXTAPOSE software/control-plane path
+
+If real hardware testing reproduces useful synthetic behavior, JUXTAPOSE could be evaluated as a transport-agnostic path-search/order component for systems that already expose multiple authorized connectivity candidates. This is a future transition path, not a current commercial product claim.
+
 These are **commercialization directions**, not claims of existing contracts, customers, or revenue.
 
 ---
 
 ## Comparison with simpler architectures
 
-| Architecture | Strength | Typical weakness | JANUS angle |
+| Architecture | Strength | Typical weakness | JANUS / JUXTAPOSE angle |
 | --- | --- | --- | --- |
 | One central gateway + passive sensors | Simple management | Gateway can become a strong dependency | Preserve more local role/state and explicitly test coordinator loss |
 | Identical mesh nodes | Easier fleet management | Poor fit for mixed hardware/sensor generations | Accept heterogeneity as a design condition |
 | Cloud-first IoT | Powerful centralized analytics | Connectivity loss can remove visibility/control | Keep useful local behavior and peer state where supported |
 | Raw radio mesh | Good transport focus | Transport health may not describe application freshness | Model peer identity, heartbeat, stale/current semantics above transport |
+| Static failover order | Simple and predictable | Can waste probes when failure patterns change | JUXTAPOSE may reorder authorized checks, while fresh measurement still decides truth |
+| Pure learned route selector | Can be fast in familiar conditions | Risk of trusting stale/model output | JUXTAPOSE explicitly denies model authority over current connectivity |
 | Highly integrated proprietary appliance | Strong packaging | Expensive/opaque for early failure research | Low-cost, inspectable experimental surface |
 
 This table describes architectural tradeoffs, not benchmark superiority.
@@ -169,10 +206,12 @@ The xTech pitch should **not** rely on any of the following:
 - military-grade security claims;
 - anti-jam claims;
 - autonomous weapon functions;
-- raw node count as proof of scalability.
+- raw node count as proof of scalability;
+- DARPA submission as proof of DARPA validation or endorsement;
+- synthetic JUXTAPOSE numbers as if they were Swarm hardware numbers.
 
 Those elements may exist elsewhere in project history or firmware, but they are not required to explain the transferable edge-engineering value.
 
 ## One-line value proposition
 
-> **JANUS is a physically instantiated heterogeneous edge swarm designed so that unlike low-cost nodes can keep their local roles, expose freshness and peer health, and make disruption/recovery behavior visible enough to measure rather than merely assume.**
+> **JANUS already provides a physically instantiated heterogeneous edge swarm; JUXTAPOSE separately demonstrates an exact-backed adaptive-search research capability. The xTech package presents both honestly, without rewriting the current Swarm or pretending that separate work is already integrated.**
