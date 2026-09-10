@@ -2,9 +2,9 @@
 
 ## Candidate technology
 
-**JANUS Resilient Edge Swarm** is the xTech-facing name for an existing subset of the `JANUS Distributed AI Swarm` engineering project. It is not a new rewrite and does not replace the original firmware.
+**JANUS Resilient Edge Swarm** is the xTech-facing presentation of the existing `JANUS Distributed AI Swarm` engineering project. It is not a new rewrite and does not replace the original firmware.
 
-The existing project is a heterogeneous ESP32/M5Stack firmware suite. Different nodes preserve different local roles—operator/UI, sensing, telemetry, radio anchor, local compute, multimedia or bounded workload participation—while selected state is shared through explicit packet interfaces, primarily ESP-NOW in the current public implementation.
+The developer reports a **10-node physical JANUS swarm** built around heterogeneous ESP32/M5Stack-class devices. Different nodes preserve different local roles—operator/UI, sensing, telemetry, radio anchor, local compute, multimedia or bounded workload participation—while selected state is shared through explicit packet interfaces, primarily ESP-NOW in the current public implementation.
 
 The xTech submission concept isolates one practical engineering question from the larger JANUS project:
 
@@ -24,7 +24,7 @@ The current repository already implements and documents the relevant architectur
 - operator/UI surfaces that distinguish current sensor state from memory, prediction and presentation state;
 - explicit technical boundaries around adaptive control and claims.
 
-The submission does not require every JANUS node. The preferred demonstration set is **Core2 + Blind Eye + Anchor + ATOM SWARM TRON**, with Buzz available when coordinator/workload behavior is useful to the demonstration.
+The technology is the **full ten-node physical swarm**. For a short, reproducible reviewer demonstration, the preferred first subset is **Core2 + Blind Eye + Anchor + ATOM SWARM TRON**, with Buzz available when coordinator/workload behavior is useful. This smaller subset is a demonstration configuration only; it must not be interpreted as the total size of JANUS.
 
 ## Why the architecture is relevant
 
@@ -41,7 +41,7 @@ JANUS addresses this at the firmware-architecture level rather than by claiming 
 
 These are useful properties for civilian and government edge networks that need to tolerate intermittent peers and heterogeneous hardware.
 
-## Existing node roles selected for xTech review
+## Existing node roles selected for first xTech review
 
 ### Core2 — operator and telemetry surface
 
@@ -101,7 +101,7 @@ Potential non-defense applications include industrial/environmental telemetry, r
 
 ### Implemented in the current project
 
-Existing firmware, node roles, ESP-NOW communication paths, sensor integration, heartbeat/state visibility, reconnect/recovery code paths, bounded-specialist architecture and explicit truth/protocol boundaries.
+Existing firmware, heterogeneous node roles, ESP-NOW communication paths, sensor integration, heartbeat/state visibility, reconnect/recovery code paths, bounded-specialist architecture and explicit truth/protocol boundaries. The developer reports ten physical nodes in the current swarm; the final submission inventory will freeze the exact hardware/firmware identity of each physical device.
 
 ### Needs controlled evidence before being claimed quantitatively
 
@@ -115,4 +115,4 @@ Battlefield readiness, Army integration, secure military communications certific
 
 The proposed xTech value is therefore deliberately narrow and testable:
 
-**Take a physically existing, low-cost heterogeneous edge swarm and turn its current resilience/recovery mechanisms into a reproducible measurement package that Army evaluators can independently stress, observe and compare.**
+**Take a physically existing ten-node, low-cost heterogeneous edge swarm and turn its current resilience/recovery mechanisms into a reproducible measurement package that Army evaluators can independently stress, observe and compare.**
