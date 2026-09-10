@@ -1,10 +1,10 @@
 # xTech|Search 10 — Concept White Paper Working Draft
 
 > **WORKING SOURCE ONLY — NOT THE OFFICIAL SUBMISSION FORMAT.**  
-> The final submission must be transferred into the official Valid Eval `Template_xTech_Search10_White_Paper.docx` and kept to exactly three pages. Eligibility must be resolved before submission.
+> The final submission must be transferred into the official Valid Eval `Template_xTech_Search10_White_Paper.docx` and kept to exactly three pages. This file is the long-form provenance-controlled master source from which the final three-page version will be compressed. Eligibility must be resolved before submission.
 
 **Company / eligible entity:** `[PENDING ELIGIBILITY CLARIFICATION]`  
-**Proposal title:** **JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Mesh for Degraded Networks**  
+**Proposal title:** **JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Network for Degraded Connectivity**  
 **Technology owner/developer:** Hawkar, independent researcher/developer, Ukraine  
 **Repository:** `Hawkar-usls/janus-distributed-ai-swarm`
 
@@ -12,69 +12,152 @@
 
 ## 1. Introduction — 5%
 
-JANUS Resilient Edge Swarm is an existing heterogeneous ESP32/M5Stack firmware system deployed by its developer as a **10-node physical swarm**. It combines low-cost sensing, telemetry, local processing, operator visualization and peer/coordinator recovery behavior across specialized edge nodes. The project is currently classified as active engineering, not a production or military-certified system.
+JANUS Resilient Edge Swarm is an existing heterogeneous ESP32/M5Stack-class firmware system operated by its developer as a **reported 10-node physical swarm**. Different nodes perform different local roles—including sensing, operator visualization, telemetry, RF/reference functions, local computation, multimedia, and bounded distributed work—while selected state is exchanged through explicit packet interfaces, primarily ESP-NOW in the current public implementation.
 
-The proposed xTech effort does not begin by inventing a new swarm architecture. It begins with working firmware and physical low-cost hardware, freezes a reproducible configuration, and measures a narrow question: **how well can heterogeneous edge nodes preserve useful local functions, expose loss/stale state, and recover connectivity when peers or network paths are disrupted?**
+The xTech effort does not begin by inventing a new swarm architecture. It begins with working firmware and physical low-cost hardware, freezes the exact ten-device configuration, and measures one bounded question: **how well can unlike edge nodes preserve useful local functions, expose peer loss and stale state honestly, and recover connectivity when peers, coordinators, or network paths are disrupted?**
 
-The technology under review is the ten-node JANUS swarm. For a short first demonstration, a focused subset of existing Core2, Blind Eye, Anchor and ATOM SWARM TRON firmware can be used, with Buzz available as an optional coordinator/workload node. That subset is a demonstration configuration, not the size of the system. The project primarily uses ESP-NOW for selected peer state in the current public implementation and preserves explicit boundaries between current sensor truth, memory, prediction and UI state.
+JANUS is currently **active engineering**, not a production or military-certified system. That maturity boundary is part of the proposal, not hidden from it. The value of Phase I would be to convert existing implementation into a reproducible evidence package with measured strengths, failures, resource costs, and integration boundaries.
 
 ## 2. Army Benefits — 25%
 
-xTech|Search 10 gives strong consideration to Command and Control (C2) and Counter-C2 Networks, including resilient communications and deep sensing. JANUS is **not** presented as an operational Army C2 system. Its relevance is a lower-level edge architecture that can be independently evaluated as a building block for distributed sensing and local telemetry under degraded connectivity.
+xTech|Search 10 gives strong consideration to Command and Control (C2) and Counter-C2 Networks, including resilient communications and deep sensing. JANUS is **not** presented as an operational Army C2 product, protected tactical radio, or secure battlefield network. Its relevance is at a lower and testable layer: heterogeneous edge devices that must remain interpretable when connectivity becomes imperfect.
 
-The potential Army benefit is a low-cost, modular testbed for exploring how non-identical edge devices behave when communication becomes intermittent. Rather than requiring every device to perform the same role, JANUS nodes preserve specialized local functions while sharing bounded state. Existing architecture rules require heartbeat/health visibility, explicit stale-node handling, protected primary missions, bounded coordinator side-work, and separation of sensor truth from inferred or remembered state.
+The potential Army benefit is a low-cost modular testbed for answering practical distributed-systems questions before higher-cost field integration. Rather than forcing every device into one identical role, JANUS is organized around specialized nodes with a protected local mission and bounded shared/coordinator work. Repository rules require peer/health visibility, stale-state handling, explicit sensor-truth boundaries, and inspectable recovery behavior.
 
-This creates a useful evaluation pattern for distributed sensing: an operator can observe which nodes are healthy, stale or recovering; a sensing node can retain its local mission when optional coordinator functions disappear; and recovery paths can be measured rather than hidden behind a single aggregate status.
+That architecture creates several Army-relevant evaluation questions:
 
-Potential Army-relevant evaluation questions include: time to identify a lost peer, time to rejoin after restoration, frequency of stale information being mistaken for current state, continuity of unaffected local sensing during coordinator/path disruption, and resource/power cost of the recovery mechanisms.
+- How quickly does a lost peer become visibly stale or absent?
+- Does loss of one role propagate into unrelated roles?
+- Does a sensor continue its local mission when a coordinator or optional service disappears?
+- Can a restored node return with the same identity without creating stale or duplicate state?
+- What radio, memory, thermal, and power cost is introduced by recovery behavior?
+- Which higher-level state/recovery mechanisms are tied to ESP-NOW, and which could migrate to a different transport or hardened platform later?
 
-The same architecture has civilian dual-use potential in industrial and environmental telemetry, remote-infrastructure monitoring, disaster-response sensor deployment, local building/field instrumentation and resilient maker/education edge networks.
+A positive result would not certify battlefield readiness. It would provide measured evidence about an inexpensive heterogeneous edge architecture and identify where later Army integration work would or would not be justified.
+
+The same architecture has civilian dual-use potential in industrial/environmental telemetry, remote-infrastructure monitoring, disaster-response instrumentation, building/field automation research, and low-cost distributed-systems evaluation.
 
 ## 3. Technical Approach — 40%
 
 ### Existing technical baseline
 
-The current repository contains multiple ESP32/M5Stack firmware roles and documents ESP-NOW packet/ABI handling, telemetry, heartbeat/state visibility, recovery behavior and explicit technical boundaries. The developer reports ten physical JANUS nodes in the current swarm; the final submission inventory will freeze the exact board/model, firmware path and flashed commit for each physical device.
+The current public repository contains multiple active ESP32/M5Stack firmware roles and documents ESP-NOW packet/ABI behavior, local sensing, telemetry, operator surfaces, heartbeat/state visibility, stale-node requirements, recovery paths, bounded specialist behavior, and explicit technical boundaries.
 
-The preferred **first demonstration subset** is:
+The developer reports ten physical JANUS nodes in the current swarm. The public repository contains more firmware roles than the physical fleet because it also preserves compatibility images, migration targets, and experimental lineages. The final xTech baseline will therefore be created from the actual hardware, not inferred from repository file count.
 
-**Core2 — operator/telemetry surface.** Existing firmware provides a dense human-facing view of swarm state and selected sensor/peer information.
+Representative current roles include:
 
-**Blind Eye — physical sensing node.** The current AtomS3R-class profile uses an STHS34PF80 TMOS/PIR sensor as its primary eye, treats the absence of a camera as a normal hardware profile, and separates physical sensor state from memory/prediction/UI semantics.
+**Core2 — operator/telemetry surface.** Existing firmware provides a dense human-facing view of swarm and sensor/peer state.
 
-**Anchor — RF/recovery reference node.** Existing firmware contains heartbeat, ESP-NOW handling, reconnect/rejoin and radio-blackout safeguards intended to keep node state and recovery observable.
+**Blind Eye — physical sensing specialist.** The current AtomS3R-class profile uses an STHS34PF80 TMOS/PIR-style sensor as its primary physical sensing path, explicitly treats a missing camera as a normal hardware fact, and separates physical sensor state from memory/prediction/UI semantics.
 
-**ATOM SWARM TRON — heterogeneous peer.** This separate Atom-class firmware lineage demonstrates that the architecture is not limited to identical devices or identical payloads.
+**Anchor — RF/recovery reference.** Existing firmware includes heartbeat/telemetry behavior, deferred receive handling, reconnect/rejoin paths, and radio-blackout safeguards.
 
-Buzz may be included when coordinator/workload behavior is useful. Its mining-related code is background engineering rather than the proposed Army capability. The remaining physical JANUS nodes remain part of the system and can be included in later or full-swarm trials; they are not removed from the technology claim simply because the first reviewer demo uses a smaller subset.
+**Buzz — coordinator/workload and recovery lineage.** Existing firmware contains coordinator/worker, watchdog, reconnect, and concurrent workload history. Mining-related functions are background engineering and are not the proposed Army capability.
 
-### Phase I measurement plan
+Other current roles—including BH/BlackStar, ADV Elite, Yaks Gate, Gladius, Golcron, Zim, Pyramid, and PEA4/P4 tracks—show the intended heterogeneity of the system. Compatibility/preserve firmware such as Beacon, Stick, and ATOM SWARM TRON remains part of project provenance. The exact physical membership of the current ten-node fleet will be frozen from the devices themselves.
 
-If selected for a Phase I effort, the first task would be to freeze one exact ten-node hardware/software configuration: board models, firmware commits, library versions, radio configuration, sensors and power sources. No performance number would be claimed from source code alone.
+### Why the architecture is technically interesting
 
-Controlled trials would then run staged conditions: normal full-swarm baseline operation; physical removal/isolation of selected nodes; coordinator or network-path disruption where applicable; and restoration/rejoin. Timestamped logs and continuous video would record the last valid heartbeat, stale/lost indication, unaffected-node behavior, first recovered packet and return to healthy peer state.
+JANUS does not claim that ESP-NOW or ESP32 hardware is novel. The candidate value is the combination of:
 
-Primary metrics would include `T_detect_loss`, `T_rejoin`, valid packet reception rate, stale-state errors, primary-mission continuity, minimum free heap and—where instrumentation is available—power draw and device temperature. Repeated trials would establish distributions rather than a single best-case result.
+1. **heterogeneous specialist roles** rather than identical nodes;
+2. **protected local missions** with bounded optional/shared work;
+3. **explicit current/stale/memory/inference separation**;
+4. **observable failure and recovery states**;
+5. **low-cost COTS hardware** suitable for repeatable failure testing;
+6. **inspectable source and provenance**, allowing claim-to-code review.
 
-The final technical output would be a reproducible evaluation package: frozen ten-node manifest, logs, event CSV, test procedure, observed failures and a concise interface description for later customer integration.
+The same heterogeneity is also a weakness: different boards, libraries, sensors, displays, radio settings, and workloads create version/ABI/resource complexity. Phase I should measure whether that complexity remains manageable rather than assuming it does.
 
-### Technical boundaries
+### Phase I work plan
 
-The proposal does not claim anti-jam capability, secure tactical networking certification, battlefield readiness, autonomous weapon authority, AGI, precognition or combat superiority. If a controlled test fails, that failure remains part of the evidence and becomes a defined engineering target rather than being removed from the result set.
+**Task 1 — Freeze the ten-node reference system.** Assign immutable physical IDs, capture dated photos, board/model, node identity, firmware path, flashed commit, relevant build/library versions, sensors/peripherals, radio configuration class, and power source. Produce a hashed `TEN_NODE_TEST_MANIFEST.json`.
+
+**Task 2 — Establish baseline behavior.** Record healthy peer visibility, physical sensor paths, local-role activity, heap/thermal state, and power where instrumentation is available.
+
+**Task 3 — Controlled node-loss/rejoin trials.** Remove selected nodes one at a time, preserve the other devices unchanged, and timestamp last valid packet, stale/lost indication, unaffected-role behavior, first recovered packet, and return to healthy state. Repeat trials and preserve failures.
+
+**Task 4 — Coordinator and optional-service outage trials.** Interrupt coordinator, Wi-Fi, or optional external-service paths where relevant and record exactly which local functions continue, degrade, defer, or require user intervention.
+
+**Task 5 — Controlled 2.4 GHz impairment.** Use legal, non-destructive conditions such as distance, attenuation, shielding, coexistence load, or environmental placement to characterize packet loss and recovery. This is explicitly **not** presented as an anti-jam test.
+
+**Task 6 — Resource-cost characterization.** Measure minimum free heap, device temperature where available, and role-specific power behavior during baseline and recovery.
+
+**Task 7 — Reproducibility and failure ledger.** Produce raw logs, event CSVs, representative continuous video, all material failures, exact source references, and an independent replay package when a second evaluator becomes available.
+
+### Metrics
+
+Primary metrics include:
+
+- `T_detect_loss` — last valid peer packet/heartbeat to stale/lost indication;
+- `T_first_packet_after_restore` — restoration to first accepted peer packet;
+- `T_rejoin_healthy` — restoration to healthy-peer classification;
+- `rejoin_success_rate` across repeated trials;
+- valid packet reception under a defined condition;
+- `stale_as_current_events` with a target of zero;
+- role-specific primary-mission continuity;
+- secondary/cascading failure count;
+- duplicate/identity-conflict events after rejoin;
+- minimum free heap, temperature, and power where instrumented;
+- manual interventions required for recovery.
+
+Results will be reported as trial counts, distributions, and failure tables rather than only a fastest or best-case run.
+
+### Known technical limitations
+
+The proposal deliberately records the current weaknesses:
+
+- the exact ten-node physical manifest is not yet frozen;
+- resilience/rejoin/power numbers are not yet established under a controlled xTech benchmark;
+- 2.4 GHz ESP-NOW/Wi-Fi-class transport is not a protected tactical or anti-jam radio;
+- military cybersecurity, fleet key management, accreditation, and ATO are not established;
+- current COTS boards are not claimed to be ruggedized or MIL-STD-qualified;
+- scale beyond the tested physical fleet is unproven;
+- heterogeneous firmware increases ABI/configuration/build complexity;
+- some original JANUS code contains multimedia, mining, game, and research/lore functions that are not part of the Army value proposition;
+- the current sensing roles must be described according to their actual sensors rather than inflated into imaging, ranging, or biometric capabilities.
+
+If a controlled test reveals an additional weakness, it will be added to the evidence package rather than omitted.
 
 ## 4. Commercial Potential — 25%
 
-JANUS uses widely available ESP32/M5Stack-class hardware and modular firmware roles, creating a low-cost path to experimentation and deployment in non-defense edge-sensing environments. The same core pattern—specialized local nodes, selected peer state, heartbeat/stale visibility and recovery—can be relevant to remote facilities, industrial/environmental monitoring, resilient local automation, field instrumentation and disaster-response deployments where replacing an entire centralized system is undesirable.
+JANUS uses widely available ESP32/M5Stack-class hardware and modular firmware roles, providing a low-cost path for architecture evaluation before a customer commits to a bespoke or hardened platform. The transferable pattern—specialized local roles, selected peer state, explicit freshness/stale visibility, and recovery behavior—could be relevant to remote facilities, industrial/environmental monitoring, resilient local automation, temporary field instrumentation, disaster-response sensing, and training/evaluation kits.
 
-At present, **verified commercial customers, revenue and quantified market traction are not documented in the public repository and will not be invented for this submission**. The owner reports physically operating the ten-node JANUS swarm for sensing, multimedia and compute/nerd-mining experiments; dated physical evidence and exact hardware manifests should be added before final submission.
+The current commercialization argument is based on **technical transition potential**, not invented traction. Verified customers, revenue, purchase orders, and quantified market adoption are not documented in this branch and will not be claimed without evidence.
 
-A realistic commercialization path would package the current engineering into a documented hardware-agnostic edge-node framework, reproducible evaluation kit and integration interface rather than selling the existing project lore as a finished product. Potential business models could include evaluation kits, integration/pilot engineering, licensed firmware modules or OEM/partner integration, subject to the repository's source-available licensing and any separately negotiated rights.
+A realistic transition path is:
 
-Phase I would materially improve commercial readiness by converting existing code paths into measured reliability data, a frozen reference configuration and a customer-readable interface/test package.
+```text
+EXISTING PHYSICAL PROTOTYPE
+-> FROZEN REFERENCE KIT
+-> MEASURED RELIABILITY / FAILURE DATA
+-> CLEAN INTERFACE DOCUMENTATION
+-> CUSTOMER PILOT / INTEGRATION
+-> HARDENED OR OEM PLATFORM IF JUSTIFIED
+```
+
+Possible business models include evaluation kits, paid integration/pilot engineering, licensed firmware/interface modules, or OEM/partner integration, subject to the repository's source-available licensing and separately negotiated commercial rights.
+
+Phase I would materially improve commercial readiness by converting an organically evolved working system into a customer-readable reference configuration with measured reliability, known weaknesses, reproducible tests, and clearer transport/hardware integration boundaries.
 
 ## 5. Proposal Quality — 5%
 
-This proposal intentionally distinguishes source-code implementation, measured evidence, proposed Phase I work and future Army application. Every quantitative claim will be tied to a frozen firmware/hardware configuration and timestamped test evidence. Existing repository claim boundaries remain in force throughout the xTech submission.
+This proposal uses a strict evidence firewall:
+
+```text
+EXISTING IMPLEMENTATION
+!=
+MEASURED PERFORMANCE
+!=
+PROPOSED PHASE I WORK
+!=
+ARMY OPERATIONAL CAPABILITY
+```
+
+Every quantitative claim will be tied to a frozen hardware/software configuration and timestamped evidence. Failed tests will remain in the record. Source timeouts will not be reported as measured latency. Owner-reported physical facts will remain labeled as such until captured. Prediction or memory will not be reported as current sensor truth.
+
+This approach is intended to give evaluators a prototype they can challenge rather than a pitch that depends on untestable language.
 
 ---
 
@@ -82,9 +165,11 @@ This proposal intentionally distinguishes source-code implementation, measured e
 
 - Resolve xTech eligibility in writing.
 - Obtain the official Valid Eval white-paper template.
-- Replace `[PENDING ELIGIBILITY CLARIFICATION]` with the exact eligible entity name only after confirmed.
-- Freeze the exact repository commit and **all ten physical node identities**.
-- Add dated group photos/video evidence of the physical swarm.
-- Run controlled full-swarm and selected-node loss/rejoin tests and insert only measured numbers that pass the claim-evidence gate.
-- Add any real commercial/customer evidence if available; otherwise preserve the current limitation statement.
-- Compress/edit into the official three-page template without dropping claim boundaries.
+- Replace `[PENDING ELIGIBILITY CLARIFICATION]` with the exact eligible entity name only after confirmation.
+- Freeze the exact repository commit and all ten physical node identities.
+- Add dated group photo/video and per-device evidence.
+- Run controlled quick-demo and full ten-node loss/rejoin tests.
+- Insert only measured numbers that pass `CLAIM_EVIDENCE_MATRIX.md`.
+- Preserve failures and limitations in the submission evidence set.
+- Add real customer/commercial evidence only if documentary support exists.
+- Compress this master source into the official three-page template without dropping the central limitations or claim firewall.
