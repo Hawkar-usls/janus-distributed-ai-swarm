@@ -3,7 +3,7 @@
 # JANUS Resilient Edge Swarm
 ### xTech|Search 10 submission review surface
 
-`10-node physical swarm` · `heterogeneous low-cost edge nodes` · `sensing` · `telemetry` · `observable failure/recovery`
+`10-node physical swarm` · `heterogeneous low-cost edge nodes` · `sensing` · `telemetry` · `observable failure/recovery` · `separate JUXTAPOSE research asset`
 
 **Branch:** `submission/xtech-search10-2026`  
 **Source project maturity:** `ACTIVE_ENGINEERING`  
@@ -31,6 +31,34 @@ OPERATIONAL CAPABILITY
 
 The four/five-node demonstrator described in this package is a reviewer/test subset, **not the size of the full swarm**.
 
+## Two existing assets, kept separate
+
+This xTech review surface now exposes two bodies of existing JANUS work without pretending that they are already one integrated product:
+
+### A. JANUS Resilient Edge Swarm — physical / firmware asset
+
+A developer-reported ten-node heterogeneous ESP32/M5Stack-class physical swarm with sensing, operator surfaces, telemetry, specialized local roles, stale-state semantics, and recovery-oriented firmware paths.
+
+### B. JUXTAPOSE — algorithmic / experimental-method asset
+
+A separately developed exact-backed adaptive communications-search architecture. JUXTAPOSE may rank which authorized path to check first and how broadly to search, but fresh end-to-end measurement remains the only authority for current connectivity. Its frozen v5.1 evidence is synthetic, not hardware/field validation.
+
+The relationship is intentionally stated as:
+
+```text
+EXISTING JANUS SWARM
++
+SEPARATE EXISTING JUXTAPOSE RESEARCH
+=
+BREADTH OF CURRENT DEVELOPER CAPABILITY
+
+NOT
+
+JUXTAPOSE IS ALREADY INTEGRATED INTO THE SWARM
+```
+
+See [`JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md`](JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md).
+
 ## Candidate title
 
 **JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Network for Degraded Connectivity**
@@ -45,6 +73,8 @@ A heterogeneous ESP32/M5Stack edge system in which specialized low-cost nodes pr
 
 JANUS does not ask xTech to fund a first paper prototype. The public repository already contains multiple ESP32/M5Stack firmware roles, sensor paths, operator surfaces, packet/ABI rules, stale-node semantics, watchdog/reconnect/rejoin logic, and a protected-primary-mission doctrine. The proposed effort is to freeze the physically existing system and determine—under controlled failure—what actually continues, what degrades, how quickly loss becomes visible, how cleanly nodes rejoin, and what those mechanisms cost in radio, memory, power, and complexity.
 
+JUXTAPOSE adds context about what the developer has already done beyond firmware integration: formal problem definition, exact-measurement authority, adaptive search-order control, OOD handling, frozen synthetic gates, negative-result preservation, and an explicit hardware-validation next step. It is included as an adjacent capability, **not as a hidden feature of the current swarm**.
+
 The strongest differentiators are:
 
 - **heterogeneity by design** rather than a fleet of identical workers;
@@ -52,9 +82,10 @@ The strongest differentiators are:
 - **sensor truth separated from stale, remembered, inferred, and UI state**;
 - **failure/recovery as observable states** rather than something hidden behind a single health flag;
 - **low-cost COTS hardware** that makes repeated disruption testing practical;
-- **inspectable source and claim boundaries**, including explicit statements of what is not yet proven.
+- **inspectable source and claim boundaries**, including explicit statements of what is not yet proven;
+- **an existing adjacent adaptive-search research asset** whose authority is explicitly limited to search order/width until fresh measurement confirms current connectivity.
 
-The strongest current weaknesses are also recorded: the exact ten-device manifest is not yet frozen, controlled resilience metrics are not yet collected, 2.4 GHz ESP-NOW is not a tactical anti-jam transport, military cybersecurity/ruggedization are not established, scaling beyond the current physical fleet is unproven, power/endurance data is incomplete, and commercial traction is not documented. These are not hidden; they are treated as evaluation targets.
+The strongest current weaknesses are also recorded: the exact ten-device manifest is not yet frozen, controlled resilience metrics are not yet collected, 2.4 GHz ESP-NOW is not a tactical anti-jam transport, military cybersecurity/ruggedization are not established, scaling beyond the current physical fleet is unproven, power/endurance data is incomplete, commercial traction is not documented, and JUXTAPOSE has not yet been validated on the real swarm. These are not hidden; they are treated as evaluation targets.
 
 ## Recommended reviewer path
 
@@ -62,14 +93,15 @@ For a fast review:
 
 1. [`REVIEWER_PATH.md`](REVIEWER_PATH.md) — ten-minute route.
 2. [`JANUS_RESILIENT_EDGE_SWARM_OVERVIEW.md`](JANUS_RESILIENT_EDGE_SWARM_OVERVIEW.md) — technical overview.
-3. [`TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md`](TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md) — why the architecture may matter.
-4. [`STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md`](STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md) — strengths, weaknesses, falsifiers, and risk controls.
-5. [`CLAIM_EVIDENCE_MATRIX.md`](CLAIM_EVIDENCE_MATRIX.md) — what may and may not be claimed.
-6. [`TEN_NODE_PHYSICAL_SYSTEM.md`](TEN_NODE_PHYSICAL_SYSTEM.md) — physical-fleet statement and freeze protocol.
-7. [`HARDWARE_MANIFEST.md`](HARDWARE_MANIFEST.md) — current demo selection and evidence checklist.
-8. [`DEMO_PLAN.md`](DEMO_PLAN.md) — quick demonstrator plus full ten-node evaluation plan.
-9. [`REVIEWER_FAQ.md`](REVIEWER_FAQ.md) — skeptical questions answered directly.
-10. [`submission/WHITE_PAPER_DRAFT.md`](submission/WHITE_PAPER_DRAFT.md) — scoring-aligned working source for the official three-page template.
+3. [`JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md`](JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md) — separate adaptive-search capability and its exact relationship to the physical swarm.
+4. [`TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md`](TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md) — why the architecture may matter.
+5. [`STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md`](STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md) — strengths, weaknesses, falsifiers, and risk controls.
+6. [`CLAIM_EVIDENCE_MATRIX.md`](CLAIM_EVIDENCE_MATRIX.md) — what may and may not be claimed.
+7. [`TEN_NODE_PHYSICAL_SYSTEM.md`](TEN_NODE_PHYSICAL_SYSTEM.md) — physical-fleet statement and freeze protocol.
+8. [`HARDWARE_MANIFEST.md`](HARDWARE_MANIFEST.md) — current demo selection and evidence checklist.
+9. [`DEMO_PLAN.md`](DEMO_PLAN.md) — quick demonstrator plus full ten-node evaluation plan.
+10. [`REVIEWER_FAQ.md`](REVIEWER_FAQ.md) — skeptical questions answered directly.
+11. [`submission/WHITE_PAPER_DRAFT.md`](submission/WHITE_PAPER_DRAFT.md) — scoring-aligned working source for the official three-page template.
 
 Repository evidence remains authoritative for the underlying implementation:
 
@@ -96,6 +128,26 @@ Repository evidence remains authoritative for the underlying implementation:
 
 The exact quick-demo peer may change after the ten physical devices are frozen. The rule is to select from what is actually powered and documented, not from memory.
 
+## JUXTAPOSE relation to a future hardware test
+
+The current swarm is not being modified to make JUXTAPOSE appear integrated. Instead, the physically existing ten-node system is treated as a plausible **future falsification substrate** for the separate algorithm.
+
+A future experiment could expose authorized real peer/interface/path candidates to JUXTAPOSE, allow it to rank search order and width, and still require a fresh real health check before any path is treated as currently valid.
+
+```text
+SWARM OBSERVES
+      ↓
+JUXTAPOSE PRIORITIZES
+      ↓
+REAL NETWORK MEASURES
+      ↓
+MEASUREMENT DECIDES CURRENT TRUTH
+      ↓
+RESULT BECOMES LATER LEARNING RECEIPT
+```
+
+Until that controlled integration/test exists, this remains a **future validation path**, not a current swarm performance claim.
+
 ## Army relevance, carefully scoped
 
 The official xTech|Search 10 RFI gives strong consideration to **Command and Control (C2) and Counter-C2 Networks**, including resilient communications and deep sensing. JANUS is **not** presented as an operational Army C2 system, secure military network, or anti-jam radio.
@@ -104,7 +156,11 @@ The relevant engineering question is lower-level and testable:
 
 > Can unlike low-cost edge devices preserve useful local behavior, communicate health/freshness honestly, and recover cleanly enough under degraded connectivity to justify later integration work?
 
-A positive Phase I result would be a reproducible evidence package, not a battlefield-readiness certificate.
+JUXTAPOSE adds a second bounded question:
+
+> Can exact-backed adaptive ordering reduce wasted route/path search on real heterogeneous hardware without ever granting prediction authority over current connectivity truth?
+
+A positive result would be a reproducible evidence package, not a battlefield-readiness certificate.
 
 ## Claim firewall
 
@@ -116,6 +172,14 @@ MEASURED_PERFORMANCE
 PROPOSED_PHASE_I_WORK
 !=
 ARMY_OPERATIONAL_CAPABILITY
+
+JUXTAPOSE_SYNTHETIC_EVIDENCE
+!=
+JANUS_HARDWARE_EVIDENCE
+
+SEPARATE_EXISTING_CAPABILITIES
+!=
+CURRENT_INTEGRATION
 ```
 
 This package does **not** claim:
@@ -127,11 +191,12 @@ This package does **not** claim:
 - AGI or access to future physical information;
 - arbitrary scalability beyond the tested fleet;
 - commercial customers/revenue without documentary evidence;
-- any quantitative performance number that is not tied to a frozen test manifest and raw evidence.
+- any quantitative performance number that is not tied to its exact evidence domain;
+- that JUXTAPOSE is already embedded in or controlling the present JANUS swarm.
 
 ## Transparency principle
 
-A reviewer should be able to find the weaknesses as easily as the strengths. If a controlled test fails, the failure belongs in the result set. If a capability is only present in source but not benchmarked, it is labeled `SUPPORTED IN CODE`, not `PROVEN PERFORMANCE`. If a physical fact has not yet been captured, it remains `OWNER-REPORTED` until evidence exists.
+A reviewer should be able to find the weaknesses as easily as the strengths. If a controlled test fails, the failure belongs in the result set. If a capability is only present in source but not benchmarked, it is labeled `SUPPORTED IN CODE`, not `PROVEN PERFORMANCE`. If a physical fact has not yet been captured, it remains `OWNER-REPORTED` until evidence exists. If an algorithm has only synthetic evidence, it stays synthetic until the real hardware test is actually run.
 
 ## Current administrative gate
 
