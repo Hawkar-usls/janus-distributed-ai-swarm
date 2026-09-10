@@ -18,6 +18,8 @@ The xTech effort does not begin by inventing a new swarm architecture. It begins
 
 JANUS is currently **active engineering**, not a production or military-certified system. That maturity boundary is part of the proposal, not hidden from it. The value of Phase I would be to convert existing implementation into a reproducible evidence package with measured strengths, failures, resource costs, and integration boundaries.
 
+The developer also has a separately developed research asset, **JUXTAPOSE**, an exact-backed adaptive communications-search architecture previously packaged for DARPA evaluation. JUXTAPOSE is **not represented as already integrated into the current swarm** and the existing swarm firmware is not being rewritten for this application. It is included to show an adjacent, already-developed algorithmic capability and a natural future hardware-validation path.
+
 ## 2. Army Benefits — 25%
 
 xTech|Search 10 gives strong consideration to Command and Control (C2) and Counter-C2 Networks, including resilient communications and deep sensing. JANUS is **not** presented as an operational Army C2 product, protected tactical radio, or secure battlefield network. Its relevance is at a lower and testable layer: heterogeneous edge devices that must remain interpretable when connectivity becomes imperfect.
@@ -32,6 +34,8 @@ That architecture creates several Army-relevant evaluation questions:
 - Can a restored node return with the same identity without creating stale or duplicate state?
 - What radio, memory, thermal, and power cost is introduced by recovery behavior?
 - Which higher-level state/recovery mechanisms are tied to ESP-NOW, and which could migrate to a different transport or hardened platform later?
+
+JUXTAPOSE adds a complementary question that can be evaluated later without changing the current claim about the swarm: **when several authorized paths or interfaces are available but current viability changes, can adaptive ordering reduce wasted checks while keeping fresh end-to-end measurement as the sole authority for present connectivity?**
 
 A positive result would not certify battlefield readiness. It would provide measured evidence about an inexpensive heterogeneous edge architecture and identify where later Army integration work would or would not be justified.
 
@@ -57,6 +61,35 @@ Representative current roles include:
 
 Other current roles—including BH/BlackStar, ADV Elite, Yaks Gate, Gladius, Golcron, Zim, Pyramid, and PEA4/P4 tracks—show the intended heterogeneity of the system. Compatibility/preserve firmware such as Beacon, Stick, and ATOM SWARM TRON remains part of project provenance. The exact physical membership of the current ten-node fleet will be frozen from the devices themselves.
 
+### Separate existing algorithmic capability — JUXTAPOSE
+
+JUXTAPOSE is an **experimental transport-agnostic exact-backed adaptive search architecture for resilient communications**. It is maintained here as a separate capability statement, not as a hidden current Swarm feature.
+
+Its central rule is:
+
+```text
+LEARNING MAY CHANGE SEARCH ORDER / WIDTH
+BUT
+FRESH END-TO-END MEASUREMENT REMAINS CURRENT TRUTH AUTHORITY
+```
+
+If a predicted first choice fails or the environment becomes unfamiliar, JUXTAPOSE widens search. If the measurement budget is exhausted before sufficient evidence exists, it returns an explicit `UNKNOWN_RESOURCE_LIMIT` rather than fabricating `CONNECTED` or `DISCONNECTED`.
+
+The frozen v5.1 synthetic holdout used **20,000 episodes** and passed **15/15 preregistered gates**. In that synthetic test only, validated connectivity was 98.215% versus 97.785% for a uniform-random comparison; mean mission/search-resource cost was 1.389 versus 1.914; mean exact checks were 1.340 versus 1.502; complete-outage controls produced zero false `CONNECTED`; and 82.138% of OOD episodes remained COLD/new. Those values are **not claimed as JANUS hardware performance**.
+
+Negative lineage is preserved as part of the evidence: v1 exposed probe overhead/route thrashing; v5 exposed premature confidence in combined OOD regimes; v5.1 repaired that specific failure; no independent external replication or field validation exists yet; and the independent end-to-end gain of every individual submodule is not established in every setting.
+
+The current relationship to the physical Swarm is therefore:
+
+```text
+JANUS SWARM = EXISTING HARDWARE / FIRMWARE TESTBED
+JUXTAPOSE = SEPARATE EXISTING ADAPTIVE-SEARCH RESEARCH ASSET
+CURRENT INTEGRATION = NOT CLAIMED
+POSSIBLE NEXT STEP = CONTROLLED HARDWARE VALIDATION
+```
+
+No current Swarm firmware is rewritten merely to make these two assets appear integrated.
+
 ### Why the architecture is technically interesting
 
 JANUS does not claim that ESP-NOW or ESP32 hardware is novel. The candidate value is the combination of:
@@ -66,7 +99,8 @@ JANUS does not claim that ESP-NOW or ESP32 hardware is novel. The candidate valu
 3. **explicit current/stale/memory/inference separation**;
 4. **observable failure and recovery states**;
 5. **low-cost COTS hardware** suitable for repeatable failure testing;
-6. **inspectable source and provenance**, allowing claim-to-code review.
+6. **inspectable source and provenance**, allowing claim-to-code review;
+7. **adjacent exact-backed adaptive-search work** that already has a falsification-first synthetic lineage, while remaining clearly separate from the present hardware claim.
 
 The same heterogeneity is also a weakness: different boards, libraries, sensors, displays, radio settings, and workloads create version/ABI/resource complexity. Phase I should measure whether that complexity remains manageable rather than assuming it does.
 
@@ -86,9 +120,11 @@ The same heterogeneity is also a weakness: different boards, libraries, sensors,
 
 **Task 7 — Reproducibility and failure ledger.** Produce raw logs, event CSVs, representative continuous video, all material failures, exact source references, and an independent replay package when a second evaluator becomes available.
 
+**Optional Task 8 — JUXTAPOSE hardware falsification.** Only after the unchanged Swarm baseline is characterized, expose a controlled set of authorized real path/interface candidates to the separate JUXTAPOSE controller. Compare adaptive ordering with a simple baseline while preserving fresh real measurement as connectivity authority. Report both performance and any failure to transfer from synthetic to physical conditions. This task is optional and explicitly does not change the claim that the current submitted Swarm exists independently of JUXTAPOSE.
+
 ### Metrics
 
-Primary metrics include:
+Primary Swarm metrics include:
 
 - `T_detect_loss` — last valid peer packet/heartbeat to stale/lost indication;
 - `T_first_packet_after_restore` — restoration to first accepted peer packet;
@@ -101,6 +137,8 @@ Primary metrics include:
 - duplicate/identity-conflict events after rejoin;
 - minimum free heap, temperature, and power where instrumented;
 - manual interventions required for recovery.
+
+If optional JUXTAPOSE hardware validation is performed, additional metrics would include exact checks per recovered connection/path decision, search/resource cost, false-current-connectivity events, OOD/novelty handling, widening behavior after prediction failure, and matched comparison against a simple non-adaptive baseline.
 
 Results will be reported as trial counts, distributions, and failure tables rather than only a fastest or best-case run.
 
@@ -116,7 +154,9 @@ The proposal deliberately records the current weaknesses:
 - scale beyond the tested physical fleet is unproven;
 - heterogeneous firmware increases ABI/configuration/build complexity;
 - some original JANUS code contains multimedia, mining, game, and research/lore functions that are not part of the Army value proposition;
-- the current sensing roles must be described according to their actual sensors rather than inflated into imaging, ranging, or biometric capabilities.
+- the current sensing roles must be described according to their actual sensors rather than inflated into imaging, ranging, or biometric capabilities;
+- JUXTAPOSE currently has **synthetic evidence only** and has not been validated on the ten-node physical Swarm;
+- JUXTAPOSE does not create RF reachability, anti-jam capability, or multi-hop routes by itself; it can only prioritize authorized candidates that an underlying system makes available.
 
 If a controlled test reveals an additional weakness, it will be added to the evidence package rather than omitted.
 
@@ -137,6 +177,8 @@ EXISTING PHYSICAL PROTOTYPE
 -> HARDENED OR OEM PLATFORM IF JUSTIFIED
 ```
 
+JUXTAPOSE offers a separate potential software/control-plane transition path if physical testing supports its synthetic result: a transport-agnostic route/path search-order layer that could sit above multiple authorized networking mechanisms while retaining fresh measurement as truth authority. That commercial path is **conditional on real validation** and is not included as current product traction.
+
 Possible business models include evaluation kits, paid integration/pilot engineering, licensed firmware/interface modules, or OEM/partner integration, subject to the repository's source-available licensing and separately negotiated commercial rights.
 
 Phase I would materially improve commercial readiness by converting an organically evolved working system into a customer-readable reference configuration with measured reliability, known weaknesses, reproducible tests, and clearer transport/hardware integration boundaries.
@@ -153,11 +195,19 @@ MEASURED PERFORMANCE
 PROPOSED PHASE I WORK
 !=
 ARMY OPERATIONAL CAPABILITY
+
+JUXTAPOSE SYNTHETIC RESULT
+!=
+JANUS HARDWARE RESULT
+
+SEPARATE EXISTING CAPABILITIES
+!=
+CURRENT INTEGRATION
 ```
 
-Every quantitative claim will be tied to a frozen hardware/software configuration and timestamped evidence. Failed tests will remain in the record. Source timeouts will not be reported as measured latency. Owner-reported physical facts will remain labeled as such until captured. Prediction or memory will not be reported as current sensor truth.
+Every quantitative claim will be tied to a frozen evidence domain. Failed tests will remain in the record. Source timeouts will not be reported as measured latency. Owner-reported physical facts will remain labeled as such until captured. Prediction or memory will not be reported as current sensor truth. JUXTAPOSE will not be represented as integrated into the physical Swarm until a real integration and controlled test actually occur.
 
-This approach is intended to give evaluators a prototype they can challenge rather than a pitch that depends on untestable language.
+This approach is intended to give evaluators artifacts they can challenge rather than a pitch that depends on untestable language.
 
 ---
 
@@ -169,6 +219,8 @@ This approach is intended to give evaluators a prototype they can challenge rath
 - Freeze the exact repository commit and all ten physical node identities.
 - Add dated group photo/video and per-device evidence.
 - Run controlled quick-demo and full ten-node loss/rejoin tests.
+- Decide whether the final three-page submission has enough space to mention JUXTAPOSE directly or keep it as linked supporting evidence.
+- If JUXTAPOSE is mentioned, preserve the words `separate`, `synthetic evidence`, and `not currently integrated` unless later evidence changes that status.
 - Insert only measured numbers that pass `CLAIM_EVIDENCE_MATRIX.md`.
 - Preserve failures and limitations in the submission evidence set.
 - Add real customer/commercial evidence only if documentary support exists.
