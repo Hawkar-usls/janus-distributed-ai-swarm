@@ -1,17 +1,25 @@
 {
-  "schema_id": "janus.xtechsearch10.submission-status.v1",
+  "schema_id": "janus.xtechsearch10.submission-status.v2",
   "competition": "xTech|Search 10",
   "program": "U.S. Army FUZE xTech Program",
   "repository": "Hawkar-usls/janus-distributed-ai-swarm",
   "branch": "submission/xtech-search10-2026",
-  "candidate_title": "JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Mesh for Degraded Networks",
+  "candidate_title": "JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Network for Degraded Connectivity",
   "created_from": "main",
-  "package_role": "PRESENTATION_AND_EVIDENCE_LAYER_ONLY",
+  "package_role": "PRESENTATION_EVIDENCE_AND_REVIEW_LAYER_ONLY",
   "firmware_rewritten_for_submission": false,
   "existing_files_deleted": false,
   "technical_baseline_maturity": "ACTIVE_ENGINEERING",
   "formal_submission_status": "NOT_SUBMITTED",
   "eligibility_status": "OFFICIAL_CLARIFICATION_PENDING",
+  "physical_system": {
+    "node_count_reported_by_developer": 10,
+    "exact_ten_device_manifest_frozen": false,
+    "evidence_status": "OWNER_REPORTED_PENDING_PHYSICAL_CAPTURE",
+    "repository_role_count_equals_physical_node_count": false,
+    "quick_demo_is_full_swarm": false,
+    "required_next_artifact": "TEN_NODE_TEST_MANIFEST.json"
+  },
   "eligibility_reason": {
     "rfi_detailed_rule": "small, for-profit, independent U.S. businesses with qualifying ownership/control and <=500 employees",
     "webpage_conflict": "summary field currently mentions small and large U.S.-based and allied foreign country businesses",
@@ -31,27 +39,103 @@
   },
   "primary_alignment": "Command and Control (C2) and Counter-C2 Networks — resilient communications / deep sensing relevance",
   "secondary_alignment": "Adaptive Sustainment — distributed edge operations relevance",
-  "preferred_demo_nodes": [
-    "Core2",
-    "Blind Eye",
-    "Anchor",
-    "ATOM SWARM TRON"
+  "xtech_value_proposition": "Freeze the physically existing heterogeneous swarm and convert current sensing, freshness, failure and recovery mechanisms into a reproducible evidence package that external evaluators can stress, measure, falsify and improve.",
+  "technical_differentiators": [
+    "heterogeneous specialist roles rather than identical node images",
+    "protected local primary missions with bounded optional/shared work",
+    "explicit current/stale/memory/inference/UI truth separation",
+    "observable loss, stale and recovery states",
+    "low-cost COTS hardware suitable for repeatable failure testing",
+    "inspectable source, provenance and claim boundaries"
   ],
-  "optional_demo_nodes": [
-    "Buzz",
-    "Zim Geek",
-    "PEA4 / P4 dual swarm core"
+  "known_limitations": [
+    "exact ten-device physical manifest not yet frozen",
+    "controlled xTech resilience and rejoin metrics not yet measured",
+    "2.4 GHz ESP-NOW/Wi-Fi-class transport is not a tactical anti-jam radio",
+    "military cybersecurity, fleet key management, accreditation and ATO not established",
+    "current COTS boards are not claimed ruggedized or MIL-STD-qualified",
+    "role-specific power and endurance not yet fully measured",
+    "scale beyond the actual tested physical fleet is unproven",
+    "heterogeneous firmware creates ABI, build and configuration complexity",
+    "some project lore, mining, game and multimedia functionality is outside the Army value proposition",
+    "commercial customers, revenue and quantified market traction are not documented",
+    "direct competition eligibility remains unresolved"
+  ],
+  "reviewer_demo": {
+    "role": "SHORT_EXPLANATORY_SUBSET_NOT_FULL_SWARM",
+    "preferred_role_classes": [
+      "operator/telemetry surface",
+      "physical sensing specialist",
+      "RF/recovery reference",
+      "heterogeneous peer",
+      "optional coordinator/workload node"
+    ],
+    "exact_devices": "TO_BE_SELECTED_FROM_PHYSICALLY_FROZEN_TEN_NODE_MANIFEST"
+  },
+  "full_evaluation_families": [
+    "single-node loss by role",
+    "coordinator loss",
+    "operator-surface loss",
+    "sensor-role loss",
+    "repeated power-cycle and rejoin",
+    "controlled non-jamming 2.4 GHz impairment",
+    "optional external-service outage",
+    "concurrent workload/resource stress",
+    "selected firmware/ABI compatibility",
+    "full cold restart"
+  ],
+  "primary_metrics": [
+    "T_detect_loss",
+    "T_first_packet_after_restore",
+    "T_rejoin_healthy",
+    "rejoin_success_rate",
+    "packet_rx_rate_under_defined_condition",
+    "stale_as_current_events",
+    "primary_mission_continuity_by_role",
+    "secondary_failure_count",
+    "identity_conflict_events",
+    "heap_min",
+    "temperature_where_available",
+    "power_by_role_where_instrumented",
+    "manual_intervention_count"
   ],
   "claim_firewall": [
-    "EXISTING_IMPLEMENTATION != PROPOSED_PHASE_I_WORK",
+    "OWNER_REPORT != INDEPENDENTLY_VERIFIED_PHYSICAL_FACT",
+    "REPOSITORY_ROLE_COUNT != PHYSICAL_NODE_COUNT",
+    "QUICK_DEMO_SUBSET != FULL_SWARM",
+    "EXISTING_IMPLEMENTATION != MEASURED_PERFORMANCE",
+    "MEASURED_PERFORMANCE != PROPOSED_PHASE_I_WORK",
     "PROPOSED_PHASE_I_WORK != ARMY_OPERATIONAL_CAPABILITY",
-    "CODE_PATH != QUANTITATIVE_PERFORMANCE_CLAIM_WITHOUT_TEST",
+    "CODE_TIMEOUT_CONSTANT != MEASURED_LATENCY",
+    "PREDICTION_OR_MEMORY != CURRENT_SENSOR_TRUTH",
     "NO_BATTLEFIELD_READINESS_CLAIM",
-    "NO_ANTI_JAM_CLAIM_WITHOUT_VALIDATED_TEST",
+    "NO_ANTI_JAM_OR_CONTESTED_SPECTRUM_CLAIM_WITHOUT_AUTHORIZED_VALIDATED_TEST",
     "NO_SECURE_MILITARY_NETWORK_CERTIFICATION_CLAIM",
     "NO_AUTONOMOUS_WEAPON_AUTHORITY_CLAIM",
     "NO_AGI_OR_PRECOGNITION_CLAIM",
+    "NO_ARBITRARY_SCALE_CLAIM",
     "NO_COMMERCIAL_TRACTION_CLAIM_WITHOUT_DOCUMENTARY_EVIDENCE"
+  ],
+  "transparency_policy": {
+    "failed_tests_preserved": true,
+    "best_run_only_reporting_forbidden": true,
+    "limitations_visible_to_reviewer": true,
+    "quantitative_claim_requires_frozen_manifest_and_raw_evidence": true,
+    "unsupported_claim_must_be_demoted": true
+  },
+  "review_documents": [
+    "xtech-search10/README.md",
+    "xtech-search10/REVIEWER_PATH.md",
+    "xtech-search10/JANUS_RESILIENT_EDGE_SWARM_OVERVIEW.md",
+    "xtech-search10/TECHNICAL_DIFFERENTIATORS_AND_USE_CASES.md",
+    "xtech-search10/STRENGTHS_LIMITATIONS_AND_RISK_REGISTER.md",
+    "xtech-search10/CLAIM_EVIDENCE_MATRIX.md",
+    "xtech-search10/TEN_NODE_PHYSICAL_SYSTEM.md",
+    "xtech-search10/HARDWARE_MANIFEST.md",
+    "xtech-search10/DEMO_PLAN.md",
+    "xtech-search10/REVIEWER_FAQ.md",
+    "xtech-search10/ELIGIBILITY_AND_SUBMISSION_STATUS.md",
+    "xtech-search10/submission/WHITE_PAPER_DRAFT.md"
   ],
   "official_sources": {
     "competition_page": "https://xtech.army.mil/competition/xtechsearch10/",
@@ -60,11 +144,15 @@
   "next_gates": [
     "receive written eligibility clarification",
     "obtain official Valid Eval DOCX template",
-    "freeze exact hardware/firmware demonstration configuration",
-    "collect dated physical evidence",
-    "run controlled normal-loss-stale-rejoin demonstration",
-    "promote only measured claims through CLAIM_EVIDENCE_MATRIX",
-    "transfer final text into official three-page template",
-    "submit through Valid Eval if eligible"
+    "physically identify all ten current nodes",
+    "freeze TEN_NODE_TEST_MANIFEST.json with exact board, firmware, commit and peripherals",
+    "collect dated group and per-node physical evidence",
+    "run quick reviewer demonstrator without modifying firmware during runs",
+    "run repeated full ten-node disruption and recovery evaluation",
+    "preserve successes, failures, raw logs and event timestamps",
+    "measure resource, thermal and power cost where instrumentation is available",
+    "promote only evidence-backed claims through CLAIM_EVIDENCE_MATRIX",
+    "transfer compressed final text into official three-page template",
+    "submit through Valid Eval only if eligibility is confirmed"
   ]
 }
