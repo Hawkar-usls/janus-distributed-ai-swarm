@@ -17,6 +17,8 @@ This directory is a presentation and evidence layer for a possible **xTech|Searc
 
 **No existing firmware is replaced, deleted, or rewritten for this competition package.** The branch was created from the existing repository and preserves the full project history and current firmware surface. The files in this directory organize what already exists, identify what can be demonstrated, and separate implemented engineering from proposed Phase I work.
 
+The developer reports a **10-node physical JANUS swarm**. The xTech package therefore presents JANUS as a ten-node physical system while using a smaller, deliberately chosen subset when a short reviewer demonstration is clearer. The four-node demonstrator is a review/test configuration, **not the size of the swarm**.
+
 ## Candidate title
 
 **JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Mesh for Degraded Networks**
@@ -36,7 +38,9 @@ A heterogeneous ESP32/M5Stack edge network in which specialized low-cost nodes p
 
 ## Existing candidate configuration
 
-The primary xTech demonstration configuration is intentionally smaller than the full JANUS swarm:
+**Full physical system:** 10 JANUS swarm nodes, as reported by the developer. Exact board/model-to-node capture for all ten will be frozen from the physical devices before final submission.
+
+For a short, reproducible xTech demonstration, the first review subset is:
 
 | Function | Existing node | Current repository path |
 | --- | --- | --- |
@@ -46,7 +50,7 @@ The primary xTech demonstration configuration is intentionally smaller than the 
 | Heterogeneous edge node | ATOM SWARM TRON | `firmware/esp32_swarm/ATOM_SWARM_TRON.ino` |
 | Optional coordinator / workload node | Buzz | `firmware/buzz/Buzz.ino` |
 
-Other firmware remains part of the repository but is not required to explain the core xTech concept.
+The remaining physical nodes and additional repository firmware remain part of the JANUS system. They are not excluded from the xTech technology claim merely because the shortest failure/recovery demonstration can be performed with fewer devices.
 
 ## Competition alignment
 
