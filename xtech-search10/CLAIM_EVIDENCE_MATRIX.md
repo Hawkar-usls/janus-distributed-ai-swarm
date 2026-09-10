@@ -8,6 +8,8 @@ This matrix is the submission firewall. A statement belongs in the white paper o
 - **SUPPORTED IN CODE** — implementation path exists, but performance is not yet measured.
 - **SUPPORTED ARCHITECTURE** — documented design/invariant; requires testing before reliability numbers are claimed.
 - **OWNER-REPORTED** — stated by the developer but not yet frozen into submission evidence.
+- **SUPPORTED IN SEPARATE RESEARCH ASSET** — supported by the separately preserved JUXTAPOSE package, not by current Swarm firmware.
+- **SYNTHETIC EVIDENCE ONLY** — measured in a frozen synthetic test; not a physical-hardware or field result.
 - **PROPOSED TEST / PHASE I OBJECTIVE** — future work, not current performance.
 - **NOT ESTABLISHED** — evidence is insufficient; do not claim.
 - **OUT OF SCOPE / NOT CLAIMED** — deliberately excluded from the xTech proposition.
@@ -64,6 +66,29 @@ This matrix is the submission firewall. A statement belongs in the white paper o
 | JANUS is LPI/LPD or protected tactical RF | **NOT ESTABLISHED** | No evidence | Do not claim |
 | Current transport can be experimentally impaired and recovery measured | **PROPOSED TEST** | Low-cost radio + recovery paths | Appropriate Phase I/evaluation objective |
 
+## JUXTAPOSE claims
+
+JUXTAPOSE is a **separate existing research asset**, documented in `JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md`. It must not be silently promoted into current Swarm functionality.
+
+| Candidate statement | Status | Existing evidence | Submission rule |
+| --- | --- | --- | --- |
+| JUXTAPOSE is an exact-backed adaptive communications-search architecture | **SUPPORTED IN SEPARATE RESEARCH ASSET** | frozen JUXTAPOSE/DARPA package | May state as separate existing developer capability |
+| JUXTAPOSE is transport-agnostic at the decision/search layer | **SUPPORTED IN SEPARATE RESEARCH ASSET** | JUXTAPOSE architecture | May state as architecture; transport-specific performance still requires validation |
+| JUXTAPOSE may reorder authorized candidate checks and search width | **SUPPORTED IN SEPARATE RESEARCH ASSET** | JUXTAPOSE decision contract | May state directly |
+| JUXTAPOSE prediction is allowed to declare current connectivity without a fresh check | **FORBIDDEN BY JUXTAPOSE BOUNDARY** | exact-measurement authority rule | Never claim |
+| JUXTAPOSE returns `UNKNOWN_RESOURCE_LIMIT` when evidence budget is exhausted with unresolved candidates | **SUPPORTED IN SEPARATE RESEARCH ASSET** | JUXTAPOSE decision contract | May state as algorithm semantics |
+| JUXTAPOSE v5.1 was evaluated on 20,000 frozen synthetic episodes and passed 15/15 preregistered gates | **SYNTHETIC EVIDENCE ONLY** | frozen v5.1 package | May state only with `synthetic` / `local twin` qualifier |
+| JUXTAPOSE v5.1 achieved 98.215% validated connectivity vs 97.785% uniform-random in its frozen synthetic holdout | **SYNTHETIC EVIDENCE ONLY** | frozen v5.1 result | Do not imply hardware, field, or Army-network performance |
+| JUXTAPOSE v5.1 reduced mean mission/search-resource cost from 1.914 to 1.389 in the frozen synthetic comparison | **SYNTHETIC EVIDENCE ONLY** | frozen v5.1 result | May state only inside the exact synthetic evidence domain |
+| JUXTAPOSE complete-outage controls produced zero false `CONNECTED` in the frozen v5.1 test | **SYNTHETIC EVIDENCE ONLY** | frozen v5.1 result | Do not generalize to all real networks |
+| JUXTAPOSE is already integrated into the current JANUS physical swarm | **NOT ESTABLISHED / CURRENTLY NOT CLAIMED** | xTech branch explicitly keeps assets separate | Do not claim |
+| The current JANUS swarm is a plausible physical falsification substrate for JUXTAPOSE | **PROPOSED TEST / ARCHITECTURAL FIT** | JUXTAPOSE swarm-reference mapping + existing Swarm interfaces | May state as a future controlled validation path |
+| JUXTAPOSE creates RF reachability when no physical path exists | **FALSE / OUT OF SCOPE** | algorithm boundary | Never claim |
+| JUXTAPOSE makes ESP-NOW anti-jam or military-grade | **FALSE / OUT OF SCOPE** | algorithm boundary | Never claim |
+| JUXTAPOSE independently creates general-purpose multi-hop routing | **NOT CLAIMED** | JUXTAPOSE consumes authorized route/path candidates from underlying system | Do not claim |
+| JUXTAPOSE has independent external field replication | **NOT ESTABLISHED** | no external/field validation yet | Do not claim |
+| Earlier JUXTAPOSE failures were removed from the record | **FALSE** | v1/v5 negative lineage is intentionally preserved | Preserve failures in reviewer materials |
+
 ## Security claims
 
 | Candidate statement | Status | Existing evidence | Submission rule |
@@ -112,6 +137,8 @@ This matrix is the submission firewall. A statement belongs in the white paper o
 | JANUS has verified revenue | **NOT DOCUMENTED** | no frozen revenue evidence | Do not invent |
 | JANUS has proven strong commercial traction | **NOT DOCUMENTED** | no evidence package | Do not claim |
 | Phase I could improve commercialization readiness by producing reproducible test/evaluation documentation | **PROPOSED OUTCOME** | submission plan | May state as proposed benefit |
+| JUXTAPOSE is already a deployed commercial product | **NOT ESTABLISHED** | research package only | Do not claim |
+| JUXTAPOSE could become a separate transport-agnostic control-plane component if real validation succeeds | **CONDITIONAL TRANSITION PATH** | architecture + proposed hardware test | May state only as future possibility contingent on validation |
 
 ## Army / xTech claims
 
@@ -122,6 +149,8 @@ This matrix is the submission firewall. A statement belongs in the white paper o
 | JANUS is combat-ready / battlefield-proven | **NOT ESTABLISHED** | no deployment evidence | Do not claim |
 | JANUS provides autonomous weapon or human-targeting authority | **OUT OF SCOPE / NOT CLAIMED** | project boundary | Do not claim or propose as current capability |
 | The developer/entity is eligible for xTech|Search 10 direct submission | **PENDING OFFICIAL CLARIFICATION** | detailed RFI vs conflicting website summary | Do not claim until Army replies |
+| A separate JUXTAPOSE package was previously prepared/shared for DARPA evaluation | **OWNER/PROVENANCE STATEMENT** | developer statement + preserved DARPA package artifacts | May state as provenance; do not imply DARPA endorsement or validation |
+| DARPA endorsement of JUXTAPOSE exists | **NOT ESTABLISHED** | submission/sharing does not equal endorsement | Never imply |
 
 ## Preferred vocabulary
 
@@ -140,6 +169,10 @@ Use:
 - `implemented code path`
 - `not yet measured`
 - `evidence gap`
+- `separate existing JUXTAPOSE research asset`
+- `synthetic evidence only`
+- `fresh measurement remains current connectivity authority`
+- `optional future hardware falsification`
 
 Avoid unless separately proven:
 
@@ -154,6 +187,8 @@ Avoid unless separately proven:
 - `guaranteed resilience`
 - `proven scalable`
 - `thermal camera` for the current camera-absent Blind Eye profile
+- `JUXTAPOSE-integrated swarm` before a real integration/test exists
+- `DARPA validated` or `DARPA approved`
 
 ## Promotion rule
 
@@ -175,6 +210,18 @@ FAILURE TABLE
 INDEPENDENT REPLAY WHERE POSSIBLE
         ->
 QUANTITATIVE SUBMISSION CLAIM
+```
+
+For JUXTAPOSE specifically:
+
+```text
+FROZEN SYNTHETIC RESULT
+!=
+PHYSICAL SWARM RESULT
+
+SEPARATE RESEARCH ASSET
+!=
+CURRENT SWARM INTEGRATION
 ```
 
 No intermediate step may be silently skipped.
