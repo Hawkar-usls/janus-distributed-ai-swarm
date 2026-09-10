@@ -1,10 +1,10 @@
 {
-  "schema_id": "janus.xtechsearch10.submission-status.v3",
+  "schema_id": "janus.xtechsearch10.submission-status.v4",
   "competition": "xTech|Search 10",
   "program": "U.S. Army FUZE xTech Program",
   "repository": "Hawkar-usls/janus-distributed-ai-swarm",
   "branch": "submission/xtech-search10-2026",
-  "candidate_title": "JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Network for Degraded Connectivity",
+  "candidate_title": "JANUS Resilient Edge Swarm: Modular Heterogeneous Sensor, Telemetry and Edge-Integration Network for Degraded Connectivity",
   "created_from": "main",
   "package_role": "PRESENTATION_EVIDENCE_AND_REVIEW_LAYER_ONLY",
   "firmware_rewritten_for_submission": false,
@@ -13,6 +13,14 @@
   "formal_submission_status": "NOT_SUBMITTED",
   "eligibility_status": "OFFICIAL_CLARIFICATION_PENDING",
   "presentation_principle": "SHOW_WHAT_ALREADY_EXISTS_AND_WHAT_THE_DEVELOPER_CAN_ALREADY_DO_WITHOUT_RETROACTIVE_INTEGRATION_OR_EMBELLISHMENT",
+  "primary_differentiator": {
+    "name": "MODULARITY_AND_EXTENSIBILITY",
+    "statement": "JANUS is designed around heterogeneous role-preserving modules so new sensors, operator surfaces, compute devices, gateways, mobile platforms and other authorized edge modules can be added through bounded adapters without forcing every existing node into one hardware or firmware image.",
+    "current_evidence": "heterogeneous existing firmware roles and developer-reported ten-node physical swarm",
+    "claim_ceiling": "architecture/design property supported by current heterogeneity; not universal plug-and-play and not proof that arbitrary third-party platforms are already integrated",
+    "falsifiable_question": "Can one new specialist be added while unrelated baseline nodes remain unchanged, and what exact ABI/configuration/resource cost does that require?",
+    "document": "xtech-search10/MODULARITY_AND_EXTENSION_MODEL.md"
+  },
   "physical_system": {
     "node_count_reported_by_developer": 10,
     "exact_ten_device_manifest_frozen": false,
@@ -21,38 +29,101 @@
     "quick_demo_is_full_swarm": false,
     "required_next_artifact": "TEN_NODE_TEST_MANIFEST.json"
   },
-  "adjacent_existing_capability": {
-    "name": "JUXTAPOSE",
-    "role": "SEPARATE_EXISTING_ALGORITHMIC_RESEARCH_ASSET",
-    "current_swarm_integration_claimed": false,
-    "current_swarm_firmware_modified_for_jux": false,
-    "darpa_package_previously_shared": true,
-    "darpa_endorsement_claimed": false,
-    "architecture": "transport-agnostic exact-backed adaptive search for resilient communications",
-    "core_rule": "learning may change authorized search order/width but fresh end-to-end measurement remains current connectivity authority",
-    "insufficient_evidence_terminal": "UNKNOWN_RESOURCE_LIMIT",
-    "synthetic_v5_1": {
-      "evidence_domain": "LOCAL_SYNTHETIC_TWIN_ONLY",
-      "episodes": 20000,
-      "frozen_gates_passed": "15/15",
-      "validated_connectivity_jux": 0.98215,
-      "validated_connectivity_uniform": 0.97785,
-      "mean_mission_cost_jux": 1.38855475,
-      "mean_mission_cost_uniform": 1.91412625,
-      "mean_exact_checks_jux": 1.34015,
-      "mean_exact_checks_uniform": 1.50225,
-      "false_connected_complete_outage": 0,
-      "ood_cold_or_new_fraction": 0.8213802435723951
+  "candidate_extension_classes": [
+    {
+      "class": "additional_sensor_node",
+      "status": "ARCHITECTURAL_EXTENSION_CLASS",
+      "current_integration_claimed": false
     },
-    "negative_lineage": [
-      "v1 probe overhead and route thrashing preserved",
-      "v5 premature confidence in combined out-of-distribution regimes preserved",
-      "v5.1 repaired that specific novelty-confidence failure",
-      "independent end-to-end contribution of every submodule is not established in every setting",
-      "no independent external replication or field validation yet"
-    ],
-    "xtech_use": "demonstrate existing developer algorithmic/falsification capability and define an optional future physical validation path on the ten-node swarm",
-    "current_claim_ceiling": "JUXTAPOSE synthetic evidence may motivate controlled hardware/network evaluation but is not JANUS hardware performance, field superiority, anti-jam capability, or current swarm integration"
+    {
+      "class": "mobile_robotic_or_aerial_drone_payload_node",
+      "status": "ARCHITECTURAL_EXTENSION_CLASS",
+      "current_integration_claimed": false,
+      "excluded_claims": [
+        "flight-control integration",
+        "autonomous navigation certification",
+        "weaponization"
+      ]
+    },
+    {
+      "class": "actuated_pan_tilt_or_turret_form_sensor_observation_mount",
+      "status": "ARCHITECTURAL_EXTENSION_CLASS",
+      "current_integration_claimed": false,
+      "excluded_claims": [
+        "weapon control",
+        "autonomous targeting",
+        "fire control",
+        "human-targeting authority"
+      ]
+    },
+    {
+      "class": "operator_gateway_surface",
+      "status": "ARCHITECTURAL_EXTENSION_CLASS"
+    },
+    {
+      "class": "larger_compute_or_verification_node",
+      "status": "SUPPORTED_BY_REPOSITORY_LINEAGE",
+      "example": "PEA4/P4"
+    }
+  ],
+  "adjacent_existing_capabilities": {
+    "JUXTAPOSE": {
+      "role": "SEPARATE_EXISTING_ALGORITHMIC_RESEARCH_ASSET",
+      "current_swarm_integration_claimed": false,
+      "current_swarm_firmware_modified_for_jux": false,
+      "darpa_package_previously_shared": true,
+      "darpa_endorsement_claimed": false,
+      "architecture": "transport-agnostic exact-backed adaptive search for resilient communications",
+      "core_rule": "learning may change authorized search order/width but fresh end-to-end measurement remains current connectivity authority",
+      "insufficient_evidence_terminal": "UNKNOWN_RESOURCE_LIMIT",
+      "synthetic_v5_1": {
+        "evidence_domain": "LOCAL_SYNTHETIC_TWIN_ONLY",
+        "episodes": 20000,
+        "frozen_gates_passed": "15/15",
+        "validated_connectivity_jux": 0.98215,
+        "validated_connectivity_uniform": 0.97785,
+        "mean_mission_cost_jux": 1.38855475,
+        "mean_mission_cost_uniform": 1.91412625,
+        "mean_exact_checks_jux": 1.34015,
+        "mean_exact_checks_uniform": 1.50225,
+        "false_connected_complete_outage": 0,
+        "ood_cold_or_new_fraction": 0.8213802435723951
+      },
+      "negative_lineage": [
+        "v1 probe overhead and route thrashing preserved",
+        "v5 premature confidence in combined out-of-distribution regimes preserved",
+        "v5.1 repaired that specific novelty-confidence failure",
+        "independent end-to-end contribution of every submodule is not established in every setting",
+        "no independent external replication or field validation yet"
+      ],
+      "xtech_use": "demonstrate existing developer algorithmic/falsification capability and define an optional future physical validation path on the ten-node swarm",
+      "current_claim_ceiling": "JUXTAPOSE synthetic evidence may motivate controlled hardware/network evaluation but is not JANUS hardware performance, field superiority, anti-jam capability, or current swarm integration"
+    },
+    "SkinGPT": {
+      "role": "SEPARATE_EXISTING_TACTILE_THERMAL_MECHANICAL_SENSING_RESEARCH_ASSET",
+      "repository": "Hawkar-usls/SkinGPT",
+      "version": "v0.3",
+      "current_swarm_integration_claimed": false,
+      "current_status": "LABORATORY_RESEARCH_PROTOTYPE",
+      "implemented_scope": [
+        "ESP32-S3 feature acquisition",
+        "8 NTC thermal zones",
+        "protected piezoelectric input",
+        "optional MPU6050 and AMG8833 support",
+        "NDJSON telemetry receiver path",
+        "calibration helpers",
+        "SHA-256 provenance/session manifest tooling"
+      ],
+      "not_claimed": [
+        "trained GPT or neural classifier",
+        "medical-device performance",
+        "certified protective-system performance",
+        "weapon targeting",
+        "validated integrated SCOBY sensing panel",
+        "current integration into the JANUS xTech ten-node baseline"
+      ],
+      "xtech_use": "demonstrate a separately implemented sensing subsystem that could be integrated as a future JANUS specialist module through the documented role/adapter contract"
+    }
   },
   "eligibility_reason": {
     "rfi_detailed_rule": "small, for-profit, independent U.S. businesses with qualifying ownership/control and <=500 employees",
@@ -73,19 +144,25 @@
   },
   "primary_alignment": "Command and Control (C2) and Counter-C2 Networks — resilient communications / deep sensing relevance",
   "secondary_alignment": "Adaptive Sustainment — distributed edge operations relevance",
-  "xtech_value_proposition": "Evaluate the physically existing heterogeneous swarm as-is, freeze its real ten-node configuration, measure failure/recovery honestly, and expose JUXTAPOSE separately as an already-developed adaptive-search research asset whose next scientific gate is real hardware validation.",
+  "xtech_value_proposition": "Evaluate the physically existing heterogeneous swarm as-is, with modularity and extensibility as the central architecture claim; freeze the real ten-node configuration, measure failure/recovery honestly, falsify the cost of adding one new benign module, and expose JUXTAPOSE and SkinGPT separately as already-developed adjacent capabilities rather than pretending they are already integrated.",
   "technical_differentiators": [
+    "modularity and extensibility through bounded role/interface adapters",
     "heterogeneous specialist roles rather than identical node images",
     "protected local primary missions with bounded optional/shared work",
     "explicit current/stale/memory/inference/UI truth separation",
     "observable loss, stale and recovery states",
-    "low-cost COTS hardware suitable for repeatable failure testing",
+    "low-cost COTS hardware suitable for repeatable failure and integration testing",
     "inspectable source, provenance and claim boundaries",
-    "separate exact-backed JUXTAPOSE adaptive-search capability with frozen synthetic falsification lineage"
+    "separate exact-backed JUXTAPOSE adaptive-search capability with frozen synthetic falsification lineage",
+    "separate SkinGPT tactile/thermal/mechanical sensing subsystem as a future modular-integration candidate"
   ],
   "known_limitations": [
     "exact ten-device physical manifest not yet frozen",
     "controlled xTech resilience and rejoin metrics not yet measured",
+    "modularity is not yet validated as universal plug-and-play across arbitrary third-party platforms",
+    "no current xTech evidence establishes drone/flight-control integration",
+    "no current xTech evidence establishes SkinGPT integration into the ten-node swarm",
+    "actuated/turret-form platform examples are limited to future sensor/observation roles and do not establish weapon-control capability",
     "2.4 GHz ESP-NOW/Wi-Fi-class transport is not a tactical anti-jam radio",
     "military cybersecurity, fleet key management, accreditation and ATO not established",
     "current COTS boards are not claimed ruggedized or MIL-STD-qualified",
@@ -108,7 +185,8 @@
       "optional coordinator/workload node"
     ],
     "exact_devices": "TO_BE_SELECTED_FROM_PHYSICALLY_FROZEN_TEN_NODE_MANIFEST",
-    "jux_required_for_demo": false
+    "jux_required_for_demo": false,
+    "skingpt_required_for_demo": false
   },
   "full_evaluation_families": [
     "single-node loss by role",
@@ -121,6 +199,7 @@
     "concurrent workload/resource stress",
     "selected firmware/ABI compatibility",
     "full cold restart",
+    "modularity falsification by adding one new benign specialist module and measuring required changes",
     "optional post-baseline JUXTAPOSE hardware falsification against a simple search-order baseline"
   ],
   "primary_metrics": [
@@ -138,6 +217,16 @@
     "power_by_role_where_instrumented",
     "manual_intervention_count"
   ],
+  "modularity_metrics": [
+    "unrelated_baseline_nodes_requiring_firmware_change",
+    "changed_file_count",
+    "interface_or_schema_change_count",
+    "integration_configuration_effort",
+    "resource_overhead_where_measurable",
+    "compatibility_failure_count",
+    "new_module_loss_and_rejoin_behavior",
+    "authority_boundary_violations"
+  ],
   "optional_jux_hardware_metrics": [
     "exact_checks_per_recovered_path_decision",
     "search_resource_cost",
@@ -150,6 +239,11 @@
     "OWNER_REPORT != INDEPENDENTLY_VERIFIED_PHYSICAL_FACT",
     "REPOSITORY_ROLE_COUNT != PHYSICAL_NODE_COUNT",
     "QUICK_DEMO_SUBSET != FULL_SWARM",
+    "MODULAR_ARCHITECTURE != UNIVERSAL_PLUG_AND_PLAY",
+    "CANDIDATE_EXTENSION != CURRENTLY_INTEGRATED_CAPABILITY",
+    "DRONE_OR_ACTUATED_PLATFORM_EXTENSION_CLASS != CURRENT_AUTONOMOUS_PLATFORM_CAPABILITY",
+    "ACTUATED_OR_TURRET_FORM_SENSOR_MOUNT != WEAPON_OR_TARGETING_AUTHORITY",
+    "SKINGPT_SEPARATE_ASSET != CURRENT_SWARM_INTEGRATION",
     "EXISTING_IMPLEMENTATION != MEASURED_PERFORMANCE",
     "MEASURED_PERFORMANCE != PROPOSED_PHASE_I_WORK",
     "PROPOSED_PHASE_I_WORK != ARMY_OPERATIONAL_CAPABILITY",
@@ -175,10 +269,12 @@
     "unsupported_claim_must_be_demoted": true,
     "synthetic_evidence_must_remain_labeled_synthetic": true,
     "separate_capabilities_must_not_be_retroactively_described_as_integrated": true,
-    "existing_swarm_should_be_presented_as_is": true
+    "existing_swarm_should_be_presented_as_is": true,
+    "candidate_extensions_must_remain_labeled_candidate_until_physically_integrated_and_tested": true
   },
   "review_documents": [
     "xtech-search10/README.md",
+    "xtech-search10/MODULARITY_AND_EXTENSION_MODEL.md",
     "xtech-search10/REVIEWER_PATH.md",
     "xtech-search10/JANUS_RESILIENT_EDGE_SWARM_OVERVIEW.md",
     "xtech-search10/JUXTAPOSE_CAPABILITY_AND_SWARM_RELATION.md",
@@ -206,6 +302,8 @@
     "run repeated full ten-node disruption and recovery evaluation",
     "preserve successes, failures, raw logs and event timestamps",
     "measure resource, thermal and power cost where instrumentation is available",
+    "select one benign new module for a controlled modularity falsification test",
+    "measure whether unrelated baseline nodes require modification for that extension",
     "optionally evaluate JUXTAPOSE on the real Swarm only after the unchanged baseline is characterized",
     "if JUXTAPOSE hardware test is run, preserve a nonadaptive comparison and all transfer failures",
     "promote only evidence-backed claims through CLAIM_EVIDENCE_MATRIX",
