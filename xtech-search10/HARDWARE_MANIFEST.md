@@ -1,8 +1,16 @@
 # xTech|Search 10 — Hardware Manifest
 
-This manifest identifies the preferred **existing** hardware/firmware subset for a JANUS Resilient Edge Swarm demonstration. It does not require modification of the underlying firmware for the submission package.
+This manifest records the xTech-facing hardware view of the existing JANUS Resilient Edge Swarm. It does not require modification of the underlying firmware for the submission package.
 
-## Primary demonstration set
+## Physical swarm count
+
+**Current physical JANUS swarm: 10 nodes**, as reported by the developer.
+
+The exact board/model, firmware path and flashed commit for each of the ten physical devices will be frozen from the hardware before final submission. Until that capture is completed, this document does not invent a one-to-one mapping for devices that have not yet been physically identified in the submission record.
+
+## First reproducible demonstration subset
+
+The following four-node subset is chosen because it makes the sensing / visibility / loss / recovery story easy to evaluate. It is **not** the total swarm.
 
 | ID | Role | Hardware / class | Existing firmware | Purpose in demonstration |
 | --- | --- | --- | --- | --- |
@@ -11,27 +19,28 @@ This manifest identifies the preferred **existing** hardware/firmware subset for
 | X10-N3 | RF anchor / resilience reference | ESP32-S3 class | `firmware/anchor/Anchor.ino` | Exercise heartbeat, radio visibility, disconnect/reconnect and rejoin behavior |
 | X10-N4 | Heterogeneous edge node | Atom-class ESP32 | `firmware/esp32_swarm/ATOM_SWARM_TRON.ino` | Demonstrate that the mesh spans non-identical node roles and payloads |
 
-## Optional demonstration nodes
+## Additional existing roles available to the ten-node physical swarm / repository lineage
 
-| Node | Existing firmware | Why optional |
+| Node / lineage | Existing firmware | Review relevance |
 | --- | --- | --- |
-| Buzz | `firmware/buzz/Buzz.ino` | Useful for coordinator/workload and multimedia coexistence/recovery history, but not required to explain the core sensing/resilience concept |
-| Zim Geek | `firmware/zim_geek/Zim.ino` | Strong autonomous-specialist lineage and persistent local state, but mining/game presentation can distract from the core xTech engineering story |
-| PEA4 / P4 dual core | `firmware/p4_dual_swarm_core/JANUS_P4_DUAL_SWARM_CORE_v1_1.ino` | Useful as future compute/verification extension; not necessary for the simplest physical demo |
-| Pyramid / Beacon / Gladius / Golcron / ADV Elite / other current nodes | See `PROJECT_MAP.md` | Preserve as project lineage and optional extensions rather than forcing the evaluator to understand the full swarm at once |
+| Buzz | `firmware/buzz/Buzz.ino` | Coordinator/workload and multimedia coexistence/recovery lineage |
+| Zim Geek | `firmware/zim_geek/Zim.ino` | Autonomous-specialist lineage and persistent local state |
+| PEA4 / P4 dual core | `firmware/p4_dual_swarm_core/JANUS_P4_DUAL_SWARM_CORE_v1_1.ino` | Compute / mirror / verification extension |
+| Pyramid / Beacon / Gladius / Golcron / ADV Elite / other current firmware | See `PROJECT_MAP.md` | Existing repository lineage and optional extension roles; repository firmware count is not treated as the physical-node count |
 
 ## Physical-evidence checklist before final white paper
 
-The repository documents the firmware and architecture, but the final submission should add a compact physical evidence package for the exact devices used in the xTech demonstration:
+The repository documents the firmware and architecture, but the final submission should add a compact physical evidence package for the exact ten-node swarm and for the subset used in the xTech demonstration:
 
-- dated photo of all selected powered nodes together;
-- board/model identification for each node;
+- dated group photo of all ten physical JANUS nodes;
+- board/model identification for each physical node;
+- stable physical ID / label for each node;
 - exact firmware file + commit hash flashed to each node;
 - library / board package versions when practical;
 - power source used during test;
 - radio mode/channel configuration used during test;
-- sensor attached to Blind Eye and its calibration/warm-up conditions;
-- a short video or log showing normal state, induced loss, stale/lost state, rejoin, and restored state.
+- attached sensors/peripherals for each relevant node;
+- a short video or log showing normal state, induced loss, stale/lost state, continued operation of unaffected nodes, rejoin and restored state.
 
 ## Configuration safety
 
@@ -41,4 +50,4 @@ The legacy `OldLastSwarm.rar` supplied during preparation is useful as historica
 
 ## Scope statement
 
-This manifest is a review/demo selection, not a new hardware design. The underlying JANUS repository remains authoritative for the actual firmware.
+This manifest is a review/demo presentation of the already existing system, not a new hardware design. The underlying JANUS repository remains authoritative for the actual firmware, and the physical inventory capture remains authoritative for the exact ten devices present in the current swarm.
