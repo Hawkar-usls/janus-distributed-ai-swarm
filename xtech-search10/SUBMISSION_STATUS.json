@@ -1,0 +1,70 @@
+{
+  "schema_id": "janus.xtechsearch10.submission-status.v1",
+  "competition": "xTech|Search 10",
+  "program": "U.S. Army FUZE xTech Program",
+  "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "branch": "submission/xtech-search10-2026",
+  "candidate_title": "JANUS Resilient Edge Swarm: Low-Cost Heterogeneous Sensor and Telemetry Mesh for Degraded Networks",
+  "created_from": "main",
+  "package_role": "PRESENTATION_AND_EVIDENCE_LAYER_ONLY",
+  "firmware_rewritten_for_submission": false,
+  "existing_files_deleted": false,
+  "technical_baseline_maturity": "ACTIVE_ENGINEERING",
+  "formal_submission_status": "NOT_SUBMITTED",
+  "eligibility_status": "OFFICIAL_CLARIFICATION_PENDING",
+  "eligibility_reason": {
+    "rfi_detailed_rule": "small, for-profit, independent U.S. businesses with qualifying ownership/control and <=500 employees",
+    "webpage_conflict": "summary field currently mentions small and large U.S.-based and allied foreign country businesses",
+    "applicant_context": "technology owner/developer based in Ukraine",
+    "rule": "DO_NOT_CLAIM_ELIGIBILITY_UNTIL_XTECH_RESPONDS"
+  },
+  "deadline": "2026-10-19T17:00:00-04:00",
+  "submission_channel": "Valid Eval registration/submission portal",
+  "required_final_format": "Template_xTech_Search10_White_Paper.docx",
+  "page_limit": 3,
+  "scoring": {
+    "introduction_percent": 5,
+    "army_benefits_percent": 25,
+    "technical_approach_percent": 40,
+    "commercial_potential_percent": 25,
+    "proposal_quality_percent": 5
+  },
+  "primary_alignment": "Command and Control (C2) and Counter-C2 Networks — resilient communications / deep sensing relevance",
+  "secondary_alignment": "Adaptive Sustainment — distributed edge operations relevance",
+  "preferred_demo_nodes": [
+    "Core2",
+    "Blind Eye",
+    "Anchor",
+    "ATOM SWARM TRON"
+  ],
+  "optional_demo_nodes": [
+    "Buzz",
+    "Zim Geek",
+    "PEA4 / P4 dual swarm core"
+  ],
+  "claim_firewall": [
+    "EXISTING_IMPLEMENTATION != PROPOSED_PHASE_I_WORK",
+    "PROPOSED_PHASE_I_WORK != ARMY_OPERATIONAL_CAPABILITY",
+    "CODE_PATH != QUANTITATIVE_PERFORMANCE_CLAIM_WITHOUT_TEST",
+    "NO_BATTLEFIELD_READINESS_CLAIM",
+    "NO_ANTI_JAM_CLAIM_WITHOUT_VALIDATED_TEST",
+    "NO_SECURE_MILITARY_NETWORK_CERTIFICATION_CLAIM",
+    "NO_AUTONOMOUS_WEAPON_AUTHORITY_CLAIM",
+    "NO_AGI_OR_PRECOGNITION_CLAIM",
+    "NO_COMMERCIAL_TRACTION_CLAIM_WITHOUT_DOCUMENTARY_EVIDENCE"
+  ],
+  "official_sources": {
+    "competition_page": "https://xtech.army.mil/competition/xtechsearch10/",
+    "rfi": "https://xtech.army.mil/wp-content/uploads/2026/09/xTechSearch-10-Competition-RFI_Final.pdf"
+  },
+  "next_gates": [
+    "receive written eligibility clarification",
+    "obtain official Valid Eval DOCX template",
+    "freeze exact hardware/firmware demonstration configuration",
+    "collect dated physical evidence",
+    "run controlled normal-loss-stale-rejoin demonstration",
+    "promote only measured claims through CLAIM_EVIDENCE_MATRIX",
+    "transfer final text into official three-page template",
+    "submit through Valid Eval if eligible"
+  ]
+}
