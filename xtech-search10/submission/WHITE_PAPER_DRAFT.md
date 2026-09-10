@@ -12,11 +12,11 @@
 
 ## 1. Introduction — 5%
 
-JANUS Resilient Edge Swarm is an existing heterogeneous ESP32/M5Stack firmware system that combines low-cost sensing, telemetry, local processing, operator visualization and peer/coordinator recovery behavior across specialized edge nodes. The project is currently classified as active engineering, not a production or military-certified system.
+JANUS Resilient Edge Swarm is an existing heterogeneous ESP32/M5Stack firmware system deployed by its developer as a **10-node physical swarm**. It combines low-cost sensing, telemetry, local processing, operator visualization and peer/coordinator recovery behavior across specialized edge nodes. The project is currently classified as active engineering, not a production or military-certified system.
 
-The proposed xTech effort does not begin by inventing a new swarm architecture. It begins with working firmware and physical low-cost hardware, freezes a reproducible subset, and measures a narrow question: **how well can heterogeneous edge nodes preserve useful local functions, expose loss/stale state, and recover connectivity when peers or network paths are disrupted?**
+The proposed xTech effort does not begin by inventing a new swarm architecture. It begins with working firmware and physical low-cost hardware, freezes a reproducible configuration, and measures a narrow question: **how well can heterogeneous edge nodes preserve useful local functions, expose loss/stale state, and recover connectivity when peers or network paths are disrupted?**
 
-The selected baseline uses existing Core2, Blind Eye, Anchor and ATOM SWARM TRON firmware, with Buzz available as an optional coordinator/workload node. The project primarily uses ESP-NOW for selected peer state in the current public implementation and preserves explicit boundaries between current sensor truth, memory, prediction and UI state.
+The technology under review is the ten-node JANUS swarm. For a short first demonstration, a focused subset of existing Core2, Blind Eye, Anchor and ATOM SWARM TRON firmware can be used, with Buzz available as an optional coordinator/workload node. That subset is a demonstration configuration, not the size of the system. The project primarily uses ESP-NOW for selected peer state in the current public implementation and preserves explicit boundaries between current sensor truth, memory, prediction and UI state.
 
 ## 2. Army Benefits — 25%
 
@@ -34,9 +34,9 @@ The same architecture has civilian dual-use potential in industrial and environm
 
 ### Existing technical baseline
 
-The current repository contains multiple ESP32/M5Stack firmware roles and documents ESP-NOW packet/ABI handling, telemetry, heartbeat/state visibility, recovery behavior and explicit technical boundaries.
+The current repository contains multiple ESP32/M5Stack firmware roles and documents ESP-NOW packet/ABI handling, telemetry, heartbeat/state visibility, recovery behavior and explicit technical boundaries. The developer reports ten physical JANUS nodes in the current swarm; the final submission inventory will freeze the exact board/model, firmware path and flashed commit for each physical device.
 
-The preferred four-node xTech baseline is:
+The preferred **first demonstration subset** is:
 
 **Core2 — operator/telemetry surface.** Existing firmware provides a dense human-facing view of swarm state and selected sensor/peer information.
 
@@ -46,17 +46,17 @@ The preferred four-node xTech baseline is:
 
 **ATOM SWARM TRON — heterogeneous peer.** This separate Atom-class firmware lineage demonstrates that the architecture is not limited to identical devices or identical payloads.
 
-Buzz may be included when coordinator/workload behavior is useful. Its mining-related code is background engineering rather than the proposed Army capability.
+Buzz may be included when coordinator/workload behavior is useful. Its mining-related code is background engineering rather than the proposed Army capability. The remaining physical JANUS nodes remain part of the system and can be included in later or full-swarm trials; they are not removed from the technology claim simply because the first reviewer demo uses a smaller subset.
 
 ### Phase I measurement plan
 
-If selected for a Phase I effort, the first task would be to freeze one exact hardware/software configuration: board models, firmware commit, library versions, radio configuration, sensors and power source. No performance number would be claimed from source code alone.
+If selected for a Phase I effort, the first task would be to freeze one exact ten-node hardware/software configuration: board models, firmware commits, library versions, radio configuration, sensors and power sources. No performance number would be claimed from source code alone.
 
-Controlled trials would then run four stages: normal baseline operation; physical removal/isolation of one node; coordinator or network-path disruption where applicable; and restoration/rejoin. Timestamped logs and continuous video would record the last valid heartbeat, stale/lost indication, unaffected-node behavior, first recovered packet and return to healthy peer state.
+Controlled trials would then run staged conditions: normal full-swarm baseline operation; physical removal/isolation of selected nodes; coordinator or network-path disruption where applicable; and restoration/rejoin. Timestamped logs and continuous video would record the last valid heartbeat, stale/lost indication, unaffected-node behavior, first recovered packet and return to healthy peer state.
 
 Primary metrics would include `T_detect_loss`, `T_rejoin`, valid packet reception rate, stale-state errors, primary-mission continuity, minimum free heap and—where instrumentation is available—power draw and device temperature. Repeated trials would establish distributions rather than a single best-case result.
 
-The final technical output would be a reproducible evaluation package: frozen manifest, logs, event CSV, test procedure, observed failures and a concise interface description for later customer integration.
+The final technical output would be a reproducible evaluation package: frozen ten-node manifest, logs, event CSV, test procedure, observed failures and a concise interface description for later customer integration.
 
 ### Technical boundaries
 
@@ -66,7 +66,7 @@ The proposal does not claim anti-jam capability, secure tactical networking cert
 
 JANUS uses widely available ESP32/M5Stack-class hardware and modular firmware roles, creating a low-cost path to experimentation and deployment in non-defense edge-sensing environments. The same core pattern—specialized local nodes, selected peer state, heartbeat/stale visibility and recovery—can be relevant to remote facilities, industrial/environmental monitoring, resilient local automation, field instrumentation and disaster-response deployments where replacing an entire centralized system is undesirable.
 
-At present, **verified commercial customers, revenue and quantified market traction are not documented in the public repository and will not be invented for this submission**. The owner reports physically operating JANUS devices for sensing, multimedia and compute/nerd-mining experiments; dated physical evidence and exact hardware manifests should be added before final submission if available.
+At present, **verified commercial customers, revenue and quantified market traction are not documented in the public repository and will not be invented for this submission**. The owner reports physically operating the ten-node JANUS swarm for sensing, multimedia and compute/nerd-mining experiments; dated physical evidence and exact hardware manifests should be added before final submission.
 
 A realistic commercialization path would package the current engineering into a documented hardware-agnostic edge-node framework, reproducible evaluation kit and integration interface rather than selling the existing project lore as a finished product. Potential business models could include evaluation kits, integration/pilot engineering, licensed firmware modules or OEM/partner integration, subject to the repository's source-available licensing and any separately negotiated rights.
 
@@ -83,8 +83,8 @@ This proposal intentionally distinguishes source-code implementation, measured e
 - Resolve xTech eligibility in writing.
 - Obtain the official Valid Eval white-paper template.
 - Replace `[PENDING ELIGIBILITY CLARIFICATION]` with the exact eligible entity name only after confirmed.
-- Freeze exact repository commit and selected hardware set.
-- Add dated physical photos/video evidence.
-- Run the controlled baseline/loss/rejoin demo and insert only measured numbers that pass the claim-evidence gate.
+- Freeze the exact repository commit and **all ten physical node identities**.
+- Add dated group photos/video evidence of the physical swarm.
+- Run controlled full-swarm and selected-node loss/rejoin tests and insert only measured numbers that pass the claim-evidence gate.
 - Add any real commercial/customer evidence if available; otherwise preserve the current limitation statement.
 - Compress/edit into the official three-page template without dropping claim boundaries.
