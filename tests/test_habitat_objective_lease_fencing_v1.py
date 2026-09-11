@@ -1,3 +1,4 @@
+# CI replay marker: exact-current-main lease-fencing compatibility witness for 26a67a7c4b5243240100475619a0d6a3d0aeed66. No executable semantics changed.
 from __future__ import annotations
 
 import multiprocessing
