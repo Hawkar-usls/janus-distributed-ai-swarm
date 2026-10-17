@@ -1,0 +1,10 @@
+{
+  "acknowledged_at": "2026-10-17T08:37:13.679259Z",
+  "batch_id": "ef5f1502434f9c0704bf",
+  "last_sequence": 1,
+  "schema": "janus.beetle.inbox_ack.v1",
+  "scientific_authority_delta": 0,
+  "sha256": "c412299534c1f257b75a04b46a7edf76efa7846b1f9d04b9fe26c27f8b23e05f",
+  "status": "INBOX_DURABLE_UNVERIFIED__NOT_RUNTIME_CONSUMPTION",
+  "target_repository": "Hawkar-usls/janus-distributed-ai-swarm"
+}
