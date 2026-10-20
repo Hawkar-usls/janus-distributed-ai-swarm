@@ -1,10 +1,10 @@
 {
-  "acknowledged_at": "2026-10-20T19:37:58.040669Z",
-  "batch_id": "a87cddecae8b95a21e47",
-  "last_sequence": 26,
+  "acknowledged_at": "2026-10-20T22:40:56.817647Z",
+  "batch_id": "28d7b4e935eee13dc54d",
+  "last_sequence": 28,
   "schema": "janus.beetle.inbox_ack.v1",
   "scientific_authority_delta": 0,
-  "sha256": "ddb94f7dfd3efd78db6ca11db544dd997560ff43a9bdac2e0e5c315483d3cf3a",
+  "sha256": "9cf5cc2047cd6d54dbf0ef5a962112a6b2339f74b5a76718e1f39c2d69ebcfe9",
   "status": "INBOX_DURABLE_UNVERIFIED__NOT_RUNTIME_CONSUMPTION",
   "target_repository": "Hawkar-usls/janus-distributed-ai-swarm"
 }
