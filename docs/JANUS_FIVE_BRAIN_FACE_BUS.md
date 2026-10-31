@@ -39,7 +39,11 @@ This is an evidence transport contract, not an authority/deployment channel.
   The workflow caps concurrent organ jobs at three to bound resource demand.
 - Only public SHA-pinned source text/JSON is read, with a 128 KiB file cap.
 - No model invocation, Copilot quota use, Rowan spending, target shell execution,
-  target repository write, default schedule or external cloud infrastructure.
+  target repository write or third-party compute provider.
+- The main-branch workflow runs once daily at **04:23 UTC** (GitHub schedules
+  are best-effort and may be delayed or skipped); it also validates changes
+  to this brain bus on PR and on merge into main. No direct trigger is installed
+  inside the five source repositories. The daily jobs remain read-only.
 - Token permissions: `contents: read` only.
 - Duplicate sender messages, spoofed roles, mismatched SHA/file digest,
   missing ACK, unknown sources and impossible permission fields fail closed.
