@@ -1,0 +1,59 @@
+{
+  "schema": "janus.brain.five_face_cohort.v1",
+  "status": "CANARY_READ_ONLY_EVIDENCE_EXCHANGE",
+  "source_portfolio_manifest": "configs/portfolio_genesis_faces_v1.json",
+  "genesis_invariants": [
+    "MESSAGE != COMMAND",
+    "FACE_COUNT != AUTHORITY",
+    "PROPOSAL != WORLD_COMMIT",
+    "SHA_PIN != TRUTH",
+    "RECEIPT != PERMISSION"
+  ],
+  "max_parallel": 3,
+  "default_write_permission": false,
+  "model_calls_enabled": false,
+  "paid_provider_calls_enabled": false,
+  "full_auto_deployment": false,
+  "faces": [
+    {
+      "repository": "Hawkar-usls/Demi_Head",
+      "ref": "main",
+      "role": "BICAMERAL_GUARDIAN_COMPARATOR",
+      "anchor_path": "docs/ARCHITECTURE.md",
+      "anchor_kind": "markdown",
+      "expected_schema": null
+    },
+    {
+      "repository": "Hawkar-usls/AIFC",
+      "ref": "main",
+      "role": "EVIDENCE_ADMISSION_VERIFIER",
+      "anchor_path": "conformance/AIFC-ADMISSION-AUTHORITY-ORDER-v1.json",
+      "anchor_kind": "json",
+      "expected_schema": "AIFC/admission-authority-order/v1"
+    },
+    {
+      "repository": "Hawkar-usls/Janus",
+      "ref": "main",
+      "role": "ORGANISM_MCP_GATEWAY",
+      "anchor_path": "docs/JANUS_MCP_GATEWAY.md",
+      "anchor_kind": "markdown",
+      "expected_schema": null
+    },
+    {
+      "repository": "Hawkar-usls/janus-io-public",
+      "ref": "main",
+      "role": "I0_OBSERVATION_PROVENANCE",
+      "anchor_path": "docs/proof-of-observation-origin-record.json",
+      "anchor_kind": "json",
+      "expected_schema": "JANUS/proof-of-observation-origin-record/v1"
+    },
+    {
+      "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+      "ref": "main",
+      "role": "DISTRIBUTED_FACE_TRANSPORT",
+      "anchor_path": "docs/architecture.md",
+      "anchor_kind": "markdown",
+      "expected_schema": null
+    }
+  ]
+}
