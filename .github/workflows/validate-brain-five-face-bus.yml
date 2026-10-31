@@ -1,0 +1,150 @@
+name: JANUS Five Brain Faces Contract Exchange
+
+# One independent ephemeral GitHub Actions job per brain organ (five jobs).
+# All inputs from external repositories are data only, never executed.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'configs/brain_five_faces_v1.json'
+      - 'tools/brain_five_face_bus.py'
+      - 'tests/test_brain_five_face_bus.py'
+      - '.github/workflows/validate-brain-five-face-bus.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: janus-brain-five-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline five-organ strict-contract and tamper replay tests
+        run: |
+          python -m unittest -v tests/test_brain_five_face_bus.py tests/test_portfolio_genesis_face_bus.py
+      - name: Emit exactly five specialized worker identities
+        id: plan
+        shell: bash
+        run: |
+          printf 'matrix=%s\n' "$(python tools/brain_five_face_bus.py matrix)" >> "$GITHUB_OUTPUT"
+
+  brain-observe:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Observe the organ's public Git SHA and one exact pinned contract file
+        run: |
+          python tools/brain_five_face_bus.py observe \
+            --repository '${{ matrix.repository }}' \
+            --out 'runtime/observation/${{ matrix.face }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain-msg-${{ matrix.face }}
+          path: runtime/observation/${{ matrix.face }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  brain-route:
+    needs: [plan, brain-observe]
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: brain-msg-*
+          path: runtime/inbox
+      - name: Independently check source pins and route peer messages
+        run: |
+          python tools/brain_five_face_bus.py route \
+            --inbox runtime/inbox \
+            --out runtime/mailboxes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain-five-mailboxes
+          path: runtime/mailboxes/
+          if-no-files-found: error
+          retention-days: 2
+
+  brain-receive:
+    needs: [plan, brain-route]
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: brain-five-mailboxes
+          path: runtime/mailboxes
+      - name: Consume inbound verified message as data, never as command
+        run: |
+          python tools/brain_five_face_bus.py receive \
+            --repository '${{ matrix.repository }}' \
+            --mailbox 'runtime/mailboxes/MAILBOX_${{ matrix.face }}.json' \
+            --out 'runtime/receipt/ACK_${{ matrix.face }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brain-ack-${{ matrix.face }}
+          path: runtime/receipt/ACK_${{ matrix.face }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  brain-independent-witness:
+    needs: [plan, brain-observe, brain-route, brain-receive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: brain-msg-*
+          path: runtime/inbox
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: brain-ack-*
+          path: runtime/acks
+      - name: Independently verify five source contracts and five distinct peer ACKs
+        run: |
+          python tools/brain_five_face_bus.py witness \
+            --inbox runtime/inbox \
+            --acks runtime/acks \
+            --out runtime/witness/receipt.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: janus-five-brain-delivery-witness
+          path: runtime/witness/receipt.json
+          if-no-files-found: error
+          retention-days: 14
