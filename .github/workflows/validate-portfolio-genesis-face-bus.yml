@@ -1,0 +1,150 @@
+name: JANUS Portfolio Genesis Face Bus Canary
+
+# Three public, read-only Git HEAD observations are routed across distinct
+# ephemeral Actions jobs. This is not a model call or remote execution grant.
+on:
+  pull_request:
+    paths:
+      - 'configs/portfolio_genesis_faces_v1.json'
+      - 'tools/portfolio_genesis_face_bus.py'
+      - 'tests/test_portfolio_genesis_face_bus.py'
+      - '.github/workflows/validate-portfolio-genesis-face-bus.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-genesis-face-bus-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline protocol, Genesis boundaries and 50-face manifest checks
+        run: python -m unittest -v tests/test_portfolio_genesis_face_bus.py
+      - name: Build fixed three-Face read-only matrix
+        id: plan
+        shell: bash
+        run: |
+          printf 'matrix=%s\n' "$(python tools/portfolio_genesis_face_bus.py matrix --cohort canary)" >> "$GITHUB_OUTPUT"
+
+  observe:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Observe only public Git HEAD without checking out target code
+        run: |
+          python tools/portfolio_genesis_face_bus.py observe \
+            --cohort canary \
+            --repository '${{ matrix.repository }}' \
+            --out 'runtime/out/${{ matrix.face }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: face-msg-${{ matrix.face }}
+          path: runtime/out/${{ matrix.face }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  route:
+    needs: [plan, observe]
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: face-msg-*
+          path: runtime/inbox
+      - name: Reconcile Face inputs and route bounded mailboxes
+        run: |
+          python tools/portfolio_genesis_face_bus.py route \
+            --cohort canary --inbox runtime/inbox --out runtime/mailboxes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-face-mailboxes
+          path: runtime/mailboxes/
+          if-no-files-found: error
+          retention-days: 2
+
+  receive:
+    needs: [plan, route]
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: portfolio-face-mailboxes
+          path: runtime/mailboxes
+      - name: Receive another Face's message but never execute it
+        run: |
+          python tools/portfolio_genesis_face_bus.py receive \
+            --cohort canary \
+            --repository '${{ matrix.repository }}' \
+            --mailbox 'runtime/mailboxes/MAILBOX_${{ matrix.face }}.json' \
+            --out 'runtime/ack/ACK_${{ matrix.face }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: face-ack-${{ matrix.face }}
+          path: runtime/ack/ACK_${{ matrix.face }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  independent-delivery-witness:
+    needs: [plan, observe, route, receive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: face-msg-*
+          path: runtime/inbox
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: face-ack-*
+          path: runtime/acks
+      - name: Check exact message ids, source SHA and all peer ACKs
+        run: |
+          python tools/portfolio_genesis_face_bus.py verify \
+            --cohort canary \
+            --inbox runtime/inbox \
+            --acks runtime/acks \
+            --out runtime/witness/receipt.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-genesis-face-delivery-receipt
+          path: runtime/witness/receipt.json
+          if-no-files-found: error
+          retention-days: 14
