@@ -1,0 +1,23 @@
+{
+  "schema": "janus.essence.idea_origin/0.6",
+  "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+  "candidate_id": "idea-swarm-dual-strand-00",
+  "role": "memory",
+  "idea": "Preserve dual identity/state and evidence/provenance strands for each microcore turn, including failures and explicit cross-entity parent links.",
+  "source_path": "docs/SWARM_GENOME_LEDGER.md",
+  "source_git_blob_sha1": "4ae2cc1f750464a42fd4de580764b0a96567492e",
+  "source_document_sha256": "7eb20ea28916f50923d3b264484a228897ef048bbf73d1f7ff7a4fd889e4cf22",
+  "precommit_anchor": {
+    "schema": "janus.essence.proposal_anchor/0.6",
+    "repository": "Hawkar-usls/janus-distributed-ai-swarm",
+    "source_path": "docs/SWARM_GENOME_LEDGER.md",
+    "source_git_blob_sha1": "4ae2cc1f750464a42fd4de580764b0a96567492e",
+    "source_document_sha256": "7eb20ea28916f50923d3b264484a228897ef048bbf73d1f7ff7a4fd889e4cf22",
+    "candidate_id": "idea-swarm-dual-strand-00",
+    "evaluation_phase": "PRECOMMITTED_FOR_FUTURE_UNSEEN_TRIALS_ONLY"
+  },
+  "precommit_anchor_sha256": "f662bed64665a3abf44862b5beba370a3e1ee6d53d78c86337750e6a77d65394",
+  "precommit_hash_method": "SHA256_SORTED_CANONICAL_JSON",
+  "independent_performance_gain": "NOT_MEASURED",
+  "claimed_production_authority": false
+}

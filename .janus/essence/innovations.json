@@ -1,6 +1,15 @@
 {
   "schema": "janus.essence.innovations/0.1",
   "repository": "Hawkar-usls/janus-distributed-ai-swarm",
-  "entries": [],
+  "entries": [
+    {
+      "id": "idea-swarm-dual-strand-00",
+      "role": "memory",
+      "idea": "Preserve dual identity/state and evidence/provenance strands for each microcore turn, including failures and explicit cross-entity parent links.",
+      "evidence_sha256": "7eb20ea28916f50923d3b264484a228897ef048bbf73d1f7ff7a4fd889e4cf22",
+      "precommit_sha256": "f662bed64665a3abf44862b5beba370a3e1ee6d53d78c86337750e6a77d65394",
+      "origin_receipt_sha256": "52f7a9f785768deeb23fb55877c89f4d12941a25762460303d9518ae9fbcf7bf"
+    }
+  ],
   "authority": "RESEARCH_PROPOSAL_ONLY"
 }
