@@ -7,6 +7,14 @@ on:
       - 'tests/test_essence_v11_prospective_ci_shadow.py'
       - 'tools/essence_v07_trial_gate.py'
       - 'research/essence/v11/locked_v07_protocol.json'
+      - 'tools/essence_v12_competing_offspring.py'
+      - 'tests/test_essence_v12_competing_offspring.py'
+      - '.github/workflows/essence-v11-future-ci-shadow.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/essence_v12_competing_offspring.py'
+      - 'tests/test_essence_v12_competing_offspring.py'
       - '.github/workflows/essence-v11-future-ci-shadow.yml'
   workflow_dispatch:
   schedule:
@@ -41,6 +49,10 @@ jobs:
         run: |
           python -m py_compile tools/essence_v11_prospective_ci_shadow.py
           python -m unittest discover -v -s tests -p 'test_essence_v11_prospective_ci_shadow.py'
+      - name: Verify 12 research offspring search and chronological anti-leak contracts
+        run: |
+          python -m py_compile tools/essence_v12_competing_offspring.py
+          python -m unittest discover -v -s tests -p 'test_essence_v12_competing_offspring.py'
 
   real-future-shadow:
     needs: offline-provenance-contracts
@@ -76,6 +88,24 @@ jobs:
           assert r["scientific_task"]=="RECONSTRUCTION_AFTER_COMPLETION_NOT_PREDICTION"
           print("ESSENCE_V11_REAL_CI_SHADOW",r["research_gate"],r["cohort_record_counts"])
           PY
+      - name: Evaluate 5 inherited offspring strategies against 3 strong old baselines
+        run: |
+          python tools/essence_v12_competing_offspring.py \
+            --source "$RUNNER_TEMP/essence-v11-real-source.json" \
+            --out "$RUNNER_TEMP/essence-v12-offspring-tournament.json"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          r=json.loads((Path(os.environ["RUNNER_TEMP"])/"essence-v12-offspring-tournament.json").read_text())
+          assert r["production_authority"] is False
+          assert r.get("independent_evaluation_count",0)==0
+          assert r.get("learning_generation_promoted",0)==0
+          if r.get("records_total",0)>=20:
+              assert r["scientific_gate"]=="DEVELOPMENT_ONLY_NOT_INDEPENDENT_PROSPECTIVE"
+              assert len(r["research_candidate_mutations"])==5
+              assert len(r["frozen_baseline_candidates"])==3
+          print("ESSENCE_V12_RESEARCH_ONLY_TOURNAMENT",r.get("records_total"),r.get("selected_research_child"),r.get("test_relative_gain"))
+          PY
       - name: Publish auditable raw rows and results, research only
         uses: actions/upload-artifact@v4
         with:
@@ -83,5 +113,6 @@ jobs:
           path: |
             ${{ runner.temp }}/essence-v11-real-source.json
             ${{ runner.temp }}/essence-v11-future-shadow/
+            ${{ runner.temp }}/essence-v12-offspring-tournament.json
           retention-days: 14
           if-no-files-found: error
