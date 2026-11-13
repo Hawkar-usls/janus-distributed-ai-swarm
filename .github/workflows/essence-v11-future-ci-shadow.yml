@@ -1,0 +1,87 @@
+name: ESSENCE v1.1 frozen future public-job evidence — Swarm vs Spiral
+
+on:
+  pull_request:
+    paths:
+      - 'tools/essence_v11_prospective_ci_shadow.py'
+      - 'tests/test_essence_v11_prospective_ci_shadow.py'
+      - 'tools/essence_v07_trial_gate.py'
+      - 'research/essence/v11/locked_v07_protocol.json'
+      - '.github/workflows/essence-v11-future-ci-shadow.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '19 4 * * 6'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: essence-v11-future-shadow-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline-provenance-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert original source/checker identities were not modified
+        run: |
+          test "$(git hash-object tools/demiurge_spiral_swarm.py)" = "f4bcb0817dd91057a73e1a873eb48470058786de"
+          test "$(git hash-object tools/swarm_genome_ledger.py)" = "b4c116cd1d6500d16c5052b8cb733113935c61ee"
+          test "$(git hash-object tools/essence_v07_trial_gate.py)" = "bbfb49eb9528304b126f4c605e0de25b3df4bb5d"
+          test "$(git hash-object research/essence/v11/locked_v07_protocol.json)" = "36d68a8eae7a2d4c4de7b4085f8c59e599ba4757"
+      - name: Verify 11 temporal, original-baseline, missing-data and no-authority tests
+        run: |
+          python -m py_compile tools/essence_v11_prospective_ci_shadow.py
+          python -m unittest discover -v -s tests -p 'test_essence_v11_prospective_ci_shadow.py'
+
+  real-future-shadow:
+    needs: offline-provenance-contracts
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read PUBLIC completed GitHub CI job metadata, no logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/essence_v07_real_ci_replay.py collect \
+            --max-runs 30 --out "$RUNNER_TEMP/essence-v11-real-source.json"
+      - name: Compute paired future cohort reconstruction without data leakage
+        run: |
+          python tools/essence_v11_prospective_ci_shadow.py \
+            --input "$RUNNER_TEMP/essence-v11-real-source.json" \
+            --out "$RUNNER_TEMP/essence-v11-future-shadow"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          r=json.loads((Path(os.environ["RUNNER_TEMP"])/"essence-v11-future-shadow"/"research_receipt.json").read_text())
+          assert r["production_authority"] is False
+          assert r["external_independent_verifier"] is False
+          assert r["working_model_modified"] is False
+          assert r["source_not_independently_attested"] is True
+          assert r["scientific_task"]=="RECONSTRUCTION_AFTER_COMPLETION_NOT_PREDICTION"
+          print("ESSENCE_V11_REAL_CI_SHADOW",r["research_gate"],r["cohort_record_counts"])
+          PY
+      - name: Publish auditable raw rows and results, research only
+        uses: actions/upload-artifact@v4
+        with:
+          name: essence-v11-future-swarmed-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/essence-v11-real-source.json
+            ${{ runner.temp }}/essence-v11-future-shadow/
+          retention-days: 14
+          if-no-files-found: error
