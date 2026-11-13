@@ -1,0 +1,61 @@
+name: ESSENCE v0.7 real public CI history comparison (retrospective)
+
+on:
+  pull_request:
+    paths:
+      - 'tools/essence_v07_real_ci_replay.py'
+      - 'tests/test_essence_v07_real_ci_replay.py'
+      - '.github/workflows/essence-v07-real-ci-pilot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  non-strawman-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin original complete baseline and candidate
+        run: |
+          test "$(git hash-object tools/demiurge_spiral_swarm.py)" = "f4bcb0817dd91057a73e1a873eb48470058786de"
+          test "$(git hash-object tools/swarm_genome_ledger.py)" = "b4c116cd1d6500d16c5052b8cb733113935c61ee"
+      - name: Run independent anti-tamper offline unit contracts
+        run: |
+          python -m py_compile tools/essence_v07_real_ci_replay.py
+          python -m unittest discover -v -s tests -p 'test_essence_v07_real_ci_replay.py'
+      - name: Fetch REAL dated public GitHub Actions job metadata (not logs)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/essence_v07_real_ci_replay.py collect --max-runs 18 --out "essence-v07-live-job-collection.json"
+      - name: Compare full baseline and candidate on same historical jobs
+        run: |
+          python tools/essence_v07_real_ci_replay.py compare             --infile "essence-v07-live-job-collection.json"             --out "essence-v07-real-retrospective-result.json"
+          python - <<'PY'
+          import json
+          r=json.load(open("essence-v07-real-retrospective-result.json"))
+          assert r["candidate_correct"]<=r["records_total"]
+          assert r["baseline_correct"]<=r["records_total"]
+          assert r["research_gate"].startswith("HOLD_")
+          assert r["production_authority"] is False
+          assert r["independent_prospective_verification"] is False
+          assert r["source_claims_not_externally_authenticated"] is True
+          print("ESSENCE_V07_SWARM_RESEARCH_HOLD",r["records_total"],r["research_gate"])
+          PY
+      - name: Upload transparent 14-day empirical research receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: essence-v07-swarrm-development-${{ github.run_id }}
+          path: |
+            essence-v07-live-job-collection.json
+            essence-v07-real-retrospective-result.json
+          retention-days: 14
+          if-no-files-found: error
