@@ -96,6 +96,21 @@ def collect(token="", max_runs_per_repo=16):
 def compare(dataset):
     if dataset.get("schema")!=SCHEMA:
         raise ValueError("INVALID_REAL_EVENT_SCHEMA")
+    source = dataset.get("source")
+    if source not in ("LIVE_PUBLIC_GITHUB_ACTIONS_METADATA", "UNIT_TEST_SYNTHETIC"):
+        raise ValueError("INVALID_SOURCE_CLASS")
+    if dataset.get("kind") != "RETROSPECTIVE_DEVELOPMENT_ONLY":
+        raise ValueError("MISLABELLED_PROSPECTIVE_EVIDENCE")
+    hashes=dataset.get("response_hashes")
+    if not isinstance(hashes,list) or len(hashes)>150:
+        raise ValueError("INVALID_SOURCE_RESPONSE_HASHES")
+    if source=="LIVE_PUBLIC_GITHUB_ACTIONS_METADATA":
+        if not hashes or not all(
+            isinstance(x,dict) and set(x)=={"path","sha256"}
+            and isinstance(x["path"],str) and x["path"].startswith("/repos/Hawkar-usls/")
+            and isinstance(x["sha256"],str) and len(x["sha256"])==64
+            for x in hashes):
+            raise ValueError("MISSING_PUBLIC_SOURCE_PROVENANCE")
     records=dataset.get("records")
     if not isinstance(records,list) or not 0<=len(records)<=LIMIT_ROWS:
         raise ValueError("INVALID_RECORD_COUNT")
@@ -139,7 +154,8 @@ def compare(dataset):
     candidate_correct=sum(candidate.get(k)==v for k,v in truth.items())
     result={
         "schema":SCHEMA,"kind":"RETROSPECTIVE_DEVELOPMENT_ONLY",
-        "sample_origin":"ACTUAL_DATED_PUBLIC_GITHUB_ACTIONS_JOBS",
+        "sample_origin":"ACTUAL_DATED_PUBLIC_GITHUB_ACTIONS_JOBS" if source=="LIVE_PUBLIC_GITHUB_ACTIONS_METADATA" else "SYNTHETIC_OFFLINE_CONTRACT_FIXTURE",
+        "source_claims_not_externally_authenticated":True,
         "source_hashes_sha256":digest(dataset["response_hashes"]),
         "records_sha256":digest(records),
         "records_total":len(records),
