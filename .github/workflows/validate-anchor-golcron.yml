@@ -9,6 +9,9 @@ on:
       - '.github/workflows/validate-anchor-golcron.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   compile:
     runs-on: ubuntu-latest
@@ -16,7 +19,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
 
       - name: Verify public source contains placeholders only
         shell: bash
@@ -26,12 +31,10 @@ jobs:
           grep -RIn 'YOUR_WIFI' firmware/anchor/Anchor.ino
           grep -RIn 'YOUR_PASS' firmware/anchor/Anchor.ino
 
-      - name: Install Arduino CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: Install Arduino CLI from pinned, reviewed upstream action
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02
+        with:
+          version: '1.6.0'
 
       - name: Install Espressif ESP32 core
         shell: bash
