@@ -7,6 +7,9 @@ on:
       - '.github/workflows/validate-blind-eye.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   compile:
     runs-on: ubuntu-latest
@@ -14,7 +17,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
 
       - name: Verify public source and hardware profile
         shell: bash
@@ -39,12 +44,10 @@ jobs:
           test "$(wc -l < /tmp/BLIND_EYE/BLIND_EYE.ino)" -eq 4922
           echo '6f4de99fc710beff9fe30c09efda8fef33be2e25b94f87aa1fe01e6b0e251137  /tmp/BLIND_EYE/BLIND_EYE.ino' | sha256sum -c -
 
-      - name: Install Arduino CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          echo "$PWD/bin" >> "$GITHUB_PATH"
+      - name: Install Arduino CLI from pinned, reviewed upstream action
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02
+        with:
+          version: '1.6.0'
 
       - name: Install ESP32 core and libraries
         shell: bash
